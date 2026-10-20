@@ -339,7 +339,7 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
  * @return array{locks: array<string,array{reason:string,until:int}>, methods: array<string,string>}
  */
 function nppp_http_purge_state(): array {
-    $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [] ];
+    $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [], 'hint' => [] ];
     $raw   = get_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
 
     if ( ! $raw ) {
@@ -393,6 +393,20 @@ function nppp_http_purge_state(): array {
         }
     }
 
+    // Advisory about the queue status endpoint (Settings > Purge Queue Status Path): what NPP
+    // saw at the last Purge All. Remembered for a day, re-raised by the next Purge All.
+    $hint = $raw['hint'] ?? null;
+    if ( is_array( $hint )
+        && in_array( $hint['code'] ?? '', nppp_http_purge_hint_codes(), true )
+        && (int) ( $hint['at'] ?? 0 ) > $now - DAY_IN_SECONDS ) {
+        $detail        = (string) ( $hint['detail'] ?? '' );
+        $state['hint'] = [
+            'code'   => (string) $hint['code'],
+            'detail' => preg_match( '/^[a-z_]{1,16}$/', $detail ) ? $detail : '',
+            'at'     => (int) $hint['at'],
+        ];
+    }
+
     return $state;
 }
 
@@ -408,7 +422,7 @@ function nppp_http_purge_state_save( array $state ): void {
         $state['locks'][ $scope ]['until'] = min( (int) $lock['until'], $now + HOUR_IN_SECONDS );
         $ttl = max( $ttl, $state['locks'][ $scope ]['until'] - $now );
     }
-    if ( ! empty( $state['methods'] ) || ! empty( $state['ns'] ) || ! empty( $state['issue'] ) ) {
+    if ( ! empty( $state['methods'] ) || ! empty( $state['ns'] ) || ! empty( $state['issue'] ) || ! empty( $state['hint'] ) ) {
         $ttl = max( $ttl, DAY_IN_SECONDS );
     }
 
@@ -518,6 +532,111 @@ function nppp_http_purge_config_notice(): string {
         return '';
     }
     return implode( ' ', $parts ) . ' ' . __( 'Until fixed, NPP purges through the filesystem (slower).', 'fastcgi-cache-purge-and-preload-nginx' );
+}
+
+/**
+ * Codes of the advisory about the queue status endpoint (see nppp_http_purge_queue_status_hint()).
+ *   queue_blind  Purge All answered 202 (background queue) and no status path is set.
+ *   queue_dead   same, a path is set but it does not answer like a status endpoint.
+ *   gen_blind    generation mode (200 invalidated) and no status path is set.
+ *   gen_dead     generation mode, a path is set but it does not answer.
+ */
+function nppp_http_purge_hint_codes(): array {
+    return [ 'queue_blind', 'queue_dead', 'gen_blind', 'gen_dead' ];
+}
+
+/**
+ * Remembers the advisory (one for the whole site). An unchanged advisory younger than
+ * 6 hours causes no write.
+ *
+ * @param string $code   One of nppp_http_purge_hint_codes().
+ * @param string $detail Failure reason from nppp_http_purge_queue_snapshot() ('' when none).
+ */
+function nppp_http_purge_hint_set( string $code, string $detail = '' ): void {
+    if ( ! in_array( $code, nppp_http_purge_hint_codes(), true ) ) {
+        return;
+    }
+    $detail = preg_match( '/^[a-z_]{1,16}$/', $detail ) ? $detail : '';
+
+    $state = nppp_http_purge_state();
+    $cur   = $state['hint'] ?? [];
+    if ( ! empty( $cur )
+        && $cur['code'] === $code
+        && $cur['detail'] === $detail
+        && ( time() - (int) $cur['at'] ) < 6 * HOUR_IN_SECONDS ) {
+        return;
+    }
+
+    $state['hint'] = [ 'code' => $code, 'detail' => $detail, 'at' => time() ];
+    nppp_http_purge_state_save( $state );
+}
+
+/**
+ * Forgets the advisory once Purge All showed the queue / generation state can be observed
+ * (or that no background queue is in play any more). Writes only when one is stored.
+ */
+function nppp_http_purge_hint_clear(): void {
+    $state = nppp_http_purge_state();
+    if ( empty( $state['hint'] ) ) {
+        return;
+    }
+    $state['hint'] = [];
+    nppp_http_purge_state_save( $state );
+}
+
+/**
+ * Advisory for the Settings page, shown under the Purge Queue Status Path field.
+ *
+ * Nginx's configuration cannot be read from PHP, but the Purge All answer reveals it: 202 means
+ * the background queue is on, "invalidated" means generation mode. When the queue cannot be
+ * observed the administrator is told what to set. The advisory is hidden while the field no
+ * longer matches the situation it describes (the next Purge All re-checks it).
+ *
+ * @return array{level:string,text:string}|null level is 'warning' (data-affecting) or 'info'.
+ */
+function nppp_http_purge_queue_status_hint(): ?array {
+    if ( ! nppp_http_purge_enabled() ) {
+        return null;
+    }
+
+    $hint = nppp_http_purge_state()['hint'] ?? [];
+    if ( empty( $hint ) ) {
+        return null;
+    }
+
+    $has_url = nppp_http_purge_queue_status_url() !== '';
+    $dead    = in_array( $hint['code'], [ 'queue_dead', 'gen_dead' ], true );
+    if ( $dead !== $has_url ) {
+        return null; // *_blind needs an empty field, *_dead a filled one
+    }
+
+    $reasons = [
+        'unreachable' => __( 'the endpoint could not be reached', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'not_found'   => __( 'HTTP 404, the location does not exist in Nginx (or ngx_cache_purge is older than v4)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'denied'      => __( 'access was denied (HTTP 401/403), check allow/deny of that location', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'not_status'  => __( 'the path is served by something other than a cache_purge_queue_status location', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'bad_reply'   => __( 'the reply was not a queue status document', 'fastcgi-cache-purge-and-preload-nginx' ),
+    ];
+    $reason = $reasons[ $hint['detail'] ] ?? $reasons['bad_reply'];
+
+    switch ( $hint['code'] ) {
+        case 'queue_blind':
+            return [ 'level' => 'warning', 'text' => __( 'The last Purge All was accepted by Nginx as a background job (202), but no Purge Queue Status Path is set, so NPP cannot see when the queue has finished. On a large cache the filesystem purge and the preload may start while Nginx is still deleting, and Nginx can then delete the freshly preloaded pages. Fix: add a cache_purge_queue_status location in Nginx (see Help > HTTP Purge) and enter its path here.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
+        case 'queue_dead':
+            return [ 'level' => 'warning', 'text' => sprintf(
+                /* translators: %s: why the status endpoint failed */
+                __( 'The last Purge All was accepted by Nginx as a background job (202), but the configured Purge Queue Status Path did not answer like a queue status endpoint: %s. NPP cannot see the queue, so the filesystem purge and the preload may start while Nginx is still deleting and the freshly preloaded pages can be deleted. Fix the location or the path; the next Purge All re-checks it.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $reason
+            ) ];
+        case 'gen_dead':
+            return [ 'level' => 'info', 'text' => sprintf(
+                /* translators: %s: why the status endpoint failed */
+                __( 'ngx_cache_purge generation mode is active, but the configured Purge Queue Status Path did not answer like a queue status endpoint: %s. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $reason
+            ) ];
+        default: // gen_blind
+            return [ 'level' => 'info', 'text' => __( 'ngx_cache_purge generation mode is active but no Purge Queue Status Path is set. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Set the path of your cache_purge_queue_status location to hide them.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
+    }
 }
 
 /**
@@ -1297,12 +1416,27 @@ function nppp_http_purge_leftover( int $since ): bool {
 /**
  * Reads the aggregate counters of a `cache_purge_queue_status` location.
  *
+ * @param string      $status_url
+ * @param string|null $why Optional, out: why null was returned ('' on success): unreachable |
+ *                         not_found | denied | not_status | bad_reply. Costs no extra request.
  * @return array{pending:int,active:int,exhausted:int,errors:int,scan_errors:int}|null
  */
-function nppp_http_purge_queue_snapshot( string $status_url ): ?array {
+function nppp_http_purge_queue_snapshot( string $status_url, ?string &$why = null ): ?array {
+    $why = '';
     $res = nppp_http_purge_fetch( 'GET', $status_url, 3 );
 
     if ( $res['error'] !== '' || $res['status'] !== 200 || $res['code'] !== 'status' ) {
+        if ( $res['error'] !== '' ) {
+            $why = 'unreachable';
+        } elseif ( $res['status'] === 404 ) {
+            $why = 'not_found';
+        } elseif ( $res['status'] === 401 || $res['status'] === 403 ) {
+            $why = 'denied';
+        } elseif ( $res['status'] === 200 ) {
+            $why = 'not_status';
+        } else {
+            $why = 'bad_reply';
+        }
         return null;
     }
 
@@ -1311,6 +1445,7 @@ function nppp_http_purge_queue_snapshot( string $status_url ): ?array {
     if ( $cache === null
         || ! isset( $cache['pending']['total'], $cache['active'] )
         || ! is_numeric( $cache['pending']['total'] ) || ! is_numeric( $cache['active'] ) ) {
+        $why = 'bad_reply';
         return null;
     }
 
@@ -2153,7 +2288,8 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
     $verify     = (bool) apply_filters( 'nppp_http_purge_verify_queue', true );
     $status_url = $verify ? nppp_http_purge_queue_status_url() : '';
     $wait       = min( 40, max( 1, (int) apply_filters( 'nppp_http_purge_queue_wait', 15 ) ) );
-    $baseline   = $status_url !== '' ? nppp_http_purge_queue_snapshot( $status_url ) : null;
+    $why        = '';
+    $baseline   = $status_url !== '' ? nppp_http_purge_queue_snapshot( $status_url, $why ) : null;
 
     nppp_http_purge_extend_time_limit( $timeout + 5 + ( $verify ? $wait : 0 ) );
 
@@ -2164,7 +2300,8 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
 
     switch ( $r['outcome'] ) {
         case 'purged':
-        case 'no_match':     // v4: nothing left to delete, the goal is reached
+        case 'no_match':                  // v4: nothing left to delete, the goal is reached
+            nppp_http_purge_hint_clear(); // a synchronous answer: no queue / generation advisory applies
             if ( nppp_http_purge_leftover( $since ) ) {
                 nppp_display_admin_notice( 'info', sprintf(
                     /* translators: %s: Purge All endpoint URL */
@@ -2176,6 +2313,17 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
             return true;
 
         case 'invalidated':  // files remain on disk on purpose until nginx sweeps them
+            // Purge All itself is safe here (the cleanup only removes stale generations). Without a
+            // readable status endpoint Status / Advanced cannot tell invalidated files apart.
+            if ( $verify ) {
+                if ( $status_url === '' ) {
+                    nppp_http_purge_hint_set( 'gen_blind' );
+                } elseif ( $baseline === null ) {
+                    nppp_http_purge_hint_set( 'gen_dead', $why );
+                } else {
+                    nppp_http_purge_hint_clear();
+                }
+            }
             return true;
 
         case 'timeout':
@@ -2224,6 +2372,16 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
                     $shown
                 ), true, false );
                 return false;
+            }
+
+            // The queue is on. Tell the administrator when NPP cannot observe it, because then the
+            // filesystem purge + preload can race Nginx's walk (Settings > Purge Queue Status Path).
+            if ( $status_url === '' ) {
+                nppp_http_purge_hint_set( 'queue_blind' );
+            } elseif ( $baseline === null ) {
+                nppp_http_purge_hint_set( 'queue_dead', $why );
+            } else {
+                nppp_http_purge_hint_clear();
             }
 
             // Stay inside the Purge All lock (crash-recovery TTL, default 60 s).
