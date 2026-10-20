@@ -783,7 +783,7 @@ if ( $sc === 'method405' ) {
     warm( 'p', 5 );
     $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
     chk( $r === true && xcache( '/p/1/' ) === 'MISS', 'single: GET -> 405 Allow PURGE -> retry PURGE -> purged', var_export( $r, true ) . ' ' . notes() );
-    chk( array_slice( $T['reqs'], 0, 2 ) === [ 'GET http://127.0.0.1:8081/purge/p/1/', 'PURGE http://127.0.0.1:8081/purge/p/1/' ], 'single: exactly GET then PURGE', implode( ' | ', $T['reqs'] ) );
+    chk( array_slice( $T['reqs'], 0, 2 ) === [ 'GET http://127.0.0.1:8081/npp_purge_single/p/1/', 'PURGE http://127.0.0.1:8081/npp_purge_single/p/1/' ], 'single: exactly GET then PURGE', implode( ' | ', $T['reqs'] ) );
     chk( nppp_http_purge_state()['methods'] === [ 'single' => 'PURGE' ], 'single: PURGE remembered', json_encode( nppp_http_purge_state()['methods'] ) );
     $n = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/2/' );
     chk( nreqs() === $n + 1 && substr( $T['reqs'][ $n ], 0, 5 ) === 'PURGE', 'single: the learned method is used straight away' );
