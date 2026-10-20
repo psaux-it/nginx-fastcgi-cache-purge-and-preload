@@ -597,6 +597,9 @@ For the complete changelog, see
 
 == Upgrade Notice ==
 
+= 2.1.9 =
+Broad ngx_cache_purge module support for HTTP Purge: v2.3, v2.5/v3 and v4
+
 = 2.1.8 =
 New Fail2Ban dashboard! | URGENT: Update safexec to 1.9.7 | URGENT: Block direct web access to the runtime directory (see Help tab).
 
@@ -623,6 +626,8 @@ Important fixes for function/class/define/namespace/option names. Internationali
 This plugin is developed and maintained by Hasan CALISIR.
 
 Bundled libraries, all MIT licensed: DataTables (datatables.net), Tempus Dominus (github.com/Eonasdan/tempus-dominus), Popper.js (github.com/popperjs/popper-core), jsVectorMap (github.com/themustafaomar/jsvectormap), and flag-icons (github.com/lipis/flag-icons).
+
+The optional HTTP Purge works with the ngx_cache_purge Nginx module, using Denys Denysov fork maintained at github.com/nginx-modules/ngx_cache_purge. The module is not bundled with this plugin; it is installed separately on your Nginx server.
 
 == Privacy Policy ==
 
