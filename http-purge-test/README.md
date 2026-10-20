@@ -36,6 +36,7 @@ http-purge-test/run-purge-tests.sh --build --only matrix sync ambig   # first ru
 | `nginx.sh` | Writes `nginx.conf` for one mode, restarts nginx (and php-fpm), empties the cache. |
 | `build-nginx.sh` | Builds nginx + one `ngx_cache_purge` branch (v4, v3.0, v2.5). |
 | `delayproxy.py` | Holds answers for a few seconds to force a Purge All timeout. |
+| `wakelistener.py` | Stands in for `admin-ajax.php` in `deferred_waiter`: answers `200`, logs every POST. |
 | `fpm.conf`, `site/index.php` | php-fpm pool and WordPress stand-in (every path answers a cacheable `200`). |
 
 ## How it works
@@ -144,6 +145,7 @@ http-purge-test/run-purge-tests.sh --build --ng v25 --only matrix
 | `race_timeout` | `async` + delay proxy | Response held 3 s, plugin times out after 1 s while nginx deletes; plugin waits it out, returns `true`, preload intact. |
 | `slowq` | `async_slow` | See below. |
 | `slowq_marker` | `async_slow` | See below. |
+| `deferred_waiter` | `async_slow` | See below. Needs `wget` (skipped without it). |
 
 **Namespace mode with slow cleanup**
 
@@ -200,6 +202,22 @@ Same setup, but the crawl is spawned as a **later** request would: hand-off clea
 - Crawl starts only when the queue is idle with no old file left; all 400 pages survive.
 - Once idle, the stale marker neither gates nor stays behind.
 - With an unreadable status endpoint the spawn is still gated; the shell gate fails open after 5 failed polls.
+
+#### `deferred_waiter`
+
+`async_slow` nginx, plugin wait budget 5 s (`SLOWQ_WAIT`). A Purge All that ends with nginx's queue still deleting (status 7) must not fire `nppp_purged_all` (Cloudflare purge-all, Redis flush) yet. The scenario drives the real `nppp_http_purge_fire_purged_all()` against the real queue; `wakelistener.py` (`127.0.0.1:8092`) stands in for the wake endpoint (`admin_url()` is pointed at it; `NPP_WAKE_BASE` overrides).
+
+Part A, the detached waiter (real `bash`, `wget`, `date`, `sleep`, real `purge_status` JSON):
+
+- hook not fired, state armed with a 32-hex one-shot token, waiter spawned, cron only the slow second path (+60 s);
+- the waiter survives the spawn and does not POST while nginx still deletes;
+- exactly one POST of `action=nppp_purged_all_wake&token=<token>` to `/wp-admin/admin-ajax.php`, only after every old file is gone and the queue is idle;
+- the POSTed token claims the state exactly once; the waiter process is gone; a late cron tick fires nothing.
+
+Part B, waiter dead (killed), WP-Cron alone:
+
+- cron ticks while the queue is busy fire nothing and re-arm;
+- the hook fires once, after the real queue deleted every file, with the `auto_preload` flag of the arming Purge All; state and stale marker are gone; no wake POST.
 
 ## Running the pieces by hand
 
