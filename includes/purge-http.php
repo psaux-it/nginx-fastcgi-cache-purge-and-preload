@@ -369,9 +369,15 @@ function nppp_http_purge_state(): array {
         }
     }
 
+    // Generation mode carries the time of the last "invalidated" answer, so a flag that nothing
+    // confirms any more expires on its own (the transient TTL alone cannot: every state write
+    // renews it). Older plugin versions stored `true`: read as fresh, it ages from its next write.
     foreach ( (array) ( $raw['ns'] ?? [] ) as $scope => $flag ) {
         if ( $flag && in_array( (string) $scope, [ 'single', 'all' ], true ) ) {
-            $state['ns'][ (string) $scope ] = true;
+            $at = (int) $flag > 1 ? min( (int) $flag, $now ) : $now;
+            if ( $at > $now - DAY_IN_SECONDS ) {
+                $state['ns'][ (string) $scope ] = $at;
+            }
         }
     }
 
@@ -697,18 +703,25 @@ function nppp_http_purge_generation_mode( string $scope ): bool {
 }
 
 /**
- * Remembers (or forgets) generation mode for $scope. Writes only on change.
+ * Remembers (or forgets) generation mode for $scope. Only an "invalidated" answer calls it with
+ * $on = true, and it stores the time of that answer: a flag that is not confirmed again within a
+ * day expires (see nppp_http_purge_state()). Writes only on change, plus one refresh per 6 hours
+ * while the answers keep coming.
  */
 function nppp_http_purge_remember_generation( string $scope, bool $on ): void {
     $state = nppp_http_purge_state();
-
-    if ( ! empty( $state['ns'][ $scope ] ) === $on ) {
-        return; // nothing changed, no write on the hot path
-    }
+    $now   = time();
+    $seen  = (int) ( $state['ns'][ $scope ] ?? 0 );
 
     if ( $on ) {
-        $state['ns'][ $scope ] = true;
+        if ( $seen > 0 && ( $now - $seen ) < 6 * HOUR_IN_SECONDS ) {
+            return;
+        }
+        $state['ns'][ $scope ] = $now;
     } else {
+        if ( $seen === 0 ) {
+            return;
+        }
         unset( $state['ns'][ $scope ] );
     }
     nppp_http_purge_state_save( $state );
@@ -1189,11 +1202,10 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
         if ( $method === 'GET' ) {
             nppp_http_purge_probe_mark( $scope, DAY_IN_SECONDS ); // GET works: no probe needed for a while
         }
-        if ( $outcome === 'invalidated' ) {
-            nppp_http_purge_remember_generation( $scope, true );
-        } elseif ( $outcome !== 'accepted' ) {
-            nppp_http_purge_remember_generation( $scope, false );
-        }
+        // Only a location bound to a generation namespace answers "invalidated"; every other
+        // outcome, "accepted" (202) included, comes from one that is not, so it ends generation
+        // mode for this scope at once (ngx_cache_purge answers 202 only without a namespace).
+        nppp_http_purge_remember_generation( $scope, $outcome === 'invalidated' );
     } else {
         nppp_http_purge_report_failure( $scope, $url, $timeout, $result );
     }
