@@ -523,7 +523,7 @@ is_( locks_keys(), [ 'all', 'single' ], 'two scopes coexist' );
 is_( last_ttl(), 3600, 'transient lives as long as the longest lock' );
 nppp_http_purge_remember_method( 'single', 'PURGE' );
 delete_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
-is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [] ], 'one delete_transient clears locks, learned methods, generation mode, probe state and config issues' );
+is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [], 'hint' => [] ], 'one delete_transient clears locks, learned methods, generation mode, probe state, config issues and the queue status advisory' );
 
 t_reset();
 set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'locks' => [ 'single' => [ 'reason' => 'x', 'until' => time() - 5 ], 'all' => [ 'reason' => 'y', 'until' => time() + 100 ] ], 'methods' => [ 'single' => 'rm -rf', 'all' => 'PURGE' ] ], 3600 );
@@ -1158,6 +1158,114 @@ is_( gm_helper(), 0, 'flow: later Preload All, queue drained inside the budget -
 is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'flow: idle queue -> plain crawl, no false gate' );
 is_( gm_marker(), null, 'flow: the marker is dropped once the queue is idle' );
 gm_new_request();
+
+/* ------------------------------------------- queue status advisory (Settings > Purge Queue Status Path) */
+function hint_state() { return nppp_http_purge_state()['hint']; }
+function hint_code() { return hint_state()['code'] ?? null; }
+
+// 202 and no status path: the queue cannot be observed (behaviour itself is unchanged)
+t_reset(); Q( R( 202, 'accepted' ) );
+is_( nppp_http_purge_all(), false, 'hint: 202 without a status path -> false (unchanged)' );
+is_( hint_code(), 'queue_blind', 'hint: 202 + no status path raises queue_blind' );
+$h = nppp_http_purge_queue_status_hint();
+ok( is_array( $h ) && $h['level'] === 'warning' && strpos( $h['text'], 'cannot see when the queue has finished' ) !== false, 'hint: queue_blind is a warning that says what to set' );
+is_( last_ttl(), DAY_IN_SECONDS, 'hint: the advisory is remembered for a day' );
+is_( locks_keys(), [], 'hint: no lock armed' );
+// a synchronous answer afterwards: no queue in play, the advisory goes away
+Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_all(), true, 'hint: a later synchronous purge -> true' );
+is_( hint_state(), [], 'hint: cleared by a synchronous answer (200 purged)' );
+Q( R( 202, 'accepted' ) ); nppp_http_purge_all();
+Q( R( 200, 'no_match' ) ); nppp_http_purge_all();
+is_( hint_state(), [], 'hint: cleared by 200 no_match as well' );
+
+// a configured path that does not answer: one reason per failure, no extra request
+foreach ( [
+    'not_found'   => R( 404 ),
+    'denied'      => R( 403 ),
+    'unreachable' => E( 'cURL error 7: Failed to connect to 127.0.0.1 port 80: Connection refused' ),
+    'not_status'  => R( 200, '', $SITE ),
+    'bad_reply'   => R( 200, 'status', 'not json' ),
+] as $why => $first ) {
+    t_reset(); verify_on(); Q( $first, R( 202, 'accepted' ) );
+    is_( nppp_http_purge_all(), false, "hint: dead status path ($why) -> false (unchanged)" );
+    is_( hint_code() . '/' . ( hint_state()['detail'] ?? '' ), "queue_dead/$why", "hint: dead status path reason $why" );
+    is_( nreq(), 2, "hint: dead status path ($why) costs no extra request" );
+}
+t_reset(); verify_on(); Q( R( 404 ), R( 202, 'accepted' ) ); nppp_http_purge_all();
+$h = nppp_http_purge_queue_status_hint();
+ok( is_array( $h ) && $h['level'] === 'warning' && strpos( $h['text'], 'HTTP 404' ) !== false, 'hint: queue_dead text names the reason' );
+// a readable status endpoint clears it
+t_reset(); verify_on(); nppp_http_purge_hint_set( 'queue_blind' );
+Q( S( 0, 0 ), R( 202, 'accepted' ), S( 0, 0 ), S( 0, 0 ) );
+is_( nppp_http_purge_all(), true, 'hint: observable queue drains -> true' );
+is_( hint_state(), [], 'hint: a readable status endpoint clears the advisory' );
+
+// generation mode: Purge All is fine, only the Status / Advanced view is affected -> info
+t_reset(); Q( R( 200, 'invalidated' ) );
+is_( nppp_http_purge_all(), true, 'hint: invalidated -> true (unchanged)' );
+is_( hint_code(), 'gen_blind', 'hint: generation mode + no status path raises gen_blind' );
+$h = nppp_http_purge_queue_status_hint();
+ok( is_array( $h ) && $h['level'] === 'info' && strpos( $h['text'], 'generation mode' ) !== false, 'hint: gen_blind is informational' );
+t_reset(); verify_on(); Q( R( 404 ), R( 200, 'invalidated' ) );
+is_( nppp_http_purge_all(), true, 'hint: invalidated with a dead path -> true (unchanged)' );
+is_( hint_code() . '/' . hint_state()['detail'], 'gen_dead/not_found', 'hint: generation mode + dead path raises gen_dead' );
+t_reset(); verify_on(); nppp_http_purge_hint_set( 'gen_blind' ); Q( S( 0, 0 ), R( 200, 'invalidated' ) );
+nppp_http_purge_all();
+is_( hint_state(), [], 'hint: generation mode + readable status endpoint clears it' );
+
+// no advisory when verification is switched off by the filter, nor for a synchronous timeout
+t_reset(); t_filter( 'nppp_http_purge_verify_queue', fn() => false ); Q( R( 202, 'accepted' ) ); nppp_http_purge_all();
+is_( hint_state(), [], 'hint: queue verification disabled -> no advisory (202)' );
+t_reset(); t_filter( 'nppp_http_purge_verify_queue', fn() => false ); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+is_( hint_state(), [], 'hint: queue verification disabled -> no advisory (invalidated)' );
+t_reset(); Q( E( 'cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received' ) ); nppp_http_purge_all();
+is_( hint_state(), [], 'hint: a synchronous response timeout raises no advisory' );
+
+// the Settings page shows the advisory only while the field still matches it
+t_reset( [ 'nppp_http_purge_queue_status_path' => 'npp_purge_status' ] );
+nppp_http_purge_hint_set( 'queue_blind' );
+is_( nppp_http_purge_queue_status_hint(), null, 'hint: *_blind is hidden once a path is saved' );
+nppp_http_purge_hint_set( 'queue_dead', 'not_found' );
+ok( nppp_http_purge_queue_status_hint() !== null, 'hint: *_dead is shown while a path is saved' );
+t_reset(); nppp_http_purge_hint_set( 'queue_dead', 'not_found' );
+is_( nppp_http_purge_queue_status_hint(), null, 'hint: *_dead is hidden once the field is emptied' );
+t_reset( [ 'nppp_http_purge_enabled' => 'no' ] ); nppp_http_purge_hint_set( 'queue_blind' );
+is_( nppp_http_purge_queue_status_hint(), null, 'hint: HTTP Purge off -> no advisory' );
+
+// input hardening and lifetime
+t_reset(); nppp_http_purge_hint_set( 'bogus' );
+is_( hint_state(), [], 'hint: unknown code ignored' );
+nppp_http_purge_hint_set( 'queue_dead', 'rm -rf /' );
+is_( hint_state()['detail'], '', 'hint: detail restricted to [a-z_]' );
+t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'hint' => [ 'code' => 'queue_blind', 'detail' => '', 'at' => time() - DAY_IN_SECONDS - 5 ] ], 3600 );
+is_( hint_state(), [], 'hint: older than a day -> ignored' );
+t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'hint' => [ 'code' => 'evil', 'detail' => '', 'at' => time() ] ], 3600 );
+is_( hint_state(), [], 'hint: unknown stored code ignored' );
+t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'hint' => [ 'code' => 'queue_blind', 'detail' => '', 'at' => time() - 100 ] ], 3600 );
+is_( hint_code(), 'queue_blind', 'hint: a fresh stored advisory is read back' );
+// no write for an unchanged, recent advisory; refreshed once it is older than 6 hours
+t_reset(); nppp_http_purge_hint_set( 'queue_blind' );
+$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['hint']['at'] = time() - 3 * HOUR_IN_SECONDS;
+$at = hint_state()['at']; nppp_http_purge_hint_set( 'queue_blind' );
+is_( hint_state()['at'], $at, 'hint: unchanged advisory younger than 6 h causes no write' );
+$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['hint']['at'] = time() - 7 * HOUR_IN_SECONDS;
+nppp_http_purge_hint_set( 'queue_blind' );
+ok( hint_state()['at'] > time() - 60, 'hint: refreshed once older than 6 h' );
+// it coexists with the other remembered state
+t_reset(); nppp_http_purge_hint_set( 'queue_blind' ); nppp_http_purge_remember_method( 'all', 'PURGE' ); nppp_http_purge_arm( 'single', 'x', 600 );
+is_( hint_code(), 'queue_blind', 'hint: survives other state writes' );
+nppp_http_purge_hint_clear();
+is_( [ nppp_http_purge_state()['methods'], locks_keys() ], [ [ 'all' => 'PURGE' ], [ 'single' ] ], 'hint: clearing it leaves methods and locks alone' );
+
+// snapshot: the optional reason parameter is backward compatible
+t_reset(); Q( S( 0, 0 ) );
+ok( is_array( nppp_http_purge_queue_snapshot( 'http://127.0.0.1/s' ) ), 'snapshot: one argument still works' );
+$w = 'x'; Q( R( 404 ) );
+is_( nppp_http_purge_queue_snapshot( 'http://127.0.0.1/s', $w ), null, 'snapshot: 404 -> null' );
+is_( $w, 'not_found', 'snapshot: reason not_found' );
+Q( S( 0, 0 ) ); nppp_http_purge_queue_snapshot( 'http://127.0.0.1/s', $w );
+is_( $w, '', 'snapshot: reason is empty on success' );
 
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
