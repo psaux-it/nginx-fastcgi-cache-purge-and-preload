@@ -311,6 +311,22 @@ function nppp_drop_stale_generations( array &$urls, $before = null ): void {
             $max[ $g ] = $entry['gen'];
         }
     }
+    // Remember whether a live group has no usable namespace state (Advanced tab notice).
+    $unverified = false;
+    $ns_ok      = [];
+    foreach ( $max as $g => $unused ) {
+        $ns = (string) strstr( (string) $g, '|', true );
+        if ( isset( $ns_ok[ $ns ] ) ) {
+            continue;
+        }
+        if ( ! is_array( $before ) || ! isset( $before[ $ns ] ) ) {
+            $unverified = true;
+            break;
+        }
+        $ns_ok[ $ns ] = true;
+    }
+    nppp_gen_scan_unverified( $unverified );
+
     if ( empty( $max ) ) {
         return;
     }
@@ -329,6 +345,44 @@ function nppp_drop_stale_generations( array &$urls, $before = null ): void {
         $kept[] = $entry;
     }
     $urls = $kept;
+}
+
+/**
+ * Request-local flag: the last scan listed generation-mode (p4) files whose staleness could not be
+ * judged from the namespace state (no usable status endpoint, or the namespace is missing from it).
+ * Written by nppp_drop_stale_generations(), read by the Advanced tab notice.
+ *
+ * @param bool|null $set New value, or null to only read.
+ */
+function nppp_gen_scan_unverified( ?bool $set = null ): bool {
+    static $unverified = false;
+    if ( $set !== null ) {
+        $unverified = $set;
+    }
+    return $unverified;
+}
+
+/**
+ * Advanced tab advisory for generation-mode files listed without namespace state.
+ * Derived from what the scan observed, so it does not depend on the Purge All hint (24 h) or on
+ * HTTP Purge being enabled. Plain text, '' when nothing applies.
+ */
+function nppp_gen_scan_unverified_notice(): string {
+    if ( ! nppp_gen_scan_unverified() ) {
+        return '';
+    }
+
+    if ( ! function_exists( 'nppp_http_purge_enabled' ) || ! nppp_http_purge_enabled() ) {
+        return __( 'ngx_cache_purge generation mode files were found in the cache, but HTTP Purge is disabled, so NPP cannot tell which of them Nginx has already invalidated. The list may include files that are no longer served and not yet deleted. Enable HTTP Purge and set the Purge Queue Status Path to hide them.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $url = function_exists( 'nppp_http_purge_queue_status_url' ) ? nppp_http_purge_queue_status_url() : '';
+    if ( $url === '' ) {
+        // Same wording as the Settings page advisory (nppp_http_purge_queue_status_hint), so translations are shared.
+        return __( 'ngx_cache_purge generation mode is active but no Purge Queue Status Path is set. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Set the path of your cache_purge_queue_status location to hide them.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    return __( 'ngx_cache_purge generation mode is active, but the configured Purge Queue Status Path did not return the state of this namespace (unreachable, denied, an older module, or the namespace is missing from the list). Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Check the location and path in Settings.', 'fastcgi-cache-purge-and-preload-nginx' );
 }
 
 /**
@@ -753,6 +807,17 @@ function nppp_premium_html($nginx_cache_path) {
                 <span style="font-size:13px;">' .
                     wp_kses( $wget_msg, array( 'strong' => array() ) ) .
                 '</span>
+            </p>
+        </div>';
+    }
+
+    // Generation mode: files listed without namespace state may already be invalidated by Nginx.
+    $nppp_gen_notice = nppp_gen_scan_unverified_notice();
+    if ( $nppp_gen_notice !== '' ) {
+        $wget_notice_html .= '<div style="background-color:#f0f6fc;border-left:6px solid #72aee6;padding:5px;margin-bottom:15px;max-width:max-content;">
+            <p style="margin:0;display:flex;align-items:center;">
+                <span class="dashicons dashicons-info" style="font-size:22px;color:#2271b1;margin-right:8px;"></span>
+                <span style="font-size:13px;">' . esc_html( $nppp_gen_notice ) . '</span>
             </p>
         </div>';
     }
