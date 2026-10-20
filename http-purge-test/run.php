@@ -907,7 +907,7 @@ foreach ( [
             // generation mode: disk purge cannot match generated keys, so a notice is logged
             ok( notice_has( 'generation mode is active' ), "ambiguous invalidated ($label) reports that the disk purge cannot help" );
             is_( count( $GLOBALS['T']['notices'] ), 1, "ambiguous invalidated ($label) exactly one notice" );
-            is_( nppp_http_purge_state()['ns'], [ 'single' => true ], "ambiguous invalidated ($label) generation mode remembered" );
+            is_( array_keys( nppp_http_purge_state()['ns'] ), [ 'single' ], "ambiguous invalidated ($label) generation mode remembered" );
         } else {
             is_( $GLOBALS['T']['notices'], [], "ambiguous purged ($label, $st $cd) silent" );
         }
@@ -1266,6 +1266,76 @@ is_( nppp_http_purge_queue_snapshot( 'http://127.0.0.1/s', $w ), null, 'snapshot
 is_( $w, 'not_found', 'snapshot: reason not_found' );
 Q( S( 0, 0 ) ); nppp_http_purge_queue_snapshot( 'http://127.0.0.1/s', $w );
 is_( $w, '', 'snapshot: reason is empty on success' );
+
+/* ------------------------------------------------- generation mode expires unless "invalidated" repeats */
+function nppp_gen_mode_seen_probe() { return nppp_http_purge_generation_mode( 'single' ) || nppp_http_purge_generation_mode( 'all' ); }
+function ns_raw() { return $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['ns'] ?? []; }
+function ns_age( string $scope, int $seconds ) { $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['ns'][ $scope ] = time() - $seconds; }
+
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+ok( is_int( ns_raw()['all'] ?? null ) && abs( ns_raw()['all'] - time() ) < 5, 'ns: "invalidated" stores the time it was seen' );
+ok( nppp_http_purge_generation_mode( 'all' ), 'ns: generation mode active right after "invalidated"' );
+
+// younger than 6 h: no write; older: refreshed
+ns_age( 'all', 3 * HOUR_IN_SECONDS ); $before = ns_raw()['all'];
+Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+is_( ns_raw()['all'], $before, 'ns: "invalidated" younger than 6 h causes no write' );
+ns_age( 'all', 7 * HOUR_IN_SECONDS );
+Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+ok( ns_raw()['all'] > time() - 60, 'ns: "invalidated" older than 6 h refreshes the stamp' );
+
+// not confirmed for a day: expires, even though the transient itself is still alive
+ns_age( 'all', DAY_IN_SECONDS + 5 );
+is_( nppp_http_purge_state()['ns'], [], 'ns: older than a day -> ignored' );
+is_( nppp_http_purge_generation_mode( 'all' ), false, 'ns: expired generation mode is off' );
+
+// unrelated state writes must not keep an unconfirmed flag alive
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+ns_age( 'all', 23 * HOUR_IN_SECONDS );
+for ( $i = 0; $i < 3; $i++ ) {
+    nppp_http_purge_remember_method( 'single', $i % 2 ? 'GET' : 'PURGE' ); // each call rewrites the state and its TTL
+    nppp_http_purge_hint_set( 'queue_blind', '' ); $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['hint']['at'] = time() - 7 * HOUR_IN_SECONDS;
+}
+ok( ( ns_raw()['all'] ?? 0 ) <= time() - 23 * HOUR_IN_SECONDS + 5, 'ns: other state writes do not refresh generation mode' );
+ns_age( 'all', DAY_IN_SECONDS + 5 );
+nppp_http_purge_remember_method( 'single', 'PURGE' );
+is_( nppp_http_purge_state()['ns'], [], 'ns: unconfirmed flag is gone within a day although the state keeps being written' );
+
+// 202 is answered only by a location without a namespace: it ends generation mode for that scope at once
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+Q( R( 202, 'accepted' ) ); nppp_http_purge_all();
+is_( nppp_http_purge_state()['ns'], [], 'ns: "accepted" (202) clears generation mode at once' );
+ok( nppp_http_purge_state()['hint']['code'] === 'queue_blind', 'ns: the queue advisory is raised by the same answer' );
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_try_first( 'https://example.com/a/' );
+Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+Q( R( 202, 'accepted' ) ); nppp_http_purge_all();
+is_( array_keys( nppp_http_purge_state()['ns'] ), [ 'single' ], 'ns: a 202 on Purge All leaves the single scope alone' );
+// a bare 202 (v3 background queue, no Cache-Purge-Code header) is 'accepted' too
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+Q( R( 202 ) ); nppp_http_purge_all();
+is_( nppp_http_purge_state()['ns'], [], 'ns: a plain v3 202 clears it as well' );
+
+// a synchronous answer still forgets it at once; no write when there is nothing to forget
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+Q( R( 200, 'purged' ) ); nppp_http_purge_all();
+is_( nppp_http_purge_state()['ns'], [], 'ns: a synchronous purge clears generation mode at once' );
+t_reset(); $GLOBALS['T']['ttl'] = []; nppp_http_purge_remember_generation( 'all', false );
+is_( $GLOBALS['T']['ttl'], [], 'ns: forgetting what is not set writes nothing' );
+
+// state written by older plugin versions stored `true`
+t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'ns' => [ 'all' => true, 'single' => true, 'bogus' => true ] ], 3600 );
+is_( array_keys( nppp_http_purge_state()['ns'] ), [ 'all', 'single' ], 'ns: legacy `true` flags are still honoured, unknown scopes dropped' );
+ok( nppp_http_purge_generation_mode( 'single' ) && nppp_gen_mode_seen_probe(), 'ns: legacy flag keeps generation mode on' );
+nppp_http_purge_remember_method( 'all', 'PURGE' );
+ok( is_int( ns_raw()['all'] ) && ns_raw()['all'] > 1, 'ns: legacy `true` becomes a timestamp on the next write' );
+// a future stamp (clock step) is clamped, not trusted
+t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'ns' => [ 'all' => time() + 10 * DAY_IN_SECONDS ] ], 3600 );
+ok( nppp_http_purge_state()['ns']['all'] <= time(), 'ns: a future stamp is clamped to now' );
+// the single scope behaves the same
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_try_first( 'https://example.com/a/' );
+ok( ! empty( nppp_http_purge_state()['ns']['single'] ), 'ns: single scope remembered by "invalidated"' );
+ns_age( 'single', DAY_IN_SECONDS + 5 );
+is_( nppp_http_purge_generation_mode( 'single' ), false, 'ns: single scope expires too' );
 
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
