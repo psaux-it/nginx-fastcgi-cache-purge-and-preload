@@ -6959,3 +6959,32 @@ body.nppp-f2b-modal-open { overflow: hidden; }
     #nppp-f2b-tab .nppp-f2b-modal-foot .nppp-f2b-btn { width: 100%; }
     #nppp-f2b-tab .nppp-f2b-abuse-preview-table th { width: auto; }
 }
+
+/* ============================================================
+   HTTP Purge options: keep descriptions at the same readable
+   width as the other settings
+   ============================================================ */
+#nppp-http-purge-main-row td > p.description,
+#nppp-http-purge-custom-url-row td > p.description,
+#nppp-http-purge-suffix-row td > p.description,
+#nppp-http-purge-all-path-row td > p.description,
+#nppp-http-purge-queue-status-row td > p.description {
+    max-width: 67em;
+    box-sizing: border-box;
+    line-height: 1.5;
+    margin: 0 0 8px;
+}
+
+/* Queue Status warning notice follows the same width */
+#nppp-http-purge-queue-status-row td > .notice {
+    max-width: 67em;
+    box-sizing: border-box;
+}
+
+/* Small gap between the input and its first description line */
+#nppp-http-purge-custom-url-row td > input.regular-text,
+#nppp-http-purge-suffix-row td > input.regular-text,
+#nppp-http-purge-all-path-row td > input.regular-text,
+#nppp-http-purge-queue-status-row td > input.regular-text {
+    margin-bottom: 8px;
+}
