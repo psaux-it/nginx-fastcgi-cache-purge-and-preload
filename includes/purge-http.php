@@ -221,7 +221,7 @@ function nppp_http_purge_base_url(): string {
     $s      = get_option( 'nginx_cache_settings', [] );
     $suffix = ( is_array( $s ) && isset( $s['nppp_http_purge_suffix'] ) && $s['nppp_http_purge_suffix'] !== '' )
               ? (string) $s['nppp_http_purge_suffix']
-              : 'purge';
+              : 'npp_purge_single';
 
     return nppp_http_purge_origin() . '/' . trim( $suffix, '/' );
 }
@@ -235,7 +235,7 @@ function nppp_http_purge_all_path(): string {
     $s    = get_option( 'nginx_cache_settings', [] );
     $path = ( is_array( $s ) && isset( $s['nppp_http_purge_all_path'] ) && $s['nppp_http_purge_all_path'] !== '' )
             ? (string) $s['nppp_http_purge_all_path']
-            : 'purge_all';
+            : 'npp_purge_all';
 
     return trim( $path, '/' );
 }
