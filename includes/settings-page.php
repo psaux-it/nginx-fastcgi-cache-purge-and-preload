@@ -908,7 +908,7 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <!-- HTTP Purge Fast-Path Section -->
-                        <tr valign="top">
+                        <tr valign="top" id="nppp-http-purge-main-row">
                             <th scope="row">
                                 <span class="dashicons dashicons-rest-api"></span>
                                 <?php echo esc_html__( 'HTTP Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
