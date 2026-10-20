@@ -384,7 +384,8 @@ if ( $sc === 'deferred_waiter' ) {
         }
         chk( $busy_ticks >= 1, 'B: cron ticks while the real queue is busy fire nothing and re-arm (it waited ' . $busy_ticks . ' tick(s))', "busy_ticks=$busy_ticks" );
         chk( $fires() === 1 && $fired_files === 0, 'B: the cron fail-safe fired the hook once, only after the real queue deleted every file', 'fires=' . $fires() . ' files_at_fire=' . var_export( $fired_files, true ) );
-        chk( ( $GLOBALS['T']['actions'][0][1] ?? null ) === [ true ], 'B: with the auto_preload flag of the Purge All that armed it' );
+        $fired = array_values( array_filter( $GLOBALS['T']['actions'] ?? [], fn( $a ) => $a[0] === 'nppp_purged_all' ) );   // other actions (nppp_http_purge_result) are recorded too
+        chk( ( $fired[0][1] ?? null ) === [ true ], 'B: with the auto_preload flag of the Purge All that armed it', json_encode( $fired ) );
         chk( $state() === null && $marker() === null, 'B: state consumed and the stale gate marker dropped once the real queue proved idle' );
         $pre = $fires(); nppp_http_purge_run_deferred_purged_all();
         chk( $fires() === $pre && $posts() === [], 'B: one more tick fires nothing (at most once) and no wake POST happened' );
