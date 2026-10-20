@@ -948,7 +948,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_http_purge_suffix_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'The URI path used to purge individual cached pages. This must match the regex pattern in your Nginx single purge location block (e.g., location ~ ^/purge(/.*)). Default: purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The URI path used to purge individual cached pages. This must match the regex pattern in your Nginx single purge location block (e.g., location ~ ^/npp_purge_single(/.*)). Default: npp_purge_single.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
 	                    <tr valign="top" id="nppp-http-purge-all-path-row">
@@ -958,7 +958,7 @@ function nppp_nginx_cache_settings_page() {
                             </th>
                             <td>
                                 <?php nppp_http_purge_all_path_callback(); ?>
-                                <p class="description"><?php echo esc_html__( 'The URI path used to clear the entire cache. This must match the exact URI in your Nginx purge all location block (e.g., location = /purge_all). Default: purge_all.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'The URI path used to clear the entire cache. This must match the exact URI in your Nginx purge all location block (e.g., location = /npp_purge_all). Default: npp_purge_all.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top" id="nppp-http-purge-queue-status-row">
