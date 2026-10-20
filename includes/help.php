@@ -499,7 +499,7 @@ location = /npp_purge_all {
     fastcgi_cache_purge GET purge_all from all;
 }</pre>
 
-                        <p><strong>Optional — ngx_cache_purge v4 only:</strong> if you use <code>cache_purge_background_queue on</code>, add a queue status location so NPP can confirm that a queued (<code>202</code>) Purge All has finished before preloading starts, then enter its path in <strong>Purge Queue Status Path</strong>. The directive does not exist in v2/v3 — <strong>do not add it on those versions, Nginx will refuse to load the configuration</strong> (<code>unknown directive "cache_purge_queue_status"</code>).</p>
+                        <p><strong>Required when the background queue is on — ngx_cache_purge v4 only:</strong> if you use <code>cache_purge_background_queue on</code> (or generation keys), add a queue status location so NPP can confirm that a queued (<code>202</code>) Purge All has finished before preloading starts, then enter its path in <strong>Purge Queue Status Path</strong>. Without it, on a large cache the filesystem purge and the preload can start while Nginx is still deleting, and Nginx can then delete the freshly preloaded pages. The directive does not exist in v2/v3 — <strong>do not add it on those versions, Nginx will refuse to load the configuration</strong> (<code>unknown directive "cache_purge_queue_status"</code>).</p>
 
 <pre>## Purge Queue Status location - (requires ngx_cache_purge ≥ 4.0)
 location = /npp_purge_status {
@@ -568,7 +568,7 @@ location = /npp_purge_status {
                                 <tr>
                                     <td><strong>Purge Queue Status Path</strong></td>
                                     <td>(empty)</td>
-                                    <td>Optional. The exact URI path of your <code>cache_purge_queue_status</code> location (e.g. <code>location = /purge_status</code>), available in ngx_cache_purge ≥ 4.0. Only needed when Nginx uses <code>cache_purge_background_queue on</code>: NPP then reads the queue status to confirm that a queued (<code>202</code>) Purge All has finished before the filesystem fallback or the preload starts. Leave empty otherwise. Restrict the location with <code>allow</code>/<code>deny</code>; the same Purge Custom Base URL is used for it.</td>
+                                    <td>The exact URI path of your <code>cache_purge_queue_status</code> location (e.g. <code>location = /npp_purge_status</code>), available in ngx_cache_purge ≥ 4.0. Set it when Nginx uses <code>cache_purge_background_queue on</code>: NPP then reads the queue status to confirm that a queued (<code>202</code>) Purge All has finished before the filesystem fallback or the preload starts. Without it, on a large cache the preload can start while Nginx is still deleting and the freshly preloaded pages can be deleted; NPP shows a warning next to the field when it detects this. With generation keys (<code>cache_purge_key</code>) it lets Status and Advanced hide files Nginx has already invalidated but not yet deleted. Leave empty on ngx_cache_purge v2/v3 or when neither is used. Restrict the location with <code>allow</code>/<code>deny</code>; the same Purge Custom Base URL is used for it.</td>
                                 </tr>
                             </tbody>
                         </table>
