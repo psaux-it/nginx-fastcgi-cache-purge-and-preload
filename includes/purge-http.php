@@ -228,7 +228,7 @@ function nppp_http_purge_base_url(): string {
 
 /**
  * Sanitized URL path segment for the dedicated Purge All nginx endpoint
- * (e.g. "purge_all" in `location = /purge_all`). Independent of the
+ * (e.g. "npp_purge_all" in `location = /npp_purge_all`). Independent of the
  * Single Purge Path, they hit two different nginx locations.
  */
 function nppp_http_purge_all_path(): string {
