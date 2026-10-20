@@ -42,17 +42,17 @@ ALLZONE=NPP; ALLCACHE_KEY="$KEYLINE"
 [ "$MODE" = single202 ] && PK='"$scheme$request_method$host$1*"'
 ST=""
 RTLINE="cache_purge_response_type $RT;"; [ "$MODE" = v25 ] && RTLINE=""
-PALLBLOCK="location = /purge_all { allow 127.0.0.1; deny all; $BIND fastcgi_cache $ALLZONE; $KEYLINE fastcgi_cache_purge GET purge_all from all; }"
+PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; $BIND fastcgi_cache $ALLZONE; $KEYLINE fastcgi_cache_purge GET purge_all from all; }"
 [ "$MODE" = v25 ] && PALLBLOCK=""
-SINGLEBLOCK="location ~ ^/purge(/.*) { allow 127.0.0.1; deny all; $BIND1 fastcgi_cache_purge NPP $PK; }"
+SINGLEBLOCK="location ~ ^/npp_purge_single(/.*) { allow 127.0.0.1; deny all; $BIND1 fastcgi_cache_purge NPP $PK; }"
 case $MODE in
-  denied)    PALLBLOCK="location = /purge_all { allow 127.0.0.1; deny all; fastcgi_cache $ALLZONE; $KEYLINE fastcgi_cache_purge GET purge_all from 10.255.255.1; }"
-             SINGLEBLOCK="location ~ ^/purge(/.*) { deny all; fastcgi_cache_purge NPP $PK; }";;
-  method405) PALLBLOCK="location = /purge_all { allow 127.0.0.1; deny all; fastcgi_cache $ALLZONE; $KEYLINE fastcgi_cache_purge PURGE purge_all from all; }"
-             SINGLEBLOCK="location ~ ^/purge(/.*) { allow 127.0.0.1; deny all; fastcgi_cache NPP; fastcgi_cache_key \"$SKG\"; fastcgi_cache_purge PURGE from all; }";;
-  nocache)   PALLBLOCK="location = /purge_all { allow 127.0.0.1; deny all; fastcgi_cache off; $KEYLINE fastcgi_cache_purge GET purge_all from all; }";;
-  wrongep)   SINGLEBLOCK="location ~ ^/purge(/.*) { allow 127.0.0.1; deny all; cache_purge_queue_status /tmp/npp-cache; }";;
-  keymismatch) PALLBLOCK="location = /purge_all { allow 127.0.0.1; deny all; $BIND fastcgi_cache $ALLZONE; fastcgi_cache_key \"x\$cache_purge_key\"; fastcgi_cache_purge GET purge_all from all; }";;
+  denied)    PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; fastcgi_cache $ALLZONE; $KEYLINE fastcgi_cache_purge GET purge_all from 10.255.255.1; }"
+             SINGLEBLOCK="location ~ ^/npp_purge_single(/.*) { deny all; fastcgi_cache_purge NPP $PK; }";;
+  method405) PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; fastcgi_cache $ALLZONE; $KEYLINE fastcgi_cache_purge PURGE purge_all from all; }"
+             SINGLEBLOCK="location ~ ^/npp_purge_single(/.*) { allow 127.0.0.1; deny all; fastcgi_cache NPP; fastcgi_cache_key \"$SKG\"; fastcgi_cache_purge PURGE from all; }";;
+  nocache)   PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; fastcgi_cache off; $KEYLINE fastcgi_cache_purge GET purge_all from all; }";;
+  wrongep)   SINGLEBLOCK="location ~ ^/npp_purge_single(/.*) { allow 127.0.0.1; deny all; cache_purge_queue_status /tmp/npp-cache; }";;
+  keymismatch) PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; $BIND fastcgi_cache $ALLZONE; fastcgi_cache_key \"x\$cache_purge_key\"; fastcgi_cache_purge GET purge_all from all; }";;
 esac
 [ "$STATUS" = yes ] && ST='location = /purge_status { allow 127.0.0.1; deny all; cache_purge_queue_status /tmp/npp-cache; }'
 THR=""; [ "$NG" = "$V4" ] && THR="thread_pool default threads=2;"
