@@ -2110,8 +2110,8 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
             // PIDFILE exists but PID is dead/stale — no live process to protect.
             // Safe to clear monitoring hook and phase state immediately.
             wp_clear_scheduled_hook('npp_cache_preload_status_event');
-            delete_transient($nppp_phase_key);
-            delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+            nppp_preload_phase_delete();
+            nppp_preload_cycle_start_delete();
 
             // Kill the watchdog after purge has already killed the preload
             nppp_kill_preload_watcher();
@@ -2184,8 +2184,8 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         // No PIDFILE — no preload was running at all.
         // Safe to clear monitoring hook and phase state immediately.
         wp_clear_scheduled_hook('npp_cache_preload_status_event');
-        delete_transient($nppp_phase_key);
-        delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+        nppp_preload_phase_delete();
+        nppp_preload_cycle_start_delete();
 
         // Kill the watchdog after purge has already killed the preload
         nppp_kill_preload_watcher();
