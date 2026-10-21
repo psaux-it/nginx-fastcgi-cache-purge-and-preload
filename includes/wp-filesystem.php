@@ -227,6 +227,9 @@ function nppp_validate_purge_path($directory_path) {
  * This helper never follows links: a link is unlinked itself, its target is untouched.
  *
  * Tolerates concurrent removal (Nginx cache manager): a vanished path counts as deleted.
+ * Also tolerates concurrent creation: Nginx or a preload request can store a fresh entry in a
+ * directory after it was listed, which makes rmdir() fail with "Directory not empty" although
+ * nothing is wrong. A directory whose known entries were all removed is re-listed (max 3 passes).
  *
  * Why raw PHP (is_link/scandir/unlink/rmdir) instead of WP_Filesystem or wp_delete_file():
  * - WP_Filesystem has no symlink-aware primitive. Its recursive delete() lists children via
@@ -235,7 +238,7 @@ function nppp_validate_purge_path($directory_path) {
  *   to walk a tree that may contain planted links. The is_link() decision must be made on the
  *   exact entry being removed, which the API cannot express.
  * - wp_delete_file() runs the 'wp_delete_file' filter, which any plugin can use to rewrite or
- *   veto the path, and it only returns a status since WP 6.7 (this plugin supports 6.5+).
+ *   veto the path, and it only returns a status since WP 6.7.
  *   A purge removes tens of thousands of entries; the safety of this routine depends on deleting
  *   exactly the entry it was given and on reliable success reporting.
  * Single known files elsewhere in the plugin still go through WP_Filesystem.
@@ -261,22 +264,41 @@ function nppp_delete_tree(string $path): bool {
         return !is_link($path) && !file_exists($path);
     }
 
-    $entries = @scandir($path);
-    if ($entries !== false) {
-        foreach ($entries as $name) {
-            if ($name === '.' || $name === '..') {
-                continue;
+    // Real directory. A concurrent writer (Nginx storing a fresh entry, a preload request
+    // finishing) can add a child after scandir() but before rmdir(), so re-list a bounded number
+    // of times. Retry ONLY when every entry we knew about was removed: a real failure (e.g.
+    // permissions) never loops. Retry ONLY while the path is still a real directory: a swapped-in
+    // link is never descended into.
+    for ($pass = 0; $pass < 3; $pass++) {
+        $clean   = true;
+        $entries = @scandir($path);
+        if ($entries === false) {
+            $clean = false;
+        } else {
+            foreach ($entries as $name) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                if (!nppp_delete_tree($path . '/' . $name)) {
+                    $clean = false;
+                }
             }
-            nppp_delete_tree($path . '/' . $name);
+        }
+
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Intentional, see nppp_delete_tree() docblock: WP_Filesystem has no symlink-safe recursive delete (Trac #36710).
+        if (@rmdir($path)) {
+            return true;
+        }
+        clearstatcache(true, $path);
+        if (is_link($path) || !is_dir($path)) {
+            return !is_link($path) && !file_exists($path);
+        }
+        if (!$clean) {
+            break;
         }
     }
 
-    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Intentional, see nppp_delete_tree() docblock: WP_Filesystem has no symlink-safe recursive delete (Trac #36710).
-    if (@rmdir($path)) {
-        return true;
-    }
-    clearstatcache(true, $path);
-    return !is_link($path) && !file_exists($path);
+    return false;
 }
 
 // Purge cache with WP_Filesystem
