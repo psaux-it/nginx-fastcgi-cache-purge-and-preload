@@ -201,9 +201,13 @@ function nppp_f2b_record_abuse_report( string $ip ): void {
 }
 
 // Same rotating-bucket shape as nppp_f2b_rate_exceeded(): one transient row.
+// Same rotating-bucket shape as nppp_f2b_rate_exceeded(): one row. Kept as an
+// option-backed state row (includes/state.php, nppp_st_f2b_abuse_rate), not a
+// transient, so an object-cache flush cannot reset the hourly ceiling on
+// outgoing abuse mail. The legacy transient is still read once for an in-place update.
 function nppp_f2b_abuse_rate_exceeded(): bool {
     $window = (int) floor( time() / HOUR_IN_SECONDS );
-    $bucket = get_transient( NPPP_F2B_ABUSE_RATE_KEY );
+    $bucket = nppp_state_get_with_legacy( 'f2b_abuse_rate', NPPP_F2B_ABUSE_RATE_KEY );
 
     if ( ! is_array( $bucket ) || ( $bucket['w'] ?? 0 ) !== $window ) {
         $bucket = array(
@@ -219,7 +223,7 @@ function nppp_f2b_abuse_rate_exceeded(): bool {
     }
 
     $bucket['c'] = (int) $bucket['c'] + 1;
-    set_transient( NPPP_F2B_ABUSE_RATE_KEY, $bucket, 2 * HOUR_IN_SECONDS );
+    nppp_state_set_with_legacy( 'f2b_abuse_rate', NPPP_F2B_ABUSE_RATE_KEY, $bucket, 2 * HOUR_IN_SECONDS );
 
     return false;
 }
@@ -1207,8 +1211,39 @@ if ( ! defined( 'NPPP_F2B_RIPE_REG_COOLDOWN_DAYS' ) ) {
 
 // Site-wide lock: at most one registration mail per day, whatever the
 // identifier, so changing the suffix back and forth cannot flood the RIPEstat team's inbox.
+// Legacy (<= 2.1.8) transient name. Still honoured on read, so an in-place update
+// inside the 24 h window keeps the lock; nothing writes it any more.
 if ( ! defined( 'NPPP_F2B_RIPE_REG_RATE_KEY' ) ) {
     define( 'NPPP_F2B_RIPE_REG_RATE_KEY', 'nppp_f2b_ripe_reg_rl' );
+}
+
+// Current lock: an atomic wp_options row (nppp_f2b_ripe_reg.lock, WP_Upgrader::create_lock(),
+// a single INSERT IGNORE), so neither an object-cache flush nor a double click can lift it.
+if ( ! defined( 'NPPP_F2B_RIPE_REG_LOCK_NAME' ) ) {
+    define( 'NPPP_F2B_RIPE_REG_LOCK_NAME', 'nppp_f2b_ripe_reg' );
+}
+
+// Claim the 24 h registration slot. false = a registration mail already went out
+// (or is being sent right now) in the last 24 hours.
+function nppp_f2b_ripe_reg_acquire_lock(): bool {
+    if ( false !== get_transient( NPPP_F2B_RIPE_REG_RATE_KEY ) ) {
+        return false;
+    }
+
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    return WP_Upgrader::create_lock( NPPP_F2B_RIPE_REG_LOCK_NAME, DAY_IN_SECONDS );
+}
+
+// Give the slot back (no-op if not held). Used only when the transport rejects the mail.
+function nppp_f2b_ripe_reg_release_lock(): void {
+    if ( ! class_exists( 'WP_Upgrader' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+
+    WP_Upgrader::release_lock( NPPP_F2B_RIPE_REG_LOCK_NAME );
 }
 
 // Unix time the current identifier was last emailed to the RIPEstat team, or 0. A record
@@ -1415,21 +1450,19 @@ function nppp_f2b_ripe_reg_send(): array {
         );
     }
 
-    if ( false !== get_transient( NPPP_F2B_RIPE_REG_RATE_KEY ) ) {
+    // Atomic claim before sending, so a double click cannot produce two mails;
+    // released again below if the transport rejects the message.
+    if ( ! nppp_f2b_ripe_reg_acquire_lock() ) {
         return array(
             'ok'      => false,
             'message' => __( 'A registration email was already sent in the last 24 hours. Please wait before sending another.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
     }
 
-    // Lock before sending so a double click cannot produce two mails; released
-    // again below if the transport rejects the message.
-    set_transient( NPPP_F2B_RIPE_REG_RATE_KEY, time(), DAY_IN_SECONDS );
-
     $result = nppp_wp_mail_diagnostic( $mail['to'], $mail['subject'], $mail['body'], $mail['headers'] );
 
     if ( ! $result['sent'] ) {
-        delete_transient( NPPP_F2B_RIPE_REG_RATE_KEY );
+        nppp_f2b_ripe_reg_release_lock();
         nppp_f2b_log( 'ERROR', 'RIPEstat registration failed: sourceapp=' . nppp_f2b_rdap_sourceapp() . ' error=' . $result['error'] );
         return array(
             'ok'      => false,
