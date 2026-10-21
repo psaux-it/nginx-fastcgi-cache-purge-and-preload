@@ -268,14 +268,12 @@ function nppp_create_scheduled_events($cron_expression) {
 
 // Create process status check event for preload action
 function nppp_create_scheduled_event_preload_status() {
-    // Reset phase transient on every fresh preload start so stale state
+    // Reset phase state on every fresh preload start so stale state
     // from any previous interrupted cycle never corrupts the new one.
-    $phase_transient_key = 'nppp_preload_phase_' . md5('nppp');
-    delete_transient($phase_transient_key);
+    nppp_preload_phase_delete();
 
     // Save cycle start timestamp for total elapsed time calculation
-    $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
-    set_transient($start_transient_key, time(), 12 * HOUR_IN_SECONDS);
+    nppp_preload_cycle_start_set(time());
 
     // Generate a fresh watchdog token for this preload cycle.
     // The watchdog spawned in preload will carry this token.
@@ -296,7 +294,7 @@ function nppp_create_scheduled_event_preload_status() {
 // request_terminate_timeout, or fastcgi_read_timeout — regardless of how long
 // the preload takes.
 //
-// Phase tracking via transient:
+// Phase tracking via option (includes/state.php, survives an object-cache flush):
 //   nppp_preload_phase = 'desktop'  (default, set implicitly)
 //   nppp_preload_phase = 'mobile'   (set after desktop finishes + mobile starts)
 function nppp_create_scheduled_event_preload_status_callback() {
@@ -317,18 +315,13 @@ function nppp_create_scheduled_event_preload_status_callback() {
     $PIDFILE = nppp_get_runtime_file('cache_preload.pid');
 
     // Determine current phase — 'desktop' (default) or 'mobile'
-    $static_key_base = 'nppp';
-    $phase_transient_key = 'nppp_preload_phase_' . md5($static_key_base);
-    $phase = get_transient($phase_transient_key);
-    if ($phase === false) {
-        $phase = 'desktop';
-    }
+    $phase = nppp_preload_phase_get(true);
 
     // PIDFILE gone means a purge action stopped the preload externally.
-    // Clean up our phase transient and exit — nothing more to do.
+    // Clean up our phase state and exit — nothing more to do.
     if (!$wp_filesystem->exists($PIDFILE)) {
-        delete_transient($phase_transient_key);
-        delete_transient('nppp_preload_cycle_start_' . md5('nppp'));
+        nppp_preload_phase_delete();
+        nppp_preload_cycle_start_delete();
         return;
     }
 
@@ -361,7 +354,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // Lock phase to 'mobile' IMMEDIATELY after deleting desktop PIDFILE.
         // Any REST poll firing from this point on sees phase='mobile' and
         // cannot re-enter this branch
-        set_transient($phase_transient_key, 'mobile', 12 * HOUR_IN_SECONDS);
+        nppp_preload_phase_set('mobile');
 
         // Generate a fresh watchdog token for this preload cycle.
         // The watchdog spawned in preload will carry this token.
@@ -408,9 +401,9 @@ function nppp_create_scheduled_event_preload_status_callback() {
         return;
     }
 
-    // All phases done — clean up phase transient
+    // All phases done — clean up phase state
     $mobile_enabled = ($phase === 'mobile');
-    delete_transient($phase_transient_key);
+    nppp_preload_phase_delete();
 
     /** ALL PRELOAD ACTIONS ENDED  */
 
@@ -506,9 +499,8 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
     // Elapsed time comes from wget's own wall clock line parsed above.
     // If wget did not write it (e.g. interrupted), fall back to a plain notice.
-    $start_transient_key = 'nppp_preload_cycle_start_' . md5('nppp');
-    $cycle_start = get_transient($start_transient_key);
-    delete_transient($start_transient_key);
+    $cycle_start = nppp_preload_cycle_start_get(true);
+    nppp_preload_cycle_start_delete();
 
     if ($mobile_enabled && $cycle_start && !empty($last_preload_time)) {
         // Use wget's own FINISHED timestamp as end — immune to cron delay
