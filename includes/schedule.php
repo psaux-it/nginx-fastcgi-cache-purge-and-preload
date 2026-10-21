@@ -320,8 +320,16 @@ function nppp_create_scheduled_event_preload_status_callback() {
     // PIDFILE gone means a purge action stopped the preload externally.
     // Clean up our phase state and exit — nothing more to do.
     if (!$wp_filesystem->exists($PIDFILE)) {
-        nppp_preload_phase_delete();
-        nppp_preload_cycle_start_delete();
+        // A concurrent tick (WP-Cron vs watchdog) may be in the middle of the
+        // desktop -> mobile hand-off: it has deleted the desktop PID file and set
+        // phase='mobile', but the mobile PID is not written yet. It holds the
+        // completion lock (and the start lock inside nppp_preload()) for that whole
+        // window, so wiping the state here would lose the phase and make the mobile
+        // crawl run twice. A genuinely stopped preload has no lock holder.
+        if (!nppp_completion_lock_in_flight() && !nppp_preload_start_in_flight()) {
+            nppp_preload_phase_delete();
+            nppp_preload_cycle_start_delete();
+        }
         return;
     }
 
