@@ -82,10 +82,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_wget_compatibility_' . md5($static_key_base),
         'nppp_cron_reliability_' . md5($static_key_base),
         'nppp_missing_commands_' . md5($static_key_base),
-        'nppp_preload_trigger_' . md5($static_key_base),
         'nppp_mail_health_' . md5($static_key_base),
-        'nppp_http_purge_endpoint_broken',
-        'nppp_gen_mode_seen',
         'nppp_wget_urls_cache_prev_key',
         'nppp_safexec_ok',
         'nppp_category_map',
@@ -108,6 +105,10 @@ function nppp_clear_plugin_cache($silent = false) {
         delete_transient($transient);
     }
 
+    // Option-backed state (includes/state.php): the reset helpers also drop the pre-2.1.9 transients.
+    nppp_http_purge_state_reset();
+    nppp_gen_mode_flag_delete();
+
     // Re-arm the Vary: Accept-Encoding probe and its notice row so the
     // detection runs fresh on the next settings page load.
     delete_option( 'nppp_vary_notice_dismissed' );
@@ -115,16 +116,18 @@ function nppp_clear_plugin_cache($silent = false) {
     // Re-arm the DISABLE_WP_CRON notice row the same way.
     delete_option( 'nppp_cron_notice_dismissed' );
 
-    // Transients that must not be cleared while a preload is running:
-    //   nppp_preload_phase_        — tick monitor reads this every 5s to track desktop/mobile phase
-    //   nppp_preload_cycle_start_  — needed at completion to calculate total elapsed time
-    //   nppp_ping_token_           — watchdog validates this token when preload finishes;
-    //                                deleting it causes watchdog to 403 and post-preload tasks never fire
+    // Job state that must not be cleared while a preload is running:
+    //   nppp_preload_phase (option)       — tick monitor reads this every 5s to track desktop/mobile phase
+    //   nppp_preload_cycle_start (option) — needed at completion to calculate total elapsed time
+    //   nppp_preload_trigger (option)     — shown in the completion mail; read once at completion
+    //   nppp_ping_token_ (transient)      — watchdog validates this token when preload finishes;
+    //                                       deleting it causes watchdog to 403 and post-preload tasks never fire
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ( ! nppp_is_preload_running( $wp_filesystem ) ) {
+        nppp_preload_phase_delete();
+        nppp_preload_cycle_start_delete();
+        nppp_preload_trigger_delete();
         $job_transients = array(
-            'nppp_preload_phase_'       . md5($static_key_base),
-            'nppp_preload_cycle_start_' . md5($static_key_base),
             'nppp_ping_token_'          . md5($static_key_base),
         );
         foreach ($job_transients as $transient) {
