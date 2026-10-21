@@ -131,6 +131,17 @@ function nppp_reset_plugin_settings_on_deactivation() {
         // termination was just confirmed above — safe to remove the PID file.
         nppp_perform_file_operation($PIDFILE, 'delete');
     }
+
+    // No live preload process is left (none existed, or its termination was just
+    // confirmed above; a failed kill returns earlier and never gets here). The
+    // tick monitor is already unscheduled, so drop the job state it would have
+    // consumed. A running preload must keep its state, same rule as
+    // nppp_clear_plugin_cache().
+    if ($wp_filesystem !== false && function_exists('nppp_preload_phase_delete')) {
+        nppp_preload_phase_delete();
+        nppp_preload_cycle_start_delete();
+        nppp_preload_trigger_delete();
+    }
 }
 
 // Re-arm the scheduled preload on (re)activation.
