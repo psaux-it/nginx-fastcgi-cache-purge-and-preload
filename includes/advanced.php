@@ -387,11 +387,12 @@ function nppp_gen_scan_unverified_notice(): string {
 
 /**
  * Remember that generation-mode keys were seen in the cache directory (24 h).
- * One transient read per scan; written only when it is missing.
+ * One option read per scan; written only when it is missing. Option-backed
+ * (includes/state.php) so an object-cache flush does not drop it.
  */
 function nppp_gen_mode_note_seen(): void {
-    if ( get_transient( 'nppp_gen_mode_seen' ) === false ) {
-        set_transient( 'nppp_gen_mode_seen', 1, DAY_IN_SECONDS );
+    if ( ! nppp_gen_mode_flag_get() ) {
+        nppp_gen_mode_flag_set();
     }
 }
 
@@ -402,7 +403,7 @@ function nppp_gen_mode_note_seen(): void {
  * about the page's current file.
  */
 function nppp_gen_mode_seen(): bool {
-    if ( get_transient( 'nppp_gen_mode_seen' ) !== false ) {
+    if ( nppp_gen_mode_flag_get() ) {
         return true;
     }
     return function_exists( 'nppp_http_purge_generation_mode' )
