@@ -34,8 +34,12 @@ function t_reset( array $settings = [] ) {
 function t_filter( $tag, $fn ) { $GLOBALS['T']['filters'][ $tag ] = $fn; }
 
 function get_option( $k, $d = false ) { return $GLOBALS['T']['options'][ $k ] ?? $d; }
-function update_option( $k, $v, $autoload = null ) { $GLOBALS['T']['options'][ $k ] = $v; $GLOBALS['T']['autoload'][ $k ] = $autoload; return true; }
-function delete_option( $k ) { unset( $GLOBALS['T']['options'][ $k ], $GLOBALS['T']['autoload'][ $k ] ); return true; }
+function update_option( $k, $v, $autoload = null ) {
+    $GLOBALS['T']['options'][ $k ] = $v; $GLOBALS['T']['autoload'][ $k ] = $autoload;
+    if ( strpos( $k, 'nppp_st_' ) === 0 && is_array( $v ) && isset( $v['exp'] ) ) { $GLOBALS['T']['ttl'][ $k ] = $v['exp'] > 0 ? $v['exp'] - time() : 0; }
+    return true;
+}
+function delete_option( $k ) { unset( $GLOBALS['T']['options'][ $k ], $GLOBALS['T']['autoload'][ $k ], $GLOBALS['T']['ttl'][ $k ] ); return true; }
 function wp_cache_delete( $k, $g = '' ) { return true; }
 function home_url() { return 'https://example.com'; }
 function wp_parse_url( $u, $c = -1 ) { return parse_url( $u, $c ); }
@@ -85,12 +89,15 @@ function is_( $got, $want, $name ) {
 function nreq() { return count( $GLOBALS['T']['requests'] ); }
 function lockstate() { return nppp_http_purge_state()['locks']; }
 function locks_keys() { $k = array_keys( lockstate() ); sort( $k ); return $k; }
-function last_ttl() { return $GLOBALS['T']['ttl'][ NPPP_HTTP_PURGE_BROKEN_KEY ] ?? null; }
+const EP_OPT = 'nppp_st_http_purge_endpoint';   // endpoint state row since 2.1.9 (includes/state.php)
+function ep_seed( $state, int $ttl = 3600 ) { update_option( EP_OPT, [ 'v' => $state, 'exp' => time() + $ttl ], false ); }
+function last_ttl() { return $GLOBALS['T']['ttl'][ EP_OPT ] ?? null; }
 function notice_has( $needle ) { foreach ( $GLOBALS['T']['notices'] as $n ) { if ( strpos( $n[1], $needle ) !== false ) return true; } return false; }
 function all_log_only() { foreach ( $GLOBALS['T']['notices'] as $n ) { if ( $n[2] !== true || $n[3] !== false ) return false; } return true; }
 function last_result() { $a = array_values( array_filter( $GLOBALS['T']['actions'], fn( $x ) => $x[0] === 'nppp_http_purge_result' ) ); return $a ? end( $a )[1] : null; }
 
 require $argv[1];
+require dirname( $argv[1] ) . '/state.php';   // option-backed job state
 
 $V3_HTML = '<html><head><title>Cache Purge</title></head><body bgcolor="white"><center><h1>Cache Purge</h1><p>Key: httpsGETexample.com/blog/post/</p><p>Status: purged</p></center></body></html>';
 $SITE    = '<!doctype html><html><head><title>My blog</title></head><body>' . str_repeat( '<p>Hello world</p>', 50 ) . '</body></html>';
@@ -378,10 +385,10 @@ ok( strpos( nppp_http_purge_config_notice(), 'cache_unavailable' ) !== false, 's
 /* The issue outlives the 1 h lock, a good answer from that scope clears it, other scopes are untouched. */
 t_reset(); Q( R( 500, 'key_mismatch' ) );
 nppp_http_purge_try_first( $U );
-$st = $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ];
-is_( $GLOBALS['T']['ttl'][ NPPP_HTTP_PURGE_BROKEN_KEY ], 86400, 'issue keeps the state for a day' );
+$st = $GLOBALS['T']['options'][ EP_OPT ]['v'];
+is_( last_ttl(), 86400, 'issue keeps the state for a day' );
 $st['locks']['single']['until'] = time() - 5;                 // the lock expired ...
-$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = $st;
+$GLOBALS['T']['options'][ EP_OPT ]['v'] = $st;
 is_( nppp_http_purge_state()['locks'], [], 'lock expired' );
 ok( nppp_http_purge_config_notice() !== '', '... but the settings notice is still there' );
 Q( R( 200, 'purged' ) );
@@ -391,20 +398,20 @@ is_( nppp_http_purge_config_notice(), '', 'settings notice disappears' );
 t_reset(); Q( R( 500, 'key_mismatch' ) );
 nppp_http_purge_all();
 Q( R( 200, 'purged' ) );
-$st = $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ];
-$st['locks'] = []; $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = $st;
+$st = $GLOBALS['T']['options'][ EP_OPT ]['v'];
+$st['locks'] = []; $GLOBALS['T']['options'][ EP_OPT ]['v'] = $st;
 nppp_http_purge_try_first( $U );
 is_( array_keys( nppp_http_purge_state()['issue'] ), [ 'all' ], 'single success does not clear the all issue' );
 
 /* An issue older than a day, or an unknown code, is ignored. HTTP Purge off -> no notice. */
 t_reset();
-$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = [ 'issue' => [
+ep_seed( [ 'issue' => [
     'single' => [ 'code' => 'key_mismatch', 'at' => time() - 90000 ],
     'all'    => [ 'code' => '<script>',      'at' => time() ],
-] ];
+] ] );
 is_( nppp_http_purge_state()['issue'], [], 'stale or unknown issue is dropped' );
 t_reset( [ 'nppp_http_purge_enabled' => 'no' ] );
-$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] = [ 'issue' => [ 'single' => [ 'code' => 'key_mismatch', 'at' => time() ] ] ];
+ep_seed( [ 'issue' => [ 'single' => [ 'code' => 'key_mismatch', 'at' => time() ] ] ] );
 is_( nppp_http_purge_config_notice(), '', 'HTTP Purge disabled -> no config notice' );
 t_reset(); Q( R( 200, 'status' ) );
 is_( nppp_http_purge_try_first( $U ), false, 'single bound to status handler -> false' );
@@ -513,7 +520,7 @@ is_( nppp_http_purge_locked( 'single' ), true, 'legacy string lock blocks single
 is_( nppp_http_purge_locked( 'all' ), true, 'legacy string lock blocks all' );
 is_( nppp_http_purge_try_first( $U ), false, 'legacy lock -> no request' );
 is_( nreq(), 0, 'legacy lock -> zero requests' );
-delete_transient( NPPP_HTTP_PURGE_BROKEN_KEY );   // what status.php / uninstall.php do
+nppp_http_purge_state_reset();   // what status.php does (also drops a pre-2.1.9 transient)
 is_( nppp_http_purge_locked( 'single' ), false, 'status.php reset clears every scope' );
 
 t_reset();
@@ -522,11 +529,11 @@ nppp_http_purge_arm( 'all', 'y', 120 );
 is_( locks_keys(), [ 'all', 'single' ], 'two scopes coexist' );
 is_( last_ttl(), 3600, 'transient lives as long as the longest lock' );
 nppp_http_purge_remember_method( 'single', 'PURGE' );
-delete_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
+nppp_http_purge_state_reset();
 is_( nppp_http_purge_state(), [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [], 'hint' => [] ], 'one delete_transient clears locks, learned methods, generation mode, probe state, config issues and the queue status advisory' );
 
 t_reset();
-set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'locks' => [ 'single' => [ 'reason' => 'x', 'until' => time() - 5 ], 'all' => [ 'reason' => 'y', 'until' => time() + 100 ] ], 'methods' => [ 'single' => 'rm -rf', 'all' => 'PURGE' ] ], 3600 );
+ep_seed( [ 'locks' => [ 'single' => [ 'reason' => 'x', 'until' => time() - 5 ], 'all' => [ 'reason' => 'y', 'until' => time() + 100 ] ], 'methods' => [ 'single' => 'rm -rf', 'all' => 'PURGE' ] ] );
 is_( locks_keys(), [ 'all' ], 'expired scope lock ignored' );
 is_( nppp_http_purge_state()['methods'], [ 'all' => 'PURGE' ], 'invalid method token dropped' );
 Q( R( 200, 'purged' ) );
@@ -537,7 +544,7 @@ nppp_http_purge_state_save( [ 'locks' => [ '*' => [ 'reason' => 'legacy', 'until
 ok( last_ttl() <= 3600, 'legacy (infinite) lock is clamped when saved' );
 t_reset();
 nppp_http_purge_state_save( [ 'locks' => [], 'methods' => [] ] );
-is_( $GLOBALS['T']['transients'], [], 'empty state removes transient' );
+is_( $GLOBALS['T']['options'][ EP_OPT ] ?? null, null, 'empty state removes the stored row' );
 
 t_reset();
 t_filter( 'nppp_http_purge_lock_ttl', fn( $ttl, $o, $s ) => $o === 'denied' ? 120 : $ttl );
@@ -1238,18 +1245,18 @@ t_reset(); nppp_http_purge_hint_set( 'bogus' );
 is_( hint_state(), [], 'hint: unknown code ignored' );
 nppp_http_purge_hint_set( 'queue_dead', 'rm -rf /' );
 is_( hint_state()['detail'], '', 'hint: detail restricted to [a-z_]' );
-t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'hint' => [ 'code' => 'queue_blind', 'detail' => '', 'at' => time() - DAY_IN_SECONDS - 5 ] ], 3600 );
+t_reset(); ep_seed( [ 'hint' => [ 'code' => 'queue_blind', 'detail' => '', 'at' => time() - DAY_IN_SECONDS - 5 ] ] );
 is_( hint_state(), [], 'hint: older than a day -> ignored' );
-t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'hint' => [ 'code' => 'evil', 'detail' => '', 'at' => time() ] ], 3600 );
+t_reset(); ep_seed( [ 'hint' => [ 'code' => 'evil', 'detail' => '', 'at' => time() ] ] );
 is_( hint_state(), [], 'hint: unknown stored code ignored' );
-t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'hint' => [ 'code' => 'queue_blind', 'detail' => '', 'at' => time() - 100 ] ], 3600 );
+t_reset(); ep_seed( [ 'hint' => [ 'code' => 'queue_blind', 'detail' => '', 'at' => time() - 100 ] ] );
 is_( hint_code(), 'queue_blind', 'hint: a fresh stored advisory is read back' );
 // no write for an unchanged, recent advisory; refreshed once it is older than 6 hours
 t_reset(); nppp_http_purge_hint_set( 'queue_blind' );
-$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['hint']['at'] = time() - 3 * HOUR_IN_SECONDS;
+$GLOBALS['T']['options'][ EP_OPT ]['v']['hint']['at'] = time() - 3 * HOUR_IN_SECONDS;
 $at = hint_state()['at']; nppp_http_purge_hint_set( 'queue_blind' );
 is_( hint_state()['at'], $at, 'hint: unchanged advisory younger than 6 h causes no write' );
-$GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['hint']['at'] = time() - 7 * HOUR_IN_SECONDS;
+$GLOBALS['T']['options'][ EP_OPT ]['v']['hint']['at'] = time() - 7 * HOUR_IN_SECONDS;
 nppp_http_purge_hint_set( 'queue_blind' );
 ok( hint_state()['at'] > time() - 60, 'hint: refreshed once older than 6 h' );
 // it coexists with the other remembered state
@@ -1269,8 +1276,8 @@ is_( $w, '', 'snapshot: reason is empty on success' );
 
 /* ------------------------------------------------- generation mode expires unless "invalidated" repeats */
 function nppp_gen_mode_seen_probe() { return nppp_http_purge_generation_mode( 'single' ) || nppp_http_purge_generation_mode( 'all' ); }
-function ns_raw() { return $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['ns'] ?? []; }
-function ns_age( string $scope, int $seconds ) { $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['ns'][ $scope ] = time() - $seconds; }
+function ns_raw() { return $GLOBALS['T']['options'][ EP_OPT ]['v']['ns'] ?? []; }
+function ns_age( string $scope, int $seconds ) { $GLOBALS['T']['options'][ EP_OPT ]['v']['ns'][ $scope ] = time() - $seconds; }
 
 t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
 ok( is_int( ns_raw()['all'] ?? null ) && abs( ns_raw()['all'] - time() ) < 5, 'ns: "invalidated" stores the time it was seen' );
@@ -1294,7 +1301,7 @@ t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
 ns_age( 'all', 23 * HOUR_IN_SECONDS );
 for ( $i = 0; $i < 3; $i++ ) {
     nppp_http_purge_remember_method( 'single', $i % 2 ? 'GET' : 'PURGE' ); // each call rewrites the state and its TTL
-    nppp_http_purge_hint_set( 'queue_blind', '' ); $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ]['hint']['at'] = time() - 7 * HOUR_IN_SECONDS;
+    nppp_http_purge_hint_set( 'queue_blind', '' ); $GLOBALS['T']['options'][ EP_OPT ]['v']['hint']['at'] = time() - 7 * HOUR_IN_SECONDS;
 }
 ok( ( ns_raw()['all'] ?? 0 ) <= time() - 23 * HOUR_IN_SECONDS + 5, 'ns: other state writes do not refresh generation mode' );
 ns_age( 'all', DAY_IN_SECONDS + 5 );
@@ -1336,6 +1343,20 @@ t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_try_first( 'https://exa
 ok( ! empty( nppp_http_purge_state()['ns']['single'] ), 'ns: single scope remembered by "invalidated"' );
 ns_age( 'single', DAY_IN_SECONDS + 5 );
 is_( nppp_http_purge_generation_mode( 'single' ), false, 'ns: single scope expires too' );
+
+/* ------------------------------------------- endpoint state is an option (2.1.9) */
+t_reset(); Q( R( 200, 'invalidated' ) ); nppp_http_purge_all();
+$GLOBALS['T']['transients'] = [];   // what wp_cache_flush() does to transients when an object cache holds them
+ok( nppp_http_purge_generation_mode( 'all' ), 'state: generation mode (ns) survives an object-cache flush' );
+t_reset(); nppp_http_purge_arm( 'single', 'x', 600 ); nppp_http_purge_remember_method( 'all', 'PURGE' ); nppp_http_purge_hint_set( 'queue_blind' );
+$GLOBALS['T']['transients'] = [];
+is_( [ locks_keys(), nppp_http_purge_state()['methods'], hint_code() ], [ [ 'single' ], [ 'all' => 'PURGE' ], 'queue_blind' ], 'state: locks, method and advisory survive a flush' );
+is_( $GLOBALS['T']['autoload'][ EP_OPT ] ?? 'unset', false, 'state: the row is NOT autoloaded' );
+t_reset(); set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, [ 'locks' => [ 'single' => [ 'reason' => 'x', 'until' => time() + 100 ] ] ], 3600 );
+is_( locks_keys(), [ 'single' ], 'state: a pre-2.1.9 transient is honoured while no option row exists' );
+nppp_http_purge_remember_method( 'all', 'PURGE' );
+ok( ! isset( $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] ) && isset( $GLOBALS['T']['options'][ EP_OPT ] ), 'state: first write moves it to the option, transient dropped' );
+is_( locks_keys(), [ 'single' ], 'state: the migrated lock is kept' );
 
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
