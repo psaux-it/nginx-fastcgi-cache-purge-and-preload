@@ -121,11 +121,11 @@ function nppp_send_mail_now(
     $mobile_pass = $mobile_enabled ? '&#10003; Yes' : '&#10007; No';
 
     // METRIC: Trigger
-    $trigger = get_transient( 'nppp_preload_trigger_' . md5('nppp') );
+    $trigger = nppp_preload_trigger_get( true );
     if ( empty( $trigger ) ) {
         $trigger = '–';
     }
-    delete_transient( 'nppp_preload_trigger_' . md5('nppp') );
+    nppp_preload_trigger_delete();
 
     // Template
     $template_file = __DIR__ . '/templates/mail.html';
