@@ -451,11 +451,11 @@ function nppp_stop_watchdog(): void {
 }
 
 /**
- * Clear the tick‑monitor cron hook and preload phase/cycle transients.
+ * Clear the tick‑monitor cron hook and preload phase/cycle state.
  * Must only be called when the main preload process is definitely dead.
  */
 function nppp_cleanup_preload_state(): void {
     wp_clear_scheduled_hook( 'npp_cache_preload_status_event' );
-    delete_transient( 'nppp_preload_phase_' . md5( 'nppp' ) );
-    delete_transient( 'nppp_preload_cycle_start_' . md5( 'nppp' ) );
+    nppp_preload_phase_delete();
+    nppp_preload_cycle_start_delete();
 }
