@@ -82,6 +82,7 @@ function is_( $got, $want, $name ) { ok( $got === $want, $name, '-- got ' . json
 $PLUGIN = realpath( $argv[1] ?? '' ) or exit( "usage: php gen-scan.php path/to/includes/purge-http.php\n" );
 $INC    = dirname( $PLUGIN );
 require $PLUGIN;
+require "$INC/state.php";
 
 function load_fn( string $file, string $fn, bool $optional = false ): void {
     if ( function_exists( $fn ) ) { return; }
@@ -96,6 +97,7 @@ foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_ann
 // Helpers that nppp_drop_stale_generations() calls: absent on the unpatched plugin, in which case only the legacy behaviour is checked.
 // nppp_gen_mode_note_seen() comes from the Gen Index patch and is needed once the two patch sets are merged.
 foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_generation_count_live' ] as $fn ) { load_fn( "$INC/advanced.php", $fn, true ); }
+load_fn( "$INC/advanced.php", 'nppp_gen_scan_unverified', true );   // added by 57e57608, called by nppp_drop_stale_generations()
 $HAS_NS = function_exists( 'nppp_generation_views' );
 foreach ( [ 'nppp_head_fast', 'nppp_read_head' ] as $fn ) { load_fn( "$INC/wp-filesystem.php", $fn ); }
 load_fn( "$INC/status.php", 'nppp_get_in_cache_page_count' );
