@@ -158,6 +158,15 @@ function nppp_delete_plugin_options_on_uninstall() {
     global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('nppp_f2b_rate_rej_') . '%'));
+
+    // Persistent job/state rows (nppp_st_<key>, includes/state.php): preload phase, cycle start,
+    // trigger, HTTP Purge endpoint state, generation-mode flag, per-IP RDAP work, and any later
+    // addition. Deleted through delete_option() so an external object cache entry cannot outlive the row.
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+    $nppp_state_rows = $wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like('nppp_st_') . '%'));
+    foreach ((array) $nppp_state_rows as $nppp_state_row) {
+        delete_option($nppp_state_row);
+    }
 }
 
 /**
