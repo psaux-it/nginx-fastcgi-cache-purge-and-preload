@@ -1340,6 +1340,85 @@ function nppp_pre_checks() {
     }
 }
 
+// Reads the native header of cached Nginx files and reports whether Nginx actually STORED
+// an upstream "Vary: Accept-Encoding" (vary_len / vary of ngx_http_file_cache_header_t).
+// That stored value is the only thing that creates cache variants. A Vary header on the
+// wire proves nothing: nginx "gzip_vary on" and "fastcgi_ignore_headers Vary" both leave it
+// in the response without ever touching the cache key.
+//
+// Returns: sampled       valid cache entries read
+//          vary_ae       of those, entries that store Accept-Encoding in Vary (any age)
+//          fresh         entries written within the freshness window
+//          fresh_vary_ae of the fresh ones, entries that store Accept-Encoding in Vary
+if (! function_exists('nppp_sample_cache_vary')) {
+    function nppp_sample_cache_vary(string $cache_path): array {
+        $out = [ 'sampled' => 0, 'vary_ae' => 0, 'fresh' => 0, 'fresh_vary_ae' => 0 ];
+
+        $max_entries = max( 1, (int) apply_filters( 'nppp_vary_sample_entries', 24 ) );
+        $max_visits  = max( $max_entries, (int) apply_filters( 'nppp_vary_sample_scan_limit', 400 ) );
+        $max_age     = max( 60, (int) apply_filters( 'nppp_vary_sample_max_age', 3 * 86400 ) );
+        $fresh_after = time() - $max_age;
+
+        if ( $cache_path === '' || ! is_dir( $cache_path ) ) {
+            return $out;
+        }
+
+        $visited = 0;
+
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator( $cache_path, RecursiveDirectoryIterator::SKIP_DOTS ),
+                RecursiveIteratorIterator::LEAVES_ONLY
+            );
+
+            foreach ( $iterator as $file ) {
+                if ( ++$visited > $max_visits || $out['sampled'] >= $max_entries ) {
+                    break;
+                }
+                if ( ! $file->isFile() || ! $file->isReadable() ) {
+                    continue;
+                }
+
+                $path = $file->getPathname();
+                $head = function_exists( 'nppp_head_fast' )
+                    ? nppp_head_fast( $path, 344 )
+                    : (string) @file_get_contents( $path, false, null, 0, 344 );
+
+                // 336 byte header + "\nKEY: " marker; anything else is not a cache file we understand.
+                if ( strlen( $head ) < 342 || substr( $head, 336, 6 ) !== "\nKEY: " ) {
+                    continue;
+                }
+
+                $ver = unpack( 'Pv', $head );
+                if ( ! is_array( $ver ) || (int) $ver['v'] !== 5 ) {
+                    continue;
+                }
+
+                $vary_len = ord( $head[187] );
+                $has_ae   = $vary_len > 0 && $vary_len <= 128
+                    && stripos( substr( $head, 188, $vary_len ), 'accept-encoding' ) !== false;
+                $is_fresh = (int) $file->getMTime() >= $fresh_after;
+
+                $out['sampled']++;
+                if ( $has_ae ) {
+                    $out['vary_ae']++;
+                }
+                if ( $is_fresh ) {
+                    $out['fresh']++;
+                    if ( $has_ae ) {
+                        $out['fresh_vary_ae']++;
+                    }
+                }
+            }
+        } catch ( \Throwable $e ) {
+            // Unreadable directory: return whatever was counted so far.
+            return $out;
+        }
+
+        return $out;
+    }
+}
+
 // Detect the Vary: Accept-Encoding cache issue.
 //
 //  RC1 — Conditional upstream Vary (PHP zlib or a plugin that only emits
@@ -1351,8 +1430,11 @@ function nppp_pre_checks() {
 //  RC2 — Unconditional upstream Vary (a plugin or middleware that always emits
 //         Vary: Accept-Encoding regardless of the client's Accept-Encoding value):
 //         · Probe signal: Vary present in no-AE probe AND zlib is Off.
-//         · Caveat: nginx gzip_vary on also produces Vary in the no-AE probe but is SAFE
-//           (writes only r->gzip_vary, never r->cache->vary). UI message clarifies.
+//         · Caveat: the probes only see what goes ON THE WIRE. nginx gzip_vary on and
+//           fastcgi_ignore_headers Vary both leave Vary in the response without ever
+//           touching r->cache->vary, so this signal alone is only a hint. It is
+//           cross-checked against the cache files (nppp_sample_cache_vary()): fresh
+//           entries that store no Vary clear it, entries that do store it confirm it.
 //         · Effect: second independent cache file per URL — NPP-warmed entry bypassed.
 if (! function_exists('nppp_detect_vary_issue')) {
     function nppp_detect_vary_issue(): array {
@@ -1424,11 +1506,38 @@ if (! function_exists('nppp_detect_vary_issue')) {
         // nginx gzip_vary on = safe (r->gzip_vary only, never r->cache->vary). UI clarifies.
         $rc2 = $vary_identity && ! $zlib_on;
 
+        // The probes only see response headers, so RC2 is a hint, not proof: nginx
+        // "gzip_vary on" and "fastcgi_ignore_headers Vary" leave Vary on the wire without
+        // splitting the cache. Cross-check against what nginx really stored. Only FRESH
+        // entries that store no Vary clear the flag; an empty or stale cache stays unknown
+        // and keeps the warning, and entries that do store it turn the hint into proof.
+        $evidence  = [ 'sampled' => 0, 'vary_ae' => 0, 'fresh' => 0, 'fresh_vary_ae' => 0 ];
+        $min_fresh = max( 1, (int) apply_filters( 'nppp_vary_evidence_min_fresh', 3 ) );
+        $cleared   = false;
+        $legacy    = false;
+
+        if ( $rc2 ) {
+            $nppp_settings = get_option( 'nginx_cache_settings', [] );
+            $evidence      = nppp_sample_cache_vary( (string) ( $nppp_settings['nginx_cache_path'] ?? '' ) );
+
+            if ( $evidence['vary_ae'] === 0 && $evidence['fresh'] >= $min_fresh ) {
+                $cleared = true;
+                $rc2     = false;
+            } elseif ( $evidence['vary_ae'] > 0 && $evidence['fresh'] >= $min_fresh && $evidence['fresh_vary_ae'] === 0 ) {
+                // New entries store no Vary but older ones still do: the directive is in place,
+                // the cache just has to be rewritten once.
+                $legacy = true;
+            }
+        }
+
         $result = [
-            'zlib_on' => $zlib_on,
-            'rc1'     => $rc1,
-            'rc2'     => $rc2,
-            'issue'   => $rc1 || $rc2,
+            'zlib_on'  => $zlib_on,
+            'rc1'      => $rc1,
+            'rc2'      => $rc2,
+            'issue'    => $rc1 || $rc2,
+            'cleared'  => $cleared,
+            'legacy'   => $legacy,
+            'evidence' => $evidence,
         ];
 
         set_transient($transient_key, $result, HOUR_IN_SECONDS);
@@ -1518,8 +1627,25 @@ if ( ! function_exists( 'nppp_render_vary_notice_html' ) ) {
                 <strong style="color:#991b1b;"><?php esc_html_e( '⚠ RC2 Potential: Double Cache Risk', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
                 <span style="font-size:13px; color:#7f1d1d;">
                     <?php esc_html_e( 'Vary: Accept-Encoding is present in responses. A plugin or upstream proxy may be emitting this unconditionally — Nginx may create a second cache per URL and NPP-warmed cache are never reached by real visitors.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br><br>
+                    <?php if ( ! empty( $nppp_vary['legacy'] ) ) : ?>
+                        <strong><?php esc_html_e( 'Entries cached recently no longer store it, only older ones do. Run Purge All once so they are rewritten.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br><br>
+                    <?php elseif ( ! empty( $nppp_vary['evidence']['vary_ae'] ) ) : ?>
+                        <strong>
+                        <?php
+                        echo esc_html( sprintf(
+                            /* translators: 1: number of cache entries that store Vary: Accept-Encoding, 2: number of cache entries inspected */
+                            __( 'Confirmed in the cache: Nginx stored Vary: Accept-Encoding in %1$d of %2$d inspected entries.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            (int) $nppp_vary['evidence']['vary_ae'],
+                            (int) ( $nppp_vary['evidence']['sampled'] ?? 0 )
+                        ) );
+                        ?>
+                        </strong><br><br>
+                    <?php endif; ?>
+                    <?php if ( empty( $nppp_vary['evidence']['vary_ae'] ) ) : // Hint only, nothing stored in the cache to prove it yet. ?>
                     <?php esc_html_e( 'To verify if this affects you: Run Preload All, then visit the page in a browser for the first time. If you see HIT, you\'re fine. If you see MISS, the double cache issue is affecting you.', 'fastcgi-cache-purge-and-preload-nginx' ); ?><br><br>
-                    <span style="font-size:12.5px; color:#06402B; font-weight: bold;"><?php esc_html_e( 'Note: If nginx "gzip_vary on" is your only Vary source, this detection is a false positive and no action is needed. You can dismiss permanently.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br><br>
+                    <span style="font-size:12.5px; color:#06402B; font-weight: bold;"><?php esc_html_e( 'Note: If nginx "gzip_vary on" is your only Vary source, this detection is a false positive and no action is needed. You can dismiss permanently.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br>
+                    <span style="font-size:12.5px; color:#06402B;"><?php esc_html_e( 'The same applies when fastcgi_ignore_headers Vary is set. This notice clears itself once the cache holds enough fresh entries to confirm that Nginx does not store Vary.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span><br><br>
+                    <?php endif; ?>
                     <a href="?page=nginx_cache_settings&nppp_tab=help#help" style="font-size:13px; color:#991b1b; font-weight:600; text-decoration:none; display:block; margin-top:4px;">
                         <?php esc_html_e( '→ See Help tab for the required fix', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     </a>
@@ -1531,7 +1657,19 @@ if ( ! function_exists( 'nppp_render_vary_notice_html' ) ) {
             <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px 14px; max-width:500px; position:relative;">
                 <button type="button" id="nppp-dismiss-vary" title="<?php esc_attr_e( 'Dismiss permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>" style="position:absolute; top:6px; right:8px; background:none; border:none; cursor:pointer; font-size:16px; line-height:1; color:#14532d; padding:0;" aria-label="<?php esc_attr_e( 'Dismiss Vary notice permanently', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">&#x2715;</button>
                 <strong style="color:#14532d;"><?php esc_html_e( '✔ Not Affected', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong><br>
-                <span style="font-size:13px; color:#166534;"><?php esc_html_e( 'No upstream Vary: Accept-Encoding source detected. Single cache per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+                <span style="font-size:13px; color:#166534;">
+                    <?php
+                    if ( ! empty( $nppp_vary['cleared'] ) ) {
+                        echo esc_html( sprintf(
+                            /* translators: %d: number of cache entries inspected */
+                            __( 'Responses carry Vary: Accept-Encoding, but none of the %d inspected Nginx cache entries stores it (gzip_vary or fastcgi_ignore_headers Vary). Single cache per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            (int) ( $nppp_vary['evidence']['sampled'] ?? 0 )
+                        ) );
+                    } else {
+                        esc_html_e( 'No upstream Vary: Accept-Encoding source detected. Single cache per URL confirmed.', 'fastcgi-cache-purge-and-preload-nginx' );
+                    }
+                    ?>
+                </span>
             </div>
             <?php
         else :
