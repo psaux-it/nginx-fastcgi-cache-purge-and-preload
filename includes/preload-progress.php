@@ -186,9 +186,7 @@ function nppp_nginx_cache_preload_progress($request) {
 
     // Expose the current preload phase so the JS poller knows not to stop
     // during the desktop→mobile transition gap (PIDFILE briefly absent).
-    $phase_transient_key = 'nppp_preload_phase_' . md5( 'nppp' );
-    $preload_phase       = get_transient( $phase_transient_key );
-    $preload_phase       = ( is_string( $preload_phase ) && $preload_phase !== '' ) ? $preload_phase : 'desktop';
+    $preload_phase = nppp_preload_phase_get();
 
     return new WP_REST_Response([
         'load_1'            => $load_1,
