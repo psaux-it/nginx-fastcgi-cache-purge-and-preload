@@ -271,7 +271,7 @@ zlib.output_compression = Off</pre>
 
                         <h4><strong>Step 2 — Add <code>fastcgi_ignore_headers Vary</code> to your Nginx PHP block</strong></h4>
                         <p style="font-size: 14px;">
-                            This directive tells Nginx to ignore the <code>Vary</code> header completely during cache operations.
+                            This directive tells Nginx not to use the upstream <code>Vary</code> header for cache storage (the header itself still reaches visitors).
                             When set, <code>ngx_http_upstream_process_vary()</code> returns immediately without writing to
                             <code>r-&gt;cache-&gt;vary</code>, preventing variant hash storage and all resulting cache overwrites
                             regardless of whether <code>Vary: Accept-Encoding</code> originates from PHP <code>zlib.output_compression</code>,
@@ -309,6 +309,15 @@ zlib.output_compression = Off</pre>
                             📌 If you already set <code>fastcgi_param HTTP_ACCEPT_ENCODING ""</code> in your shared
                             <code>fastcgi_params</code> file, you do not need to repeat it here — it applies automatically
                             via <code>include /etc/nginx/fastcgi_params</code>.
+                        </p>
+                        <p style="font-size: 14px;">
+                            <strong>Good to know:</strong>
+                            Nginx still forwards the upstream <code>Vary</code> header to visitors, only the cache ignores it
+                            (<code>fastcgi_hide_header Vary</code> changes what visitors see, not how Nginx caches, so it is not a substitute).
+                            A <code>Vary: *</code> response becomes cacheable. Entries cached <em>before</em> you added the directive
+                            keep their variants until they expire or you run <strong>Purge All</strong> once.
+                            The Vary notice on the Settings page cross-checks this against the cache files themselves,
+                            so it clears on its own once fresh entries show that Nginx no longer stores <code>Vary</code>.
                         </p>
                         <p style="font-size: 14px;">
                             Reload Nginx after saving: <code>nginx -t &amp;&amp; systemctl reload nginx</code>
