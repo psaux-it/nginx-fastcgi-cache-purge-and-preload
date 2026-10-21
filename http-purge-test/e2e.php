@@ -51,7 +51,9 @@ function wp_remote_request( $url, $a ) {
 }
 function wp_remote_retrieve_response_code( $r ) { return $r['c']; } function wp_remote_retrieve_body( $r ) { return $r['b']; }
 function wp_remote_retrieve_header( $r, $n ) { return $r['h'][ strtolower( $n ) ] ?? ''; }
-require $argv[2] ?? dirname( __DIR__ ) . '/includes/purge-http.php';
+$NPPP_PLUGIN_FILE = $argv[2] ?? dirname( __DIR__ ) . '/includes/purge-http.php';
+require $NPPP_PLUGIN_FILE;
+require dirname( $NPPP_PLUGIN_FILE ) . '/state.php';   // option-backed job state
 
 /* Plugin includes/ dir for the helper files ns_keys loads (advanced.php, preload-defaults.php). Inside the plugin
  * checkout it is ../includes; in the Docker lab the harness lives in /opt/npp-http-purge-test, so fall back to the
@@ -469,7 +471,7 @@ if ( $sc === 'ns_keys' ) {
     };
     /* What the Advanced tab / Status counter do with these files: the plugin's real default cache_key_regex (preload-defaults.php)
      * and the real generation helpers (advanced.php; pure functions, loaded by extraction because advanced.php needs WordPress). */
-    foreach ( [ 'nppp_key_generation_info', 'nppp_gen_mode_note_seen', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
+    foreach ( [ 'nppp_key_generation_info', 'nppp_gen_mode_note_seen', 'nppp_gen_scan_unverified', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts' ] as $fn ) {
         if ( ! function_exists( $fn ) ) {
             preg_match( '/^function ' . $fn . '\(.*?^}\n/ms', (string) file_get_contents( npp_includes_dir() . '/advanced.php' ), $fm ) or ( print( "FAIL missing $fn\n" ) and exit( 2 ) );
             eval( $fm[0] );
@@ -634,7 +636,7 @@ if ( $sc === 'ns_index' ) {
         eval( $fm[0] );
         return true;
     };
-    foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_generation_stale_groups', 'nppp_generation_views' ] as $fn ) {
+    foreach ( [ 'nppp_key_generation_info', 'nppp_gen_scan_unverified', 'nppp_drop_stale_generations', 'nppp_generation_stale_groups', 'nppp_generation_views' ] as $fn ) {
         $load( 'advanced.php', $fn, $fn === 'nppp_generation_views' || $fn === 'nppp_generation_stale_groups' );
     }
     // Added by the Gen Index patch; absent on an unpatched plugin, which is reported once and then every behaviour check runs anyway.
