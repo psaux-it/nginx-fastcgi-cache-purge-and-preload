@@ -107,6 +107,7 @@ function is_( $got, $want, $name ) { ok( $got === $want, $name, '-- got ' . json
 $PLUGIN = realpath( $argv[1] ?? '' ) or exit( "usage: php gen-index.php path/to/includes/purge-http.php\n" );
 $INC    = dirname( $PLUGIN );
 require $PLUGIN;
+require "$INC/state.php";
 
 /** Extract one top-level function from a plugin file and define it (the files need WordPress, so they are not included). */
 function load_fn( string $file, string $fn, bool $optional = false ): bool {
@@ -121,6 +122,7 @@ function load_fn( string $file, string $fn, bool $optional = false ): bool {
 foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_generation_stale_groups', 'nppp_generation_views' ] as $fn ) {
     load_fn( "$INC/advanced.php", $fn, $fn === 'nppp_generation_views' || $fn === 'nppp_generation_stale_groups' );
 }
+load_fn( "$INC/advanced.php", 'nppp_gen_scan_unverified', true );   // added by 57e57608
 // Added by the Gen Index patch; absent on an unpatched plugin, which is reported once and then every behaviour test runs anyway.
 $HELPERS = [];
 foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_gen_mode_seen', 'nppp_gen_mode_active', 'nppp_index_merge_hits' ] as $fn ) { $HELPERS[ $fn ] = load_fn( "$INC/advanced.php", $fn, true ); }
@@ -176,7 +178,7 @@ function mkctx( array $urls, array $index, int $head = 4096, int $head_fb = 3276
 
 /** Gate states. closed: nothing observed. seen: a scan met p4 keys (transient). single/all: an HTTP purge answered "invalidated". */
 function gate( string $how ): void {
-    if ( $how === 'seen' )   { set_transient( 'nppp_gen_mode_seen', 1, DAY_IN_SECONDS ); }
+    if ( $how === 'seen' )   { nppp_gen_mode_flag_set(); }
     if ( $how === 'single' ) { nppp_http_purge_remember_generation( 'single', true ); }
     if ( $how === 'all' )    { nppp_http_purge_remember_generation( 'all', true ); }
 }
@@ -201,14 +203,15 @@ if ( $HELPERS['nppp_gen_mode_active'] ) {
     is_( nppp_gen_mode_active(), false, 'gate: HTTP Purge empty -> closed' );
     t_reset( [] ); unset( $GLOBALS['T']['options']['nginx_cache_settings']['nppp_http_purge_enabled'] ); gate( 'seen' );
     is_( nppp_gen_mode_active(), false, 'gate: HTTP Purge setting missing -> closed' );
-    t_reset(); gate( 'seen' ); delete_transient( 'nppp_gen_mode_seen' );
+    t_reset(); gate( 'seen' ); nppp_gen_mode_flag_delete();
     is_( nppp_gen_mode_active(), false, 'gate: transient cleared (Clear Plugin Cache) -> closed again' );
 
     t_reset(); nppp_gen_mode_note_seen();
-    is_( $GLOBALS['T']['transients']['nppp_gen_mode_seen'] ?? null, 1, 'note_seen: sets the transient' );
-    is_( $GLOBALS['T']['ttl']['nppp_gen_mode_seen'] ?? null, DAY_IN_SECONDS, 'note_seen: lives 24 h' );
-    t_reset(); set_transient( 'nppp_gen_mode_seen', 7, 5 ); nppp_gen_mode_note_seen();
-    is_( [ $GLOBALS['T']['transients']['nppp_gen_mode_seen'], $GLOBALS['T']['ttl']['nppp_gen_mode_seen'] ], [ 7, 5 ], 'note_seen: written only when missing (no write on the hot path)' );
+    is_( $GLOBALS['T']['options']['nppp_st_gen_mode_seen']['v'] ?? null, 1, 'note_seen: sets the option row' );
+    $left = ( $GLOBALS['T']['options']['nppp_st_gen_mode_seen']['exp'] ?? 0 ) - time();
+    ok( $left > DAY_IN_SECONDS - 5 && $left <= DAY_IN_SECONDS, 'note_seen: lives 24 h', "-- got $left" );
+    t_reset(); $row = [ 'v' => 7, 'exp' => time() + 5 ]; update_option( 'nppp_st_gen_mode_seen', $row, false ); nppp_gen_mode_note_seen();
+    is_( $GLOBALS['T']['options']['nppp_st_gen_mode_seen'], $row, 'note_seen: written only when missing (no write on the hot path)' );
     warned( 'gate' );
 }
 
@@ -224,9 +227,9 @@ is_( array_column( $urls, 'file_path' ), [ '/c/a2', '/c/leg' ], 'drop_stale: the
 is_( $urls[0]['gen_mode'] ?? null, true, 'drop_stale: a kept generation entry is flagged gen_mode (lets the merge prune only those)' );
 ok( ! array_key_exists( 'gen_mode', $urls[1] ), 'drop_stale: a legacy entry is NOT flagged' );
 ok( ! isset( $urls[0]['gen_group'] ) && ! isset( $urls[0]['gen'] ), 'drop_stale: internal gen_group/gen keys are removed from kept entries' );
-if ( $HELPERS['nppp_gen_mode_note_seen'] ) { is_( get_transient( 'nppp_gen_mode_seen' ), 1, 'drop_stale: seeing a generation entry records generation mode' ); }
+if ( $HELPERS['nppp_gen_mode_note_seen'] ) { is_( nppp_gen_mode_flag_get(), true, 'drop_stale: seeing a generation entry records generation mode' ); }
 t_reset(); $leg = [ [ 'url_encoded' => 'https://example.com/l/', 'file_path' => '/c/leg' ] ]; nppp_drop_stale_generations( $leg );
-is_( get_transient( 'nppp_gen_mode_seen' ), false, 'drop_stale: legacy-only scan does not record generation mode' );
+is_( nppp_gen_mode_flag_get(), false, 'drop_stale: legacy-only scan does not record generation mode' );
 is_( $leg, [ [ 'url_encoded' => 'https://example.com/l/', 'file_path' => '/c/leg' ] ], 'drop_stale: legacy-only entries untouched' );
 warned( 'drop_stale' );
 
