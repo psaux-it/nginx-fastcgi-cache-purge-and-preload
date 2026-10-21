@@ -1,0 +1,11 @@
+{
+  "kernel": "6.18.44-fc-v139",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+  "cpus": 2,
+  "mem_mb": 8029,
+  "fs": "ext4 /dev/vda",
+  "nginx": "nginx version: nginx/1.31.6",
+  "php": "PHP 8.3.6 (cli) (built: Oct  7 2026 18:06:38) (NTS)",
+  "module": "4.0.0-rc2\n5c2b7d9 test(benchmark): qualify timings and retain partial reports",
+  "plugin": "57e57608 advanced: warn when generation-mode files are listed without namespace state\nv2.1.9"
+}
