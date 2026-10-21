@@ -123,7 +123,7 @@ function nppp_clear_plugin_cache($silent = false) {
     //   nppp_ping_token_ (transient)      — watchdog validates this token when preload finishes;
     //                                       deleting it causes watchdog to 403 and post-preload tasks never fire
     $wp_filesystem = nppp_initialize_wp_filesystem();
-    if ( ! nppp_is_preload_running( $wp_filesystem ) ) {
+    if ( ! nppp_preload_job_active( $wp_filesystem ) ) {
         nppp_preload_phase_delete();
         nppp_preload_cycle_start_delete();
         nppp_preload_trigger_delete();
