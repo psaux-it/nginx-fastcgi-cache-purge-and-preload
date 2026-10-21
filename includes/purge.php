@@ -1931,10 +1931,8 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
 
     try {
 
-    // Phase key used in multiple branches below — declared once here.
-    // Actual hook/transient cleanup is deferred until kill success is confirmed
+    // Actual hook/phase cleanup is deferred until kill success is confirmed
     // so that if kill fails and we return early, the tick monitor keeps running.
-    $nppp_phase_key = 'nppp_preload_phase_' . md5('nppp');
 
     // Initialize variables for messages
     $message_type = '';
