@@ -152,6 +152,7 @@ $PLUGIN = realpath( $argv[1] ?? '' ) or exit( "usage: php purged-all-deferred.ph
 $INC    = dirname( $PLUGIN );
 $ROOT   = dirname( $INC );
 require $PLUGIN;
+require "$INC/state.php";
 
 /** Extract one top-level function from a plugin file and define it (the files need WordPress, so they are not included). */
 function load_fn( string $file, string $fn ): void {
