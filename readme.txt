@@ -334,6 +334,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Fixed: Process liveness detection now works on BusyBox/Alpine, where "ps -p" is not supported and a running preload was always reported as not running.
 * Fixed: Purge no longer shows a false "Permission denied" error when a new cache entry is written into a directory while it is being deleted.
 * Fixed: The Vary: Accept-Encoding notice no longer false-alarms with gzip_vary or fastcgi_ignore_headers Vary; it now checks what Nginx actually stored in the cache files.
+* Fixed: Flushing the object cache no longer disrupts a running preload or makes the plugin forget its Nginx purge settings and Fail2Ban lookup progress.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All. Existing sites with Preload Related Pages ON and Auto Preload OFF will start preloading related pages on auto-purge.
 * Changed: With ngx_cache_purge v4 generation mode and a Purge Queue Status Path set, Status and Advanced tabs now use the namespace state from the status endpoint to leave out cache files Nginx has already invalidated (after Purge All or a full restart) but not yet deleted. Without the status path or on older/no modules nothing changes.
 
