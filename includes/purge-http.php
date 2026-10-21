@@ -147,8 +147,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Transient that remembers a broken endpoint. The key is unchanged because
- * status.php ("reset") and uninstall.php delete it by name.
+ * LEGACY transient name of the endpoint state. Since 2.1.9 the state lives in the
+ * option nppp_st_http_purge_endpoint (includes/state.php) so an object-cache flush
+ * cannot erase it; this name is only the read fallback while an old transient is
+ * still around, and is deleted by the state helpers, status.php and uninstall.php.
  *
  * Value: array{ locks: array<scope, {reason:string, until:int}>, methods: array<scope, string> }
  * Older plugin versions stored a plain string; it is still honoured as a
@@ -330,7 +332,7 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
 }
 
 /* ============================================================================
- * 2. Lock state (one transient, scoped locks, remembered request method)
+ * 2. Lock state (one option row, scoped locks, remembered request method)
  * ========================================================================= */
 
 /**
@@ -340,7 +342,7 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
  */
 function nppp_http_purge_state(): array {
     $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [], 'hint' => [] ];
-    $raw   = get_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
+    $raw   = nppp_http_purge_state_raw();
 
     if ( ! $raw ) {
         return $state;
@@ -417,7 +419,7 @@ function nppp_http_purge_state(): array {
 }
 
 /**
- * Persists the endpoint state. Nothing left to remember removes the transient.
+ * Persists the endpoint state. Nothing left to remember removes the stored row.
  */
 function nppp_http_purge_state_save( array $state ): void {
     $now = time();
@@ -437,11 +439,11 @@ function nppp_http_purge_state_save( array $state ): void {
     }
 
     if ( $ttl <= 0 ) {
-        delete_transient( NPPP_HTTP_PURGE_BROKEN_KEY );
+        nppp_http_purge_state_reset();
         return;
     }
 
-    set_transient( NPPP_HTTP_PURGE_BROKEN_KEY, $state, $ttl );
+    nppp_http_purge_state_write( $state, $ttl );
 }
 
 /**
