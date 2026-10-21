@@ -248,6 +248,54 @@ function nppp_preload_start_in_flight(): bool {
 }
 
 /**
+ * Fresh, side-effect-free probe: true while the post-preload completion lock is held.
+ *
+ * The completion lock is held by the tick / watchdog winner for the whole hand-off
+ * (desktop -> mobile spawn) and for the whole completion tail (cycle_start / trigger
+ * read, report mail). The preload PID file is already gone in both windows, so
+ * nppp_is_preload_running() cannot see them. 120 s mirrors the default TTL of
+ * nppp_acquire_completion_lock(); an older row is a crashed holder and is ignored
+ * (never deleted here: only the acquire path may take a lock over).
+ *
+ * @return bool true = completion bookkeeping is in flight, false = idle.
+ */
+function nppp_completion_lock_in_flight(): bool {
+    wp_cache_delete( NPPP_COMPLETION_LOCK_NAME . '.lock', 'options' );
+    wp_cache_delete( 'notoptions', 'options' );
+
+    $lock_time = (int) get_option( NPPP_COMPLETION_LOCK_NAME . '.lock' );
+
+    return $lock_time > 0 && $lock_time > ( time() - 120 );
+}
+
+/**
+ * True while a preload cycle owns its job state (phase, cycle start, trigger).
+ *
+ * Union of everything that can still read that state: the PID file, a start
+ * sequence that has not written its PID yet, and the completion lock (desktop ->
+ * mobile hand-off and the completion tail). Callers that would DELETE job state
+ * must use this instead of nppp_is_preload_running() alone.
+ *
+ * @param WP_Filesystem_Base $wp_filesystem Initialised filesystem.
+ * @return bool
+ */
+function nppp_preload_job_active( $wp_filesystem ): bool {
+    // Filesystem unavailable: cannot prove the job is idle, so keep its state.
+    if ( ! $wp_filesystem ) {
+        return true;
+    }
+
+    // The PID file is deleted only by the completion tick (after the hand-off or the
+    // completion tail) and by Stop / Purge All, which clean the state themselves. Its
+    // EXISTENCE therefore marks an unfinished cycle, even when the crawler already
+    // exited and no tick / watchdog has picked it up yet (nppp_is_preload_running()
+    // is false in that gap).
+    return $wp_filesystem->exists( nppp_get_runtime_file( 'cache_preload.pid' ) )
+        || nppp_preload_start_in_flight()
+        || nppp_completion_lock_in_flight();
+}
+
+/**
  * Wait (bounded) until no Preload start sequence is in flight.
  *
  * Used by Purge All right after it takes the purge lock. A Preload that is still
