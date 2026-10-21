@@ -529,6 +529,10 @@ function nppp_f2b_cleanup_old_events(): void {
         }
     } while ( 1000 === $deleted && $batches < 200 && ( microtime( true ) - $started ) < 10 );
 
+    // Expired in-progress RDAP work rows (nppp_st_f2b_rdap_work_<md5>): readers never
+    // delete, so abandoned IPs would otherwise stay in wp_options forever.
+    nppp_state_prune_expired( 'f2b_rdap_work_' );
+
     // Structured, untranslated. A full last batch means the loop stopped on its
     // batch/time limit with rows still waiting: the table is outgrowing the
     // cleanup, which nothing else reports. A normal run is summarised once a day.
@@ -981,7 +985,9 @@ function nppp_f2b_rdap_work_key( string $ip ): string {
 }
 
 function nppp_f2b_rdap_work_get( string $ip ): array {
-    $state = get_transient( nppp_f2b_rdap_work_key( $ip ) );
+    // Option-backed (includes/state.php): the failure counter and retry_at bound the
+    // retries per IP, so an object-cache flush must not reset them.
+    $state = nppp_f2b_rdap_work_load( $ip );
     if ( is_array( $state ) && isset( $state['result'], $state['whois'], $state['abuse'] )
         && is_array( $state['result'] ) ) {
         return $state;
@@ -1061,7 +1067,7 @@ function nppp_f2b_rdap_retry_waiting( string $ip ): bool {
 function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = false ): bool {
     if ( $state['whois'] && $state['abuse'] ) {
         nppp_f2b_rdap_store_cache( $ip, $state['result'] );
-        delete_transient( nppp_f2b_rdap_work_key( $ip ) );
+        nppp_f2b_rdap_work_delete( $ip );
         if ( ! empty( $state['retry_at'] ) ) {
             nppp_f2b_rdap_cooling_set( $ip, 0 );
         }
@@ -1097,7 +1103,7 @@ function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = fa
             $state['result'],
             max( 1, (int) apply_filters( 'nppp_f2b_rdap_negative_cache_ttl', 5 * MINUTE_IN_SECONDS ) )
         );
-        delete_transient( nppp_f2b_rdap_work_key( $ip ) );
+        nppp_f2b_rdap_work_delete( $ip );
         nppp_f2b_rdap_cooling_set( $ip, 0 );
         // Per-process tally, read by the worker's stop line (gave_up=N).
         $GLOBALS['nppp_f2b_rdap_gave_up_run'] = (int) ( $GLOBALS['nppp_f2b_rdap_gave_up_run'] ?? 0 ) + 1;
@@ -1133,7 +1139,7 @@ function nppp_f2b_rdap_work_save( string $ip, array $state, bool $permanent = fa
 
     $state['last_error'] = 'Unresolved endpoints: ' . implode( ', ', $missing );
     $state['retry_at'] = time() + $gap;
-    set_transient( nppp_f2b_rdap_work_key( $ip ), $state, max( DAY_IN_SECONDS, $gap + 1 ) );
+    nppp_f2b_rdap_work_store( $ip, $state, max( DAY_IN_SECONDS, $gap + 1 ) );
     nppp_f2b_rdap_cooling_set( $ip, (int) $state['retry_at'] );
     return false;
 }
