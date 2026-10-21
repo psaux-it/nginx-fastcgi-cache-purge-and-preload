@@ -123,6 +123,7 @@ def reset_all():
     wp(php=(
         'global $wpdb; $t = nppp_f2b_table_name(); $wpdb->query("TRUNCATE TABLE $t");'
         '$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \'%transient%nppp%\'");'
+        '$wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like("nppp_st_") . "%"));'
         'delete_option("nppp_f2b_rate_win"); delete_option(NPPP_F2B_SPAWN_TICK_KEY);'
         'delete_option(NPPP_F2B_LOG_GATE_OPTION);'
         'wp_cache_flush();'
