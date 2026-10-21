@@ -681,7 +681,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
                 if ( $nppp_is_auto_preload ) $nppp_trigger = 'Auto Preload';
                 elseif ( $nppp_is_rest_api )  $nppp_trigger = 'REST API';
                 elseif ( $nppp_is_wp_cron )   $nppp_trigger = 'Scheduled';
-                set_transient( 'nppp_preload_trigger_' . md5('nppp'), $nppp_trigger, 12 * HOUR_IN_SECONDS );
+                nppp_preload_trigger_set( $nppp_trigger );
                 nppp_create_scheduled_event_preload_status();
             }
 
@@ -933,7 +933,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
             if ( $nppp_is_auto_preload ) $nppp_trigger = 'Auto Preload';
             elseif ( $nppp_is_rest_api )  $nppp_trigger = 'REST API';
             elseif ( $nppp_is_wp_cron )   $nppp_trigger = 'Scheduled';
-            set_transient( 'nppp_preload_trigger_' . md5('nppp'), $nppp_trigger, 12 * HOUR_IN_SECONDS );
+            nppp_preload_trigger_set( $nppp_trigger );
             nppp_create_scheduled_event_preload_status();
         }
 
