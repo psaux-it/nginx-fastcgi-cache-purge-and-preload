@@ -548,6 +548,41 @@ function nppp_dashboard_widget() {
                     echo '</td>';
                 echo '</tr>';
 
+                // Show the HTTP Purge mode Nginx was last seen answering in: under "HTTP Purge"
+                if ($key === 'http_purge' && $status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
+                    $nppp_http_mode = function_exists('nppp_http_purge_observed_mode') ? nppp_http_purge_observed_mode() : null;
+                    if ($nppp_http_mode !== null) {
+                        $nppp_http_mode_label = nppp_http_purge_mode_label($nppp_http_mode['mode']);
+                        $nppp_http_mode_tip   = sprintf(
+                            /* translators: 1: "Purge All" or "single URL purge", 2: human readable time difference, e.g. "3 mins" */
+                            __('Observed on %1$s, %2$s ago', 'fastcgi-cache-purge-and-preload-nginx'),
+                            $nppp_http_mode['scope'] === 'all'
+                                ? __('Purge All', 'fastcgi-cache-purge-and-preload-nginx')
+                                : __('single URL purge', 'fastcgi-cache-purge-and-preload-nginx'),
+                            human_time_diff($nppp_http_mode['at'], time())
+                        );
+                    } else {
+                        $nppp_http_mode_label = __('Not detected yet', 'fastcgi-cache-purge-and-preload-nginx');
+                        $nppp_http_mode_tip   = __('The mode is detected from the next HTTP purge answer of Nginx.', 'fastcgi-cache-purge-and-preload-nginx');
+                    }
+
+                    echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
+                        echo '<td style="padding: 6px 15px; width: 75%;" title="' . esc_attr($nppp_http_mode_tip) . '">';
+                            echo '<div class="nppp-http-purge-mode">';
+                                echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
+                                echo '<span>' . sprintf(
+                                    /* translators: %s: HTTP Purge mode (Sync, Async Background Queue, Invalidation) */
+                                    esc_html__('Mode: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                                    '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($nppp_http_mode_label) . '</strong>'
+                                ) . '</span>';
+                            echo '</div>';
+                        echo '</td>';
+                        echo '<td style="padding: 6px 15px; text-align: center;">';
+                            echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;" title="' . esc_attr($nppp_http_mode_tip) . '"></span>';
+                        echo '</td>';
+                    echo '</tr>';
+                }
+
                 // Show Last Run: under "Auto Preload"
                 if ($key === 'auto_preload') {
                     if ($last_preload_complete_date) {
