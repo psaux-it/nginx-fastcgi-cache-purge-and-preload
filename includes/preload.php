@@ -277,7 +277,8 @@ function nppp_detect_premature_process(
     // window, which wrongly aborted Preload on small sites.
     // No -P here: the probe runs BEFORE the purge, and a -P download into a missing cache path would
     // create that directory (hiding ERROR PATH), into an unwritable one it exits 3 (hiding
-    // ERROR PERMISSION). Never combine -O /dev/null with --delete-after (wget would unlink /dev/null).
+    // ERROR PERMISSION). Never combine -O /dev/null with --delete-after: wget then writes
+    // /dev/null.tmp (needs write access to /dev) instead of discarding the body.
     $testCommand =
         'exec ' .
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
@@ -327,6 +328,23 @@ function nppp_detect_premature_process(
             // Test exit code
             if ($exitCode === 0) {
                 $test_process = true;
+            } elseif ($exitCode === 4) {
+                // wget exit 4 = network failure (DNS lookup failed, connection refused or unreachable).
+                // Report it as a DNS / network / proxy error instead of the misleading ERROR COMMAND
+                // ("check Exclude Endpoints settings"), which is only right for a bad regex / blocked start page.
+                if ($use_proxy === 'yes') {
+                    // The proxy resolves and connects to the site, so a site failure comes back as an HTTP
+                    // error (exit 8). Exit 4 here means wget could not talk to the proxy itself.
+                    $test_process = 'proxy_unreachable';
+                } else {
+                    $host_is_ip = filter_var(trim($host, '[]'), FILTER_VALIDATE_IP) !== false;
+                    $resolves   = $host_is_ip || gethostbyname($host) !== $host;
+                    if (!$resolves && function_exists('dns_get_record')) {
+                        $aaaa     = @dns_get_record($host, DNS_AAAA);
+                        $resolves = !empty($aaaa);
+                    }
+                    $test_process = $resolves ? 'network_error' : 'dns_error';
+                }
             } else {
                 $test_process = false;
             }
