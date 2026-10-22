@@ -271,7 +271,7 @@ function nppp_delete_tree(string $path): bool {
     // link is never descended into.
     for ($pass = 0; $pass < 3; $pass++) {
         $clean   = true;
-        $entries = @scandir($path);
+        $entries = @scandir($path, SCANDIR_SORT_NONE);
         if ($entries === false) {
             $clean = false;
         } else {
