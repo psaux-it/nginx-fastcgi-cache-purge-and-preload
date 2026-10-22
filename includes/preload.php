@@ -270,18 +270,25 @@ function nppp_detect_premature_process(
     $safexec_path = nppp_find_safexec_path();
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
 
+    // Probe the START PAGE only (no --recursive) and write nothing to disk (-O /dev/null).
+    // The probe has to prove that wget can start and reach the site (bad regex = exit 1,
+    // DNS/network = exit 4, start page blocked = exit 8), not crawl it. A recursive probe exits 8
+    // as soon as ANY internal link answers 404, and a warm cache lets it finish inside the 300 ms
+    // window, which wrongly aborted Preload on small sites.
+    // No -P here: the probe runs BEFORE the purge, and a -P download into a missing cache path would
+    // create that directory (hiding ERROR PATH), into an unwritable one it exits 3 (hiding
+    // ERROR PERMISSION). Never combine -O /dev/null with --delete-after (wget would unlink /dev/null).
     $testCommand =
         'exec ' .
         ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
         'wget ' .
-        '--quiet --recursive -l inf --no-cache --no-config --no-cookies --delete-after ' .
+        '--quiet --no-cache --no-config --no-cookies -O /dev/null ' .
         '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
         '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case ' .
         '-e robots=off ' .
         '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
         '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
         '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
         '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
         '--wait=' . ((int)$nginx_cache_wait) . ' ' .
         '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
@@ -368,6 +375,105 @@ function nppp_detect_premature_process(
     }
 
     return $test_process;
+}
+
+/**
+ * Preflight for a Preload All start: proves the crawler can run BEFORE anything destructive happens.
+ *
+ * Runs the proxy health check and the premature-process test (a ~300 ms wget probe) and shows the
+ * matching admin notice itself on failure. nppp_preload_locked() calls it before Preload All (desktop
+ * phase) wipes the cache, so a DNS / network / proxy / command problem aborts with the cache untouched
+ * instead of leaving an emptied cache and no crawl behind. The mobile phase has no purge and calls it
+ * from its original position, after the PID file exists.
+ *
+ * @return bool true = the crawl can start, false = a notice was shown and the caller must return.
+ */
+function nppp_preload_preflight(
+    $fdomain,
+    $tmp_path,
+    $nginx_cache_limit_rate,
+    $nginx_cache_wait,
+    $nginx_cache_reject_regex,
+    $nginx_cache_reject_extension,
+    $NPPP_DYNAMIC_USER_AGENT,
+    $use_proxy,
+    $http_proxy
+): bool {
+    $parsed = wp_parse_url($fdomain);
+    $host   = strtolower($parsed['host'] ?? '');
+
+    // Proxy / network failure code, set by either of the two checks below.
+    $proxy_error = null;
+
+    if (function_exists('proc_open') && is_callable('proc_open') &&
+        function_exists('proc_get_status') && is_callable('proc_get_status') &&
+        function_exists('proc_close') && is_callable('proc_close')) {
+        // Test and detect premature process (also checks the proxy when it is enabled)
+        $test_result = nppp_detect_premature_process(
+            $fdomain,
+            $tmp_path,
+            $nginx_cache_limit_rate,
+            $nginx_cache_wait,
+            $nginx_cache_reject_regex,
+            $nginx_cache_reject_extension,
+            $NPPP_DYNAMIC_USER_AGENT
+        );
+
+        if (in_array($test_result, ['dns_error', 'network_error', 'proxy_dns_fail', 'proxy_unreachable'], true)) {
+            $proxy_error = $test_result;
+        } elseif ($test_result === false) {
+            $reason = ($host === '')
+                ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
+                : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
+
+            /* translators: 1: Domain URL 2: Reason for preload failure */
+            nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
+            return false;
+        } elseif ($test_result !== true) {
+            /* translators: %s: Domain URL where the unknown preload error occurred */
+            nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
+        }
+    } elseif ($use_proxy === 'yes') {
+        // No proc_open: only the proxy health check is possible.
+        $parsed_url = wp_parse_url($http_proxy);
+        $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+        $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+        $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
+        if (!$proxy_status['success']) {
+            $proxy_error = $proxy_status['code'];
+        }
+    }
+
+    if ($proxy_error !== null) {
+        $parsed_url = wp_parse_url($http_proxy);
+        $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
+        $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
+
+        switch ($proxy_error) {
+            case 'dns_error':
+                nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
+                break;
+
+            case 'network_error':
+                nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
+                break;
+
+            case 'proxy_dns_fail':
+                /* translators: %s: Proxy hostname that could not be resolved */
+                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
+                break;
+
+            case 'proxy_unreachable':
+            default:
+                /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
+                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
+                break;
+        }
+        return false;
+    }
+
+    return true;
 }
 
 // Preload operation
@@ -500,6 +606,16 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
     // so we do not purge the cache before preloading.
     // Keep in mind that the auto-preload feature is triggered only by the purge action itself, not by the preload action.
     if (!$nppp_is_auto_preload) {
+        // Preflight BEFORE the destructive purge below (desktop phase): the proxy check and the
+        // premature-process test must pass first. Otherwise a DNS / network / proxy / command error
+        // would return after the cache was already wiped, leaving an empty cache and no crawl.
+        // The mobile phase has no purge; it keeps the original order (see the PID file block below),
+        // because the desktop -> mobile hand-off in schedule.php expects the PID file to exist when
+        // the mobile start fails.
+        if ( ! $preload_mobile && ! nppp_preload_preflight( $fdomain, $tmp_path, $nginx_cache_limit_rate, $nginx_cache_wait, $nginx_cache_reject_regex, $nginx_cache_reject_extension, $NPPP_DYNAMIC_USER_AGENT, $use_proxy, $http_proxy ) ) {
+            return;
+        }
+
         // Purge cache according to Preload Mobile
         if (!$preload_mobile) {
             $status = nppp_purge_helper($nginx_cache_path, $tmp_path);
@@ -527,94 +643,12 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
                 $cpulimit = 0;
             }
 
-            // Test and detect premature process
-            if (function_exists('proc_open') && is_callable('proc_open') &&
-                function_exists('proc_get_status') && is_callable('proc_get_status') &&
-                function_exists('proc_close') && is_callable('proc_close')) {
-                $test_result = nppp_detect_premature_process(
-                    $fdomain,
-                    $tmp_path,
-                    $nginx_cache_limit_rate,
-                    $nginx_cache_wait,
-                    $nginx_cache_reject_regex,
-                    $nginx_cache_reject_extension,
-                    $NPPP_DYNAMIC_USER_AGENT
-                );
-
-
-                if (in_array($test_result, ['dns_error', 'network_error', 'proxy_dns_fail', 'proxy_unreachable'], true)) {
-                    $parsed_url = wp_parse_url($http_proxy);
-                    $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
-                    $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
-
-                    switch ($test_result) {
-                        case 'dns_error':
-                            nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
-                            break;
-
-                        case 'network_error':
-                            nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
-                            break;
-
-                        case 'proxy_dns_fail':
-                            /* translators: %s: Proxy hostname that could not be resolved */
-                            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
-                            break;
-
-                        case 'proxy_unreachable':
-                        default:
-                            /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
-                            nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
-                            break;
-                    }
-                    return;
-                } elseif ($test_result === false) {
-                    $reason = ($host === '')
-                        ? __('Could not parse site host from URL.', 'fastcgi-cache-purge-and-preload-nginx')
-                        : __('Please check Exclude Endpoints and Exclude File Extensions settings syntax.', 'fastcgi-cache-purge-and-preload-nginx');
-
-                    /* translators: 1: Domain URL 2: Reason for preload failure */
-                    nppp_display_admin_notice('error', sprintf(__('ERROR COMMAND: Preloading failed for %1$s. %2$s', 'fastcgi-cache-purge-and-preload-nginx'), esc_html($fdomain), esc_html($reason)));
-                    return;
-                } elseif ($test_result !== true) {
-                    /* translators: %s: Domain URL where the unknown preload error occurred */
-                    nppp_display_admin_notice('error', sprintf(__('ERROR UNKNOWN: Preloading failed for %s. Unknown error occurred.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain));
-                }
-            } else {
-                if ($use_proxy === 'yes') {
-                    // Parse proxy IP and Port
-                    $parsed_url = wp_parse_url($http_proxy);
-                    $proxy_host = isset($parsed_url['host']) ? $parsed_url['host'] : '127.0.0.1';
-                    $proxy_port = isset($parsed_url['port']) ? $parsed_url['port'] : 3434;
-
-                    // Use proxy health check
-                    $proxy_status = nppp_is_proxy_reachable($proxy_host, $proxy_port);
-
-                    if (!$proxy_status['success']) {
-                        // Show admin notice based on error code
-                        switch ($proxy_status['code']) {
-                            case 'dns_error':
-                                nppp_display_admin_notice('error', __('ERROR DNS: DNS resolution failed inside the WordPress container. Please check your container network/DNS settings.', 'fastcgi-cache-purge-and-preload-nginx'));
-                                break;
-
-                            case 'network_error':
-                                nppp_display_admin_notice('error', __('ERROR NETWORK: Outbound network connection failed from WordPress container. Ensure firewall/Docker network settings allow outbound access.', 'fastcgi-cache-purge-and-preload-nginx'));
-                                break;
-
-                            case 'proxy_dns_fail':
-                                /* translators: %s: Proxy hostname that could not be resolved */
-                                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: The proxy hostname "%s" could not be resolved to an IP address.', 'fastcgi-cache-purge-and-preload-nginx'), $proxy_host));
-                                break;
-
-                            case 'proxy_unreachable':
-                            default:
-                                /* translators: 1: Domain URL 2: Proxy host 3: Proxy port number */
-                                nppp_display_admin_notice('error', sprintf(__('ERROR PROXY: Preloading failed for %1$s. Proxy is enabled, but %2$s:%3$d is not responding. Check your proxy or disable proxy mode.', 'fastcgi-cache-purge-and-preload-nginx'), $fdomain, $proxy_host, $proxy_port));
-                                break;
-                        }
-                        return;
-                    }
-                }
+            // Desktop phase: nppp_preload_preflight() already ran before the purge above.
+            // Mobile phase has no purge, so its preflight stays here, after the PID file exists:
+            // on failure the PID file is left behind exactly as before and the schedule.php tick
+            // still runs the completion tail for the finished desktop crawl.
+            if ( $preload_mobile && ! nppp_preload_preflight( $fdomain, $tmp_path, $nginx_cache_limit_rate, $nginx_cache_wait, $nginx_cache_reject_regex, $nginx_cache_reject_extension, $NPPP_DYNAMIC_USER_AGENT, $use_proxy, $http_proxy ) ) {
+                return;
             }
 
             // Check safexec available
