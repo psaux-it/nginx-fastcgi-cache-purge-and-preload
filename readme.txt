@@ -340,6 +340,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Fixed: When wget cannot resolve or reach the site (exit 4), Preload now shows ERROR DNS, ERROR NETWORK or ERROR PROXY instead of the misleading ERROR COMMAND that pointed to the Exclude Endpoints settings.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All. Existing sites with Preload Related Pages ON and Auto Preload OFF will start preloading related pages on auto-purge.
 * Changed: With ngx_cache_purge v4 generation mode and a Purge Queue Status Path set, Status and Advanced tabs now use the namespace state from the status endpoint to leave out cache files Nginx has already invalidated (after Purge All or a full restart) but not yet deleted. Without the status path or on older/no modules nothing changes.
+* Tested: Tested with Nginx (1.31.6), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0) and aaPanel (8.0.6).
 
 = 2.1.8 (2026-09-25) =
 
