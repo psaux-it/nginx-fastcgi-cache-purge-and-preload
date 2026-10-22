@@ -730,6 +730,102 @@ function nppp_http_purge_remember_generation( string $scope, bool $on ): void {
 }
 
 /**
+ * Mode an HTTP purge outcome proves, or '' when it proves none.
+ *   purged      200 from a synchronous purge                     -> 'sync'
+ *   accepted    202 (cache_purge_background_queue on, Purge All) -> 'async'
+ *   invalidated 200 from a generation namespace (cache_purge_key) -> 'invalidate'
+ * "no_match" / "legacy_miss" are answered the same way in every mode, so they prove nothing.
+ */
+function nppp_http_purge_mode_from_outcome( string $outcome ): string {
+    switch ( $outcome ) {
+        case 'purged':
+            return 'sync';
+        case 'accepted':
+            return 'async';
+        case 'invalidated':
+            return 'invalidate';
+    }
+
+    return '';
+}
+
+/**
+ * Remembers the mode the last successful HTTP purge of $scope ('single' | 'all') ran in, for the
+ * dashboard widget. Own option-backed row (nppp_st_http_purge_mode, swept on uninstall) so it is
+ * independent of the 24 h endpoint state. Writes only on change, plus one refresh per 6 hours.
+ */
+function nppp_http_purge_remember_mode( string $scope, string $outcome ): void {
+    $mode = nppp_http_purge_mode_from_outcome( $outcome );
+    if ( $mode === '' || ! in_array( $scope, [ 'single', 'all' ], true ) ) {
+        return;
+    }
+
+    $rows = nppp_state_get( 'http_purge_mode' );
+    $rows = is_array( $rows ) ? $rows : [];
+    $now  = time();
+    $cur  = isset( $rows[ $scope ] ) && is_array( $rows[ $scope ] ) ? $rows[ $scope ] : [];
+
+    if ( ( $cur['mode'] ?? '' ) === $mode && abs( $now - (int) ( $cur['at'] ?? 0 ) ) < 6 * HOUR_IN_SECONDS ) {
+        return;
+    }
+
+    $rows[ $scope ] = [ 'mode' => $mode, 'at' => $now ];
+    nppp_state_set( 'http_purge_mode', $rows, 30 * DAY_IN_SECONDS );
+}
+
+/**
+ * The HTTP Purge mode NPP last saw Nginx answer in, or null when none was observed yet.
+ *
+ * A single-URL "sync" proves nothing about Purge All (exact keys are always synchronous, even
+ * when Purge All runs in the background queue), so it only counts when nothing else was seen.
+ * Otherwise the newest observation wins.
+ *
+ * @return array{mode:string,scope:string,at:int}|null
+ */
+function nppp_http_purge_observed_mode(): ?array {
+    $rows = nppp_state_get( 'http_purge_mode' );
+    if ( ! is_array( $rows ) ) {
+        return null;
+    }
+
+    $best     = null;
+    $fallback = null;
+    foreach ( [ 'all', 'single' ] as $scope ) {
+        $row = isset( $rows[ $scope ] ) && is_array( $rows[ $scope ] ) ? $rows[ $scope ] : [];
+        $m   = (string) ( $row['mode'] ?? '' );
+        $at  = (int) ( $row['at'] ?? 0 );
+        if ( $at <= 0 || ! in_array( $m, [ 'sync', 'async', 'invalidate' ], true ) ) {
+            continue;
+        }
+
+        $found = [ 'mode' => $m, 'scope' => $scope, 'at' => $at ];
+        if ( $scope === 'single' && $m === 'sync' ) {
+            $fallback = $found;
+        } elseif ( $best === null || $at > $best['at'] ) {
+            $best = $found;
+        }
+    }
+
+    return $best ?? $fallback;
+}
+
+/**
+ * Translated label of a mode from nppp_http_purge_observed_mode() ('' for an unknown one).
+ */
+function nppp_http_purge_mode_label( string $mode ): string {
+    switch ( $mode ) {
+        case 'sync':
+            return __( 'Sync', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'async':
+            return __( 'Async Background Queue', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'invalidate':
+            return __( 'Invalidation (Generation)', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    return '';
+}
+
+/**
  * True for a method token that is neither GET nor a standard HTTP verb: the module's
  * own purge method (PURGE, or whatever "xxx_cache_purge <method>" names).
  */
@@ -1208,6 +1304,7 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
         // outcome, "accepted" (202) included, comes from one that is not, so it ends generation
         // mode for this scope at once (ngx_cache_purge answers 202 only without a namespace).
         nppp_http_purge_remember_generation( $scope, $outcome === 'invalidated' );
+        nppp_http_purge_remember_mode( $scope, $outcome );
     } else {
         nppp_http_purge_report_failure( $scope, $url, $timeout, $result );
     }
