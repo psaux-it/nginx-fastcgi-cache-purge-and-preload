@@ -523,11 +523,11 @@ function nppp_check_permissions_recursive($path) {
     try {
         $top = new DirectoryIterator( $probe_dir );
         foreach ( $top as $d1 ) {
-            if ( $d1->isDot() || ! $d1->isDir() ) { continue; }
+            if ( $d1->isDot() || $d1->isLink() || ! $d1->isDir() ) { continue; }
             $d1_path = $d1->getPathname();
             $mid     = new DirectoryIterator( $d1_path );
             foreach ( $mid as $d2 ) {
-                if ( $d2->isDot() || ! $d2->isDir() ) { continue; }
+                if ( $d2->isDot() || $d2->isLink() || ! $d2->isDir() ) { continue; }
                 $probe_dir = $d2->getPathname();
                 break 2;
             }
