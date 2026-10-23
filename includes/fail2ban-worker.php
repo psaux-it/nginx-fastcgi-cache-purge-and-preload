@@ -550,11 +550,7 @@ function nppp_f2b_worker_env(): array {
 
     $candidates = array();
 
-    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
-    $which = trim( (string) shell_exec( 'command -v php 2>/dev/null' ) );
-    if ( '' !== $which ) {
-        $candidates[] = $which;
-    }
+    // Same PHP build that is serving this request: version-consistent with WordPress.
     if ( defined( 'PHP_BINDIR' ) && '' !== PHP_BINDIR ) {
         $candidates[] = rtrim( PHP_BINDIR, '/' ) . '/php';
     }
@@ -562,10 +558,15 @@ function nppp_f2b_worker_env(): array {
         $candidates[] = PHP_BINARY;
     }
 
+    // PATH lookup last: may resolve to a different PHP version than the one
+    // serving WordPress (Plesk, Remi, cPanel multi-PHP setups).
+    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+    $which = trim( (string) shell_exec( 'command -v php 2>/dev/null' ) );
+    if ( '' !== $which ) {
+        $candidates[] = $which;
+    }
+
     foreach ( array_unique( $candidates ) as $bin ) {
-        if ( ! @is_file( $bin ) || ! @is_executable( $bin ) ) {
-            continue;
-        }
         // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
         $sapi = trim( (string) shell_exec(
             escapeshellarg( $bin ) . ' -r ' . escapeshellarg( 'echo PHP_SAPI;' ) . ' 2>/dev/null'
