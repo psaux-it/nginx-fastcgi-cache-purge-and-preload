@@ -273,6 +273,9 @@
                         if (!response || !response.success) { return; }
                         var d = response.data;
 
+                        // Server-escaped markup (nppp_render_traffic_row); '' hides the row.
+                        if (typeof d.traffic_html === 'string') { $('#nppp-traffic-row').html(d.traffic_html); }
+
                         if (d.na) {
                             var naMsg;
                             if      (d.na_reason === 'path_not_found') { naMsg = __( 'Cache path not found. Check Nginx cache path setting.',  'fastcgi-cache-purge-and-preload-nginx' ); }
