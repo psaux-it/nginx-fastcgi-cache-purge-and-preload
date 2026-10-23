@@ -511,6 +511,11 @@ function nppp_dashboard_widget() {
             echo '</div>';
         echo '</div>';
 
+        // Traffic hit ratio reported by Nginx (ngx_cache_purge v4 status endpoint); empty when unavailable.
+        echo '<div id="nppp-traffic-row">'
+           . ( function_exists( 'nppp_http_purge_traffic_stats' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats() ) : '' )
+           . '</div>';
+
         // Output the main NPP pluging settings statuses
         echo '<table style="width: 100%; border-collapse: collapse;">';
             foreach ($statuses as $key => $status_info) {
@@ -648,6 +653,58 @@ function nppp_add_dashboard_widget() {
     );
 }
 
+/**
+ * Escaped HTML of the "Traffic hit ratio" card; '' when the status endpoint gave nothing.
+ *
+ * @param array|null $t Result of nppp_http_purge_traffic_stats().
+ */
+function nppp_render_traffic_row( ?array $t ): string {
+    if ( $t === null ) {
+        return '';
+    }
+
+    $tip   = esc_attr__( 'Counted by Nginx for every request with a native cache HIT or MISS (preload crawler included). BYPASS, EXPIRED, STALE, UPDATING and REVALIDATED are not counted. Counters reset when Nginx is restarted.', 'fastcgi-cache-purge-and-preload-nginx' );
+    $ratio = null;
+    $scope = '';
+    $sub   = '';
+
+    if ( $t['window'] !== null ) {
+        $w     = $t['window'];
+        $ratio = $w['ratio'];
+        $hours = max( 1, (int) round( $w['seconds'] / HOUR_IN_SECONDS ) );
+        /* translators: %d: number of hours covered. */
+        $scope = sprintf( esc_html__( 'over last %dh', 'fastcgi-cache-purge-and-preload-nginx' ), $hours );
+        $sub   = sprintf(
+            /* translators: 1: HIT count, 2: MISS count. */
+            esc_html__( '%1$s HIT / %2$s MISS', 'fastcgi-cache-purge-and-preload-nginx' ),
+            esc_html( number_format_i18n( $w['hits'] ) ),
+            esc_html( number_format_i18n( $w['misses'] ) )
+        );
+    } elseif ( $t['ratio'] !== null ) {
+        $ratio = $t['ratio'];
+        $scope = esc_html__( 'since Nginx restart', 'fastcgi-cache-purge-and-preload-nginx' );
+        $sub   = esc_html__( 'Collecting data for a 24h window…', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $html = '<div class="nppp-traffic-box" title="' . $tip . '">'
+          . '<div class="nppp-traffic-head"><span class="dashicons dashicons-chart-line"></span>'
+          . '<span class="nppp-traffic-title">' . esc_html__( 'Traffic hit ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+
+    if ( $ratio === null ) {
+        return $html . '<span class="nppp-traffic-sub">' . esc_html__( 'No cache traffic observed yet', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+    }
+
+    $pct   = $ratio * 100;
+    $width = number_format( min( 100, max( 0, $pct ) ), 1, '.', '' );
+
+    return $html
+        . '<div class="nppp-traffic-main"><strong class="nppp-traffic-pct">' . esc_html( number_format_i18n( $pct, 1 ) ) . '%</strong>'
+        . '<span class="nppp-traffic-scope">' . $scope . '</span></div>'
+        . '<span class="nppp-traffic-bar"><i style="width:' . esc_attr( $width ) . '%"></i></span>'
+        . '<span class="nppp-traffic-sub">' . $sub . '</span>'
+        . '</div>';
+}
+
 // AJAX handler — refresh cache coverage ratio on demand from the dashboard widget.
 function nppp_refresh_cache_ratio_callback() {
     // Capability check
@@ -666,6 +723,10 @@ function nppp_refresh_cache_ratio_callback() {
         @set_time_limit( 0 ); // phpcs:ignore Squiz.PHP.DiscouragedFunctions.Discouraged
     }
 
+    // Explicit refresh: bypass the 20 s / 60 s caches of the Nginx counters.
+    $traffic_html = function_exists( 'nppp_http_purge_traffic_stats' )
+        ? nppp_render_traffic_row( nppp_http_purge_traffic_stats( true ) ) : '';
+
     // Fresh HITs scan
     $hits = nppp_get_in_cache_page_count();
 
@@ -678,11 +739,11 @@ function nppp_refresh_cache_ratio_callback() {
             'Undetermined' => 'undetermined',
             'RegexError'   => 'regex_error',
         ];
-        wp_send_json_success( [ 'na' => true, 'na_reason' => $na_reason_map[ $hits ] ] );
+        wp_send_json_success( [ 'na' => true, 'na_reason' => $na_reason_map[ $hits ], 'traffic_html' => $traffic_html ] );
     }
 
     if ( ! function_exists( 'nppp_get_cache_ratio' ) ) {
-        wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
+        wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot', 'traffic_html' => $traffic_html ] );
     }
 
     $ratio_data = nppp_get_cache_ratio( $hits );
@@ -695,9 +756,10 @@ function nppp_refresh_cache_ratio_callback() {
             'misses'     => (int)   $ratio_data['misses'],
             'total'      => (int)   $ratio_data['total'],
             'scanned_at' => time(),
+            'traffic_html' => $traffic_html,
         ] );
     }
 
     // nppp_get_cache_ratio returned N/A (no snapshot, empty snapshot, etc.)
-    wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot' ] );
+    wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot', 'traffic_html' => $traffic_html ] );
 }
