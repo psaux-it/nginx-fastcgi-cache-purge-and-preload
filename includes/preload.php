@@ -300,19 +300,27 @@ function nppp_detect_premature_process(
         '-- ' .
         escapeshellarg($fdomain);
 
-    // Redirect all I/O to /dev/null so wget can never block on pipes
+    // wget must never block on pipes, so the child shell redirects its own I/O to /dev/null
+    // (see the proc_open() call below). PHP only holds pipe ends and closes them right after the spawn.
     $descriptors = [
-        0 => ['file', '/dev/null', 'r'],
-        1 => ['file', '/dev/null', 'w'],
-        2 => ['file', '/dev/null', 'w'],
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
     ];
 
     // Start the testprocess
     // phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- proc_open() is needed to detect premature process status safely
-    $process = proc_open($testCommand, $descriptors, $pipes);
+    $process = proc_open($testCommand . ' > /dev/null 2>&1 < /dev/null', $descriptors, $pipes);
 
     // Verify that the process was successfully created
-    if (is_resource($process)) {
+   if (is_resource($process)) {
+        // The child talks to /dev/null, not to these pipes. Close them so nothing can ever block on them.
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+
         // Sleep for 100ms to allow process to initialize/stabilize
         usleep(300000);
 
