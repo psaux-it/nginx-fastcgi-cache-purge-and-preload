@@ -275,6 +275,168 @@ function nppp_http_purge_queue_status_url(): string {
 }
 
 /**
+ * Reads the cumulative HIT/MISS counters of the ngx_cache_purge v4 status endpoint.
+ *
+ * Source: "cache.responses.hit" / "cache.responses.miss" of the `cache_purge_queue_status`
+ * location. The module's own "hit_ratio" is ignored on purpose: the ratio is recomputed from
+ * the raw counters so that it can be windowed (see nppp_http_purge_traffic_summarize()).
+ *
+ * Returns null for anything that is not a well-formed v4 reply (module v2/v3, no status
+ * path, endpoint denied or unreachable, missing "responses" object, non-numeric or negative
+ * values). Never throws, makes one GET.
+ *
+ * @return array{hit:float,miss:float,ts:int}|null
+ */
+function nppp_http_purge_traffic_fetch( string $url ): ?array {
+    $res = nppp_http_purge_fetch( 'GET', $url, 2 );
+    if ( $res['error'] !== '' || $res['status'] !== 200 || $res['code'] !== 'status' ) {
+        return null;
+    }
+
+    $json = json_decode( $res['body'], true );
+    $r    = ( is_array( $json ) && isset( $json['cache']['responses'] ) && is_array( $json['cache']['responses'] ) )
+          ? $json['cache']['responses'] : null;
+    if ( $r === null || ! isset( $r['hit'], $r['miss'] ) ) {
+        return null;
+    }
+
+    // uint64 counters beyond PHP_INT_MAX decode as float: accept both, reject the rest.
+    foreach ( [ 'hit', 'miss' ] as $k ) {
+        if ( ( ! is_int( $r[ $k ] ) && ! is_float( $r[ $k ] ) ) || $r[ $k ] < 0 || ! is_finite( (float) $r[ $k ] ) ) {
+            return null;
+        }
+    }
+
+    return [ 'hit' => (float) $r['hit'], 'miss' => (float) $r['miss'], 'ts' => time() ];
+}
+
+/**
+ * Pure: next sample list for the rolling 24h window.
+ *
+ * The module counters are cumulative since the last full Nginx restart (a reload keeps them),
+ * so a lifetime ratio says nothing about the present. Samples are kept at most every 30 min,
+ * for 24h, max 60 entries. A counter that went DOWN means Nginx restarted: history is dropped.
+ *
+ * @param array $samples Stored list of {ts,hit,miss}; anything malformed is discarded.
+ * @param array $now     {hit,miss,ts} from nppp_http_purge_traffic_fetch().
+ * @return array<int,array{ts:int,hit:float,miss:float}>
+ */
+function nppp_http_purge_traffic_next_samples( array $samples, array $now ): array {
+    $clean = [];
+    foreach ( $samples as $s ) {
+        if ( is_array( $s ) && isset( $s['ts'], $s['hit'], $s['miss'] )
+            && is_numeric( $s['ts'] ) && is_numeric( $s['hit'] ) && is_numeric( $s['miss'] ) ) {
+            $clean[] = [ 'ts' => (int) $s['ts'], 'hit' => (float) $s['hit'], 'miss' => (float) $s['miss'] ];
+        }
+    }
+    usort( $clean, static fn( $a, $b ) => $a['ts'] <=> $b['ts'] );
+
+    $last = end( $clean );
+    if ( $last !== false && ( $now['hit'] < $last['hit'] || $now['miss'] < $last['miss'] || $now['ts'] < $last['ts'] ) ) {
+        $clean = []; // restart (or clock jump): older samples are not comparable.
+        $last  = false;
+    }
+
+    if ( $last === false || $now['ts'] - $last['ts'] >= 1800 ) {
+        $clean[] = [ 'ts' => $now['ts'], 'hit' => $now['hit'], 'miss' => $now['miss'] ];
+    }
+
+    $cut   = $now['ts'] - DAY_IN_SECONDS;
+    $clean = array_values( array_filter( $clean, static fn( $s ) => $s['ts'] >= $cut ) );
+
+    return array_slice( $clean, -60 );
+}
+
+/**
+ * Pure: lifetime and windowed traffic hit ratio.
+ *
+ * "window" uses the oldest stored sample that is at least 5 min old, and is reported only
+ * with >= 50 decided requests (HIT+MISS) in the window: below that a percentage is noise.
+ * The module counts only main requests with a native HIT or MISS decision. BYPASS, EXPIRED,
+ * STALE, UPDATING and REVALIDATED are not in either counter, so this ratio is a "fresh HIT vs
+ * cold MISS" figure, not an origin-offload figure. Preload crawler requests are included.
+ *
+ * @return array{hit:float,miss:float,ratio:?float,window:?array{ratio:float,hits:float,misses:float,seconds:int}}
+ */
+function nppp_http_purge_traffic_summarize( array $now, array $samples ): array {
+    $total = $now['hit'] + $now['miss'];
+    $out   = [
+        'hit'    => $now['hit'],
+        'miss'   => $now['miss'],
+        'ratio'  => $total > 0 ? $now['hit'] / $total : null,
+        'window' => null,
+    ];
+
+    foreach ( $samples as $base ) {
+        if ( $base['ts'] > $now['ts'] - 300 ) {
+            break;
+        }
+        $dh = $now['hit'] - $base['hit'];
+        $dm = $now['miss'] - $base['miss'];
+        if ( $dh >= 0 && $dm >= 0 && ( $dh + $dm ) >= 50 ) {
+            $out['window'] = [
+                'ratio'   => $dh / ( $dh + $dm ),
+                'hits'    => $dh,
+                'misses'  => $dm,
+                'seconds' => $now['ts'] - $base['ts'],
+            ];
+        }
+        break; // oldest eligible sample only.
+    }
+
+    return $out;
+}
+
+/**
+ * Traffic hit ratio of Nginx itself (ngx_cache_purge v4 status endpoint), or null when it
+ * is not available. Complements, never replaces, the disk based Cache Coverage:
+ * coverage = how much of the site is warm; this = how much real traffic was served warm.
+ *
+ * Cached 20 s (a dashboard reload costs no request); a failure is cached 60 s so a dead
+ * endpoint cannot add its 2 s timeout to every admin page. $fresh bypasses both.
+ *
+ * @return array|null See nppp_http_purge_traffic_summarize().
+ */
+function nppp_http_purge_traffic_stats( bool $fresh = false ): ?array {
+    if ( ! nppp_http_purge_enabled() ) {
+        return null;
+    }
+    $url = nppp_http_purge_queue_status_url();
+    if ( $url === '' ) {
+        return null;
+    }
+
+    $key = 'nppp_traffic_raw';
+    if ( $fresh ) {
+        delete_transient( $key );
+    }
+
+    $raw = get_transient( $key );
+    if ( $raw === 'fail' ) {
+        return null;
+    }
+
+    if ( ! is_array( $raw ) ) {
+        $raw = nppp_http_purge_traffic_fetch( $url );
+        if ( $raw === null ) {
+            set_transient( $key, 'fail', 60 );
+            return null;
+        }
+        set_transient( $key, $raw, 20 );
+
+        // Lost updates between two simultaneous admin loads only skip one sample: harmless.
+        $stored  = get_option( 'nppp_traffic_samples', [] );
+        $samples = nppp_http_purge_traffic_next_samples( is_array( $stored ) ? $stored : [], $raw );
+        update_option( 'nppp_traffic_samples', $samples, false );
+    } else {
+        $stored  = get_option( 'nppp_traffic_samples', [] );
+        $samples = is_array( $stored ) ? $stored : [];
+    }
+
+    return nppp_http_purge_traffic_summarize( $raw, $samples );
+}
+
+/**
  * Resolves the response timeout (seconds) for a HTTP Purge type.
  *
  * Purge All, and a single purge with cache_purge_vary_aware on, walk the cache
