@@ -898,18 +898,13 @@ function nppp_open_basedir_compat_check(): array {
             }
         }
     }
-    // NPP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo, /proc/mounts.
+    // NPP reads /proc/cpuinfo, /proc/meminfo, /proc/self/mountinfo and /proc/mounts (FUSE detection,
+    // preload progress, metrics) and /proc/<pid>/stat, /proc/<pid>/cmdline and /proc/locks (Fail2Ban worker watchdog).
     $required['/proc'] = '/proc';
 
-    // Only required when proc_open is available; nppp_detect_premature_process()
-    if (function_exists('proc_open') && is_callable('proc_open') &&
-        function_exists('proc_get_status') && is_callable('proc_get_status') &&
-        function_exists('proc_close') && is_callable('proc_close')) {
-        $required['/dev/null'] = '/dev/null';
-    }
-
-    // safexec, WordPress core and WP_Filesystem use /tmp for temp file operations.
-    $required['/tmp'] = '/tmp';
+    // v2.1.9
+    // /dev/null and /tmp are intentionally NOT required: PHP never opens them itself. wget, safexec and
+    // the preload probe run as child processes, which open_basedir does not restrict.
 
     // aaPanel specific requirements
     $is_aapanel = nppp_is_aapanel();
