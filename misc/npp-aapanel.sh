@@ -226,17 +226,9 @@ readonly -a NPP_PRELOAD_TOOLS=( "nohup" "wget" )
 
 # Static paths NPP needs reachable under open_basedir
 readonly -a NPP_OPEN_BASEDIR_STATIC_PATHS=(
-    "/tmp/"
     "/proc/"
-    "/dev/null"
     "/www/server/nginx/conf/"
     "/www/server/panel/vhost/nginx"
-    "/usr/bin/"
-    "/usr/sbin/"
-    "/usr/local/bin/"
-    "/usr/local/sbin/"
-    "/bin/"
-    "/sbin/"
 )
 
 # Minimum versions for sanity checks
