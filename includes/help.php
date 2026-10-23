@@ -107,15 +107,7 @@ function nppp_my_faq_html() {
                                 </tr>
                                 <tr>
                                     <td><code>/proc/</code></td>
-                                    <td>FUSE detection, preload progress job and various system resource metric reads.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>/dev/null</code></td>
-                                    <td>Preload premature process check — only required if <code>proc_open</code> is available.</td>
-                                </tr>
-                                <tr>
-                                    <td><code>/tmp/</code></td>
-                                    <td>Preload process — temporarily hold artifacts here during preloading.</td>
+                                    <td>FUSE detection, preload progress job, Fail2Ban worker watchdog and various system resource metric reads.</td>
                                 </tr>
                                 <tr>
                                     <td>Main nginx configuration directories (nginx.conf)</td>
@@ -140,10 +132,8 @@ function nppp_my_faq_html() {
                         <p>Every environment is different. The plugin warning will give you the exact list, but here is a typical baseline you can start from (adjust <code>ABSPATH</code> and cache path):</p>
                         <pre>php_admin_value[open_basedir] =
     /var/www/yoursite.com/ :
-    /tmp/ :
     /var/cache/nginx/ :
     /proc/ :
-    /dev/null :
     /etc/nginx/nginx.conf :</pre>
 
                         <h4><strong>Important notes</strong></h4>
