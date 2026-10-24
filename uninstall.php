@@ -150,6 +150,7 @@ function nppp_delete_plugin_options_on_uninstall() {
         'nppp_http_purge_pending',                // Purge All queue marker for the preload gate
         'nppp_purged_all_deferred',               // Deferred Purge All follow-up state (one-shot token)
         'nppp_traffic_samples',                   // Traffic hit ratio rolling samples
+        'nppp_traffic_gaps',                      // Traffic hit ratio: finished Preload All periods
     );
 
     foreach ($option_keys as $option_key) {
@@ -185,6 +186,7 @@ function nppp_clear_scheduled_events_on_uninstall() {
         'nppp_f2b_cleanup_event',
         'nppp_f2b_enrich_event',
         'nppp_f2b_worker_event',
+        'nppp_traffic_sample_event',
         // Tracking hook left by 2.0.1-2.1.4
         'npp_plugin_tracking_event',
     );
