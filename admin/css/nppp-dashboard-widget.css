@@ -461,17 +461,24 @@
     border-left: 5px solid #3CB371;
     border-left-color: var(--nppp-tc);
     transition: border-left-color 0.5s ease;
+    position: relative;   /* anchor of the "i" marker, see .nppp-traffic-head */
 }
 
 .nppp-traffic-fair { --nppp-tc: #f0a500; --nppp-tt: #9a6500; }
 .nppp-traffic-low  { --nppp-tc: #d9534f; --nppp-tt: #b8312f; }
 .nppp-traffic-idle { --nppp-tc: #ddd;    --nppp-tt: #787c82; }
 
-/* Title row */
+/* Title row. The scope pill can be long ("over last 2h · preload excluded"):
+   when it does not fit next to the title it drops to its own line (right
+   aligned) instead of spilling out of the card. The "i" marker is pinned to
+   the top-right corner so it always stays on the title line. */
 .nppp-traffic-head {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
-    gap: 8px;
+    gap: 6px 8px;
+    padding-right: 23px;   /* 15px marker + 8px gap */
 }
 
 .nppp-traffic-head .dashicons {
@@ -485,6 +492,7 @@
 
 .nppp-traffic-title {
     font-size: 12px;
+    line-height: 20px;
     font-weight: 700;
     color: #444;
     letter-spacing: 1.1px;
@@ -494,6 +502,7 @@
 
 .nppp-traffic-rule {
     flex: 1;
+    min-width: 14px;
     height: 1px;
     background: #ddd;
 }
@@ -513,8 +522,9 @@
 
 /* "i" help marker: CSS tooltip, works on hover and keyboard/touch focus */
 .nppp-traffic-info {
-    position: relative;
-    flex: none;
+    position: absolute;
+    top: 14px;
+    right: 14px;
     width: 15px;
     height: 15px;
     border: 1px solid #a7aaad;
@@ -646,6 +656,14 @@
     stroke-width: 1;
 }
 
+/* Level held across a gap (Preload All / too little traffic): faint dots in the level colour */
+.nppp-traffic-chart line.nppp-traffic-gap {
+    stroke-width: 1.5;
+    stroke-dasharray: 1 4;
+    stroke-linecap: round;
+    opacity: 0.6;
+}
+
 /* Room on the right for the "70%" reference label (only when the line is drawn) */
 .nppp-traffic-hasref svg {
     width: calc(100% - 28px);
@@ -678,6 +696,13 @@
     border-radius: 50%;
     background: currentColor;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+/* Hollow marker: the newest level is held across a gap, not measured up to "now" */
+.nppp-traffic-dot.nppp-traffic-held {
+    background: #fafafa;
+    border-color: currentColor;
+    box-shadow: none;
 }
 
 .nppp-traffic-collect {
