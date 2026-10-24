@@ -443,31 +443,44 @@
 
 /* =============================================================
    Traffic Hit Ratio (Nginx-reported)
+   Same visual language as Cache Coverage: threshold coloured left
+   border (good >= 70, fair >= 40, low < 40), hairline title row.
    ============================================================= */
 
 .nppp-traffic-box {
+    --nppp-tc: #3CB371;   /* accent: border, chart, marker */
+    --nppp-tt: #23804d;   /* text-safe variant of the accent */
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px 14px 12px;
+    gap: 9px;
+    padding: 12px 14px 14px;
     margin: 0 0 8px;
     background: #fafafa;
     border-top: 1px solid #e0e0e0;
     border-bottom: 1px solid #e0e0e0;
-    border-left: 5px solid #2271b1;
+    border-left: 5px solid #3CB371;
+    border-left-color: var(--nppp-tc);
+    transition: border-left-color 0.5s ease;
 }
 
+.nppp-traffic-fair { --nppp-tc: #f0a500; --nppp-tt: #9a6500; }
+.nppp-traffic-low  { --nppp-tc: #d9534f; --nppp-tt: #b8312f; }
+.nppp-traffic-idle { --nppp-tc: #ddd;    --nppp-tt: #787c82; }
+
+/* Title row */
 .nppp-traffic-head {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
 .nppp-traffic-head .dashicons {
+    flex: none;
     width: 16px;
     height: 16px;
     font-size: 16px;
     color: #2271b1;
+    color: var(--nppp-tt);
 }
 
 .nppp-traffic-title {
@@ -476,45 +489,220 @@
     color: #444;
     letter-spacing: 1.1px;
     text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.nppp-traffic-main {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-}
-
-.nppp-traffic-pct {
-    font-size: 20px;
-    font-weight: 800;
-    line-height: 1;
-    color: #444;
-    letter-spacing: -0.3px;
+.nppp-traffic-rule {
+    flex: 1;
+    height: 1px;
+    background: #ddd;
 }
 
 .nppp-traffic-scope {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    background: #efefef;
+    color: #666;
+    border: 1px solid #e0e0e0;
+    white-space: nowrap;
+}
+
+/* "i" help marker: CSS tooltip, works on hover and keyboard/touch focus */
+.nppp-traffic-info {
+    position: relative;
+    flex: none;
+    width: 15px;
+    height: 15px;
+    border: 1px solid #a7aaad;
+    border-radius: 50%;
+    color: #787c82;
+    font: italic 700 10px/13px Georgia, serif;
+    text-align: center;
+    cursor: help;
+}
+
+.nppp-traffic-info:hover,
+.nppp-traffic-info:focus {
+    border-color: #2271b1;
+    color: #2271b1;
+    outline: none;
+}
+
+.nppp-traffic-info::after {
+    content: attr(data-tip);
+    display: none;
+    position: absolute;
+    top: 22px;
+    right: -6px;
+    z-index: 10;
+    width: 240px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: #1d2327;
+    color: #fff;
+    font: normal 400 11.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: 0;
+    text-align: left;
+    text-transform: none;
+    white-space: normal;
+}
+
+.nppp-traffic-info:hover::after,
+.nppp-traffic-info:focus::after {
+    display: block;
+}
+
+/* Body: figures on the left, trend on the right (wraps on very narrow widgets) */
+.nppp-traffic-split {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: stretch;
+}
+
+.nppp-traffic-left {
+    flex: 0 0 auto;
+    min-width: 112px;
+}
+
+.nppp-traffic-pct {
+    display: block;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1;
+    color: #444;
+    color: var(--nppp-tt);
+    letter-spacing: -0.5px;
+}
+
+.nppp-traffic-pct small {
+    margin-left: 1px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.nppp-traffic-counts {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 8px;
     font-size: 12px;
-    color: #555;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
-.nppp-traffic-bar {
-    display: block;
-    height: 6px;
-    background: #e4e4e4;
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.nppp-traffic-bar > i {
-    display: block;
-    height: 100%;
-    background: #2271b1;
-    border-radius: 3px;
-    transition: width 0.5s ease;
-}
+.nppp-traffic-hit  { color: #1e6f42; }
+.nppp-traffic-miss { color: #b8312f; }
 
 .nppp-traffic-sub {
+    font-size: 12.5px;
+    font-style: italic;
+    color: #666;
+    line-height: 1.4;
+}
+
+/* Trend chart */
+.nppp-traffic-right {
+    display: flex;
+    flex: 1 1 150px;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.nppp-traffic-chart {
+    position: relative;
+    height: 64px;
+}
+
+.nppp-traffic-chart svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.nppp-traffic-chart line {
+    vector-effect: non-scaling-stroke;
+    fill: none;
+    stroke-width: 2.5;
+}
+
+.nppp-traffic-chart line.nppp-traffic-ref {
+    stroke: #b5b5b5;
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.nppp-traffic-chart line.nppp-traffic-join {
+    stroke: #c9c9c9;
+    stroke-width: 1;
+}
+
+/* Room on the right for the "70%" reference label (only when the line is drawn) */
+.nppp-traffic-hasref svg {
+    width: calc(100% - 28px);
+}
+
+.nppp-traffic-hasref .nppp-traffic-dot {
+    right: 24px;
+}
+
+.nppp-traffic-reflabel {
+    position: absolute;
+    right: 0;
+    margin-top: -6px;
+    font-size: 10px;
+    line-height: 12px;
+    color: #6b6f74;
+}
+
+.nppp-tl-good { color: #3CB371; fill: currentColor; stroke: currentColor; }
+.nppp-tl-fair { color: #f0a500; fill: currentColor; stroke: currentColor; }
+.nppp-tl-low  { color: #d9534f; fill: currentColor; stroke: currentColor; }
+
+.nppp-traffic-dot {
+    position: absolute;
+    right: -4px;
+    width: 9px;
+    height: 9px;
+    margin-top: -4.5px;
+    border: 2px solid #fafafa;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.nppp-traffic-collect {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 10px;
+    border: 1px dashed #c3c4c7;
+    border-radius: 4px;
+    background: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0, 0, 0, 0.02) 6px 12px);
     font-size: 11.5px;
     color: #787c82;
-    line-height: 1.4;
+    text-align: center;
+}
+
+.nppp-traffic-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 10.5px;
+    color: #6b6f74;
+    white-space: nowrap;
+}
+
+.nppp-traffic-mid {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
