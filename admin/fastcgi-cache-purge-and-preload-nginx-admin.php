@@ -211,6 +211,8 @@ add_action('npp_cache_preload_event', 'nppp_create_scheduled_event_preload_callb
 add_action('npp_cache_preload_status_event', 'nppp_create_scheduled_event_preload_status_callback');
 add_action('nppp_index_updater_event', 'nppp_run_index_updater');
 add_action('nppp_purged_all_deferred_event', 'nppp_http_purge_run_deferred_purged_all');
+add_action('nppp_traffic_sample_event', 'nppp_http_purge_traffic_sample_event');
+add_action('admin_init', 'nppp_http_purge_traffic_schedule');
 add_action('admin_init', 'nppp_schedule_index_updater');
 add_action('wp_ajax_nppp_get_active_cron_events_ajax', 'nppp_get_active_cron_events_ajax');
 add_action('wp_ajax_nppp_clear_plugin_cache', 'nppp_clear_plugin_cache_callback');
@@ -286,6 +288,7 @@ add_action('wp_ajax_nppp_check_vary_issue', 'nppp_check_vary_issue_callback');
 add_action('wp_ajax_nppp_dismiss_cron_notice', 'nppp_dismiss_cron_notice');
 add_action('wp_ajax_nppp_check_cron_issue', 'nppp_check_cron_issue_callback');
 add_action('wp_ajax_nppp_refresh_cache_ratio', 'nppp_refresh_cache_ratio_callback');
+add_action('wp_ajax_nppp_traffic_refresh', 'nppp_traffic_refresh_callback');
 add_action('wp_ajax_nppp_test_cache_key_regex', 'nppp_ajax_test_cache_key_regex');
 add_action('nppp_plugin_admin_notices', function($type, $message, $log_message, $display_notice) {
     // Check if admin notice should be displayed
