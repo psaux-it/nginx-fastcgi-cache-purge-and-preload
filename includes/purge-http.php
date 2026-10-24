@@ -285,7 +285,7 @@ function nppp_http_purge_queue_status_url(): string {
  * path, endpoint denied or unreachable, missing "responses" object, non-numeric or negative
  * values). Never throws, makes one GET.
  *
- * @return array{hit:float,miss:float,ts:int}|null
+ * @return array{hit:float,miss:float,ts:int,ns:array<string,string>}|null
  */
 function nppp_http_purge_traffic_fetch( string $url ): ?array {
     $res = nppp_http_purge_fetch( 'GET', $url, 2 );
@@ -307,61 +307,276 @@ function nppp_http_purge_traffic_fetch( string $url ): ?array {
         }
     }
 
-    return [ 'hit' => (float) $r['hit'], 'miss' => (float) $r['miss'], 'ts' => time() ];
+    return [ 'hit' => (float) $r['hit'], 'miss' => (float) $r['miss'], 'ts' => time(), 'ns' => nppp_http_purge_traffic_epochs( $json ) ];
+}
+
+/**
+ * Pure: one sample in its canonical shape, or null when it is malformed.
+ *
+ * Besides the counters a sample can carry two optional markers:
+ *  - "pl": start time of the Preload All cycle that was running when the sample was taken
+ *          (0 or absent = none). An interval that touches such a sample is not organic traffic.
+ *  - "ns": ngx_cache_purge namespace name => epoch (10 digits). The epoch of a namespace changes
+ *          on a full Nginx restart and survives a reload, exactly like the counters, so it is a
+ *          restart marker that does not depend on the counters moving backwards. Equality only.
+ *
+ * @param mixed $s Stored or live sample.
+ * @return array{ts:int,hit:float,miss:float,pl:int,ns:array<string,string>}|null
+ */
+function nppp_http_purge_traffic_point( $s ): ?array {
+    if ( ! is_array( $s ) || ! isset( $s['ts'], $s['hit'], $s['miss'] )
+        || ! is_numeric( $s['ts'] ) || ! is_numeric( $s['hit'] ) || ! is_numeric( $s['miss'] ) ) {
+        return null;
+    }
+
+    $ns = [];
+    if ( isset( $s['ns'] ) && is_array( $s['ns'] ) ) {
+        foreach ( $s['ns'] as $name => $epoch ) {
+            $name = (string) $name; // a namespace called "123" becomes an int array key.
+            if ( count( $ns ) < 16 && is_string( $epoch )
+                && preg_match( '/^[A-Za-z0-9_-]{1,32}$/', $name ) && preg_match( '/^[0-9]{10}$/', $epoch ) ) {
+                $ns[ $name ] = $epoch;
+            }
+        }
+    }
+
+    return [
+        'ts'   => (int) $s['ts'],
+        'hit'  => (float) $s['hit'],
+        'miss' => (float) $s['miss'],
+        'pl'   => ( isset( $s['pl'] ) && is_numeric( $s['pl'] ) ) ? max( 0, (int) $s['pl'] ) : 0,
+        'ns'   => $ns,
+    ];
+}
+
+/**
+ * Pure: namespace name => epoch map out of a decoded status reply.
+ *
+ * Only present in generation mode (cache_purge_namespace). Anything malformed is skipped, at most
+ * 16 namespaces are kept. An empty map simply means "no epoch marker available".
+ *
+ * @param array $json Decoded status reply.
+ * @return array<string,string>
+ */
+function nppp_http_purge_traffic_epochs( array $json ): array {
+    $out = [];
+    if ( ! isset( $json['namespaces'] ) || ! is_array( $json['namespaces'] ) ) {
+        return $out;
+    }
+    foreach ( $json['namespaces'] as $n ) {
+        if ( count( $out ) >= 16 ) {
+            break;
+        }
+        if ( is_array( $n ) && isset( $n['name'], $n['epoch'] ) && is_string( $n['name'] ) && is_string( $n['epoch'] )
+            && preg_match( '/^[A-Za-z0-9_-]{1,32}$/', $n['name'] ) && preg_match( '/^[0-9]{10}$/', $n['epoch'] ) ) {
+            $out[ $n['name'] ] = $n['epoch'];
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * Pure: did Nginx restart between two samples, according to the namespace epochs?
+ *
+ * Only namespaces present in both maps are compared, so a reload that adds or removes a namespace
+ * is not mistaken for a restart. Without any common namespace there is no verdict (false): the
+ * "counter went down" test remains the only signal.
+ *
+ * @param array<string,string> $a Older sample "ns".
+ * @param array<string,string> $b Newer sample "ns".
+ */
+function nppp_http_purge_traffic_epoch_changed( array $a, array $b ): bool {
+    foreach ( $b as $name => $epoch ) {
+        if ( isset( $a[ $name ] ) && $a[ $name ] !== $epoch ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Pure: is the interval a -> b polluted by a Preload All crawl?
+ *
+ * Polluted when either end was taken while a preload cycle was running ("pl"), or when a finished
+ * cycle (from nppp_http_purge_traffic_gaps()) overlaps the interval. The second rule catches a
+ * preload that started and ended between two samples.
+ *
+ * @param array $a    Older point.
+ * @param array $b    Newer point.
+ * @param array $gaps List of [from,to] unix timestamps of finished preload cycles.
+ */
+function nppp_http_purge_traffic_interval_dirty( array $a, array $b, array $gaps ): bool {
+    if ( ! empty( $a['pl'] ) || ! empty( $b['pl'] ) ) {
+        return true;
+    }
+    foreach ( $gaps as $g ) {
+        if ( $g[0] < $b['ts'] && $g[1] > $a['ts'] ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Finished Preload All cycles of the last ~25h as a list of [from,to] unix timestamps.
+ *
+ * @return array<int,array{0:int,1:int}>
+ */
+function nppp_http_purge_traffic_gaps(): array {
+    $raw = get_option( 'nppp_traffic_gaps', [] );
+    $out = [];
+    if ( is_array( $raw ) ) {
+        foreach ( $raw as $g ) {
+            if ( is_array( $g ) && isset( $g[0], $g[1] ) && is_numeric( $g[0] ) && is_numeric( $g[1] ) && (int) $g[1] >= (int) $g[0] ) {
+                $out[] = [ (int) $g[0], (int) $g[1] ];
+            }
+        }
+    }
+
+    return $out;
+}
+
+/**
+ * Remember that a Preload All cycle ran from $from to $to, so the traffic it generated is left
+ * out of the hit ratio. Called by nppp_preload_cycle_start_delete() (every way a cycle ends).
+ * A no-op while HTTP Purge is off, so installs without the status endpoint store nothing.
+ *
+ * @param int $from Cycle start (unix time).
+ * @param int $to   Cycle end (unix time).
+ */
+function nppp_http_purge_traffic_mark_preload( int $from, int $to ): void {
+    if ( $from <= 0 || $to < $from || ! nppp_http_purge_enabled() ) {
+        return;
+    }
+
+    $cut  = time() - DAY_IN_SECONDS - HOUR_IN_SECONDS;
+    $gaps = array_values( array_filter(
+        nppp_http_purge_traffic_gaps(),
+        static fn( $g ) => $g[1] >= $cut && $g[0] !== $from // same cycle reported twice: keep the newest end.
+    ) );
+    $gaps[] = [ $from, $to ];
+
+    update_option( 'nppp_traffic_gaps', array_slice( $gaps, -24 ), false );
+}
+
+/**
+ * Start time of the Preload All cycle running right now, 0 when there is none.
+ * A cycle spans the desktop and the mobile crawl, see nppp_create_scheduled_event_preload_status().
+ */
+function nppp_http_purge_traffic_preload_flag(): int {
+    return function_exists( 'nppp_preload_cycle_start_get' ) ? max( 0, (int) nppp_preload_cycle_start_get( true ) ) : 0;
+}
+
+/**
+ * Pure: oldest-first list of canonical points, the current counters last.
+ *
+ * @param array $now     Live {hit,miss,ts[,pl,ns]}.
+ * @param array $samples Stored samples, oldest first; malformed entries are skipped.
+ * @return array<int,array{ts:int,hit:float,miss:float,pl:int,ns:array<string,string>}>
+ */
+function nppp_http_purge_traffic_points( array $now, array $samples ): array {
+    $points = [];
+    foreach ( $samples as $s ) {
+        $p = nppp_http_purge_traffic_point( $s );
+        if ( $p !== null ) {
+            $points[] = $p;
+        }
+    }
+
+    $cur  = nppp_http_purge_traffic_point( $now );
+    $last = end( $points );
+    if ( $cur !== null && ( $last === false || $cur['ts'] > $last['ts'] ) ) {
+        $points[] = $cur;
+    }
+
+    return $points;
 }
 
 /**
  * Pure: next sample list for the rolling 24h window.
  *
  * The module counters are cumulative since the last full Nginx restart (a reload keeps them),
- * so a lifetime ratio says nothing about the present. Samples are kept at most every 30 min,
- * for 24h, max 60 entries. A counter that went DOWN means Nginx restarted: history is dropped.
+ * so a lifetime ratio says nothing about the present. Samples are kept at most every 9 min
+ * (WP-Cron takes one every 10 min, a dashboard load adds one in between only when it is due),
+ * for 24h, max 170 entries. History is dropped when Nginx restarted: a counter that went DOWN,
+ * or a namespace epoch that changed (the only signal that also works when the new counters
+ * already passed the old ones).
  *
- * @param array $samples Stored list of {ts,hit,miss}; anything malformed is discarded.
- * @param array $now     {hit,miss,ts} from nppp_http_purge_traffic_fetch().
- * @return array<int,array{ts:int,hit:float,miss:float}>
+ * @param array $samples Stored list of {ts,hit,miss[,pl,ns]}; anything malformed is discarded.
+ * @param array $now     {hit,miss,ts[,pl,ns]} from nppp_http_purge_traffic_fetch().
+ * @return array<int,array{ts:int,hit:float,miss:float,pl?:int,ns?:array<string,string>}>
  */
 function nppp_http_purge_traffic_next_samples( array $samples, array $now ): array {
     $clean = [];
     foreach ( $samples as $s ) {
-        if ( is_array( $s ) && isset( $s['ts'], $s['hit'], $s['miss'] )
-            && is_numeric( $s['ts'] ) && is_numeric( $s['hit'] ) && is_numeric( $s['miss'] ) ) {
-            $clean[] = [ 'ts' => (int) $s['ts'], 'hit' => (float) $s['hit'], 'miss' => (float) $s['miss'] ];
+        $p = nppp_http_purge_traffic_point( $s );
+        if ( $p !== null ) {
+            $clean[] = $p;
         }
     }
     usort( $clean, static fn( $a, $b ) => $a['ts'] <=> $b['ts'] );
 
-    $last = end( $clean );
-    if ( $last !== false && ( $now['hit'] < $last['hit'] || $now['miss'] < $last['miss'] || $now['ts'] < $last['ts'] ) ) {
-        $clean = []; // restart (or clock jump): older samples are not comparable.
-        $last  = false;
+    $cur = nppp_http_purge_traffic_point( $now );
+    if ( $cur !== null ) {
+        $last = end( $clean );
+        if ( $last !== false && ( $cur['hit'] < $last['hit'] || $cur['miss'] < $last['miss'] || $cur['ts'] < $last['ts']
+            || nppp_http_purge_traffic_epoch_changed( $last['ns'], $cur['ns'] ) ) ) {
+            $clean = []; // restart (or clock jump): older samples are not comparable.
+            $last  = false;
+        }
+
+        if ( $last === false || $cur['ts'] - $last['ts'] >= 540 ) {
+            $clean[] = $cur;
+        }
     }
 
-    if ( $last === false || $now['ts'] - $last['ts'] >= 1800 ) {
-        $clean[] = [ 'ts' => $now['ts'], 'hit' => $now['hit'], 'miss' => $now['miss'] ];
-    }
-
-    $cut   = $now['ts'] - DAY_IN_SECONDS;
+    $cut   = ( $cur !== null ? $cur['ts'] : time() ) - DAY_IN_SECONDS;
     $clean = array_values( array_filter( $clean, static fn( $s ) => $s['ts'] >= $cut ) );
 
-    return array_slice( $clean, -60 );
+    // Store the optional markers only when they carry something.
+    return array_map(
+        static function ( array $p ): array {
+            if ( $p['pl'] === 0 ) {
+                unset( $p['pl'] );
+            }
+            if ( $p['ns'] === [] ) {
+                unset( $p['ns'] );
+            }
+            return $p;
+        },
+        array_slice( $clean, -170 )
+    );
 }
 
 /**
  * Pure: lifetime and windowed traffic hit ratio.
  *
- * "window" uses the oldest stored sample that is at least 5 min old, and is reported only
- * with >= 50 decided requests (HIT+MISS) in the window: below that a percentage is noise.
+ * "window" is the sum of every interval of the last 24h that was NOT polluted by a Preload All
+ * crawl (see nppp_http_purge_traffic_interval_dirty()), and is reported only with >= 5 min of such
+ * intervals and >= 50 decided requests (HIT+MISS): below that a percentage is noise. Without any
+ * preload in the period this is exactly "now minus the oldest sample of the last 24h".
+ * "excluded" is the number of seconds inside the window that were left out because of a preload.
  * The module counts only main requests with a native HIT or MISS decision. BYPASS, EXPIRED,
  * STALE, UPDATING and REVALIDATED are not in either counter, so this ratio is a "fresh HIT vs
- * cold MISS" figure, not an origin-offload figure. Preload crawler requests are included.
+ * cold MISS" figure, not an origin-offload figure. Preload All crawls are excluded, the very few
+ * requests of a single-URL preload are not.
+ *
+ * "paused" is true when there is no window yet and preload traffic is the reason (a cycle is
+ * running now, or intervals were left out): the lifetime counters are then polluted by the crawl
+ * and must not be shown as the traffic ratio.
  *
  * "series" is the per-interval ratio history for the dashboard trend chart, see
  * nppp_http_purge_traffic_series().
  *
- * @return array{hit:float,miss:float,ratio:?float,window:?array{ratio:float,hits:float,misses:float,seconds:int},series:array<int,array{from:int,to:int,ratio:?float}>}
+ * @param array $now     {hit,miss,ts[,pl,ns]} from nppp_http_purge_traffic_fetch().
+ * @param array $samples Stored samples, oldest first.
+ * @param array $gaps    Finished preload cycles, see nppp_http_purge_traffic_gaps().
+ * @return array{hit:float,miss:float,ratio:?float,window:?array{ratio:float,hits:float,misses:float,seconds:int,excluded:int},paused:bool,series:array<int,array{from:int,to:int,ratio:?float,preload?:bool}>}
  */
-function nppp_http_purge_traffic_summarize( array $now, array $samples ): array {
+function nppp_http_purge_traffic_summarize( array $now, array $samples, array $gaps = [] ): array {
     $total = $now['hit'] + $now['miss'];
     $out   = [
         'hit'    => $now['hit'],
@@ -370,24 +585,57 @@ function nppp_http_purge_traffic_summarize( array $now, array $samples ): array 
         'window' => null,
     ];
 
-    foreach ( $samples as $base ) {
-        if ( $base['ts'] > $now['ts'] - 300 ) {
-            break;
+    $points  = nppp_http_purge_traffic_points( $now, $samples );
+    $cut     = (int) $now['ts'] - DAY_IN_SECONDS;
+    $dh      = 0.0;
+    $dm      = 0.0;
+    $organic = 0; // seconds of intervals that were counted.
+    $first   = 0; // start of the first counted interval.
+    $left    = 0; // seconds left out because of preload, whole 24h.
+    $left_in = 0; // ... of which after the first counted interval (inside the window).
+
+    for ( $i = 1, $n = count( $points ); $i < $n; $i++ ) {
+        $a = $points[ $i - 1 ];
+        $b = $points[ $i ];
+        if ( $b['ts'] <= $a['ts'] || $b['ts'] <= $cut ) {
+            continue; // zero/negative length, or entirely older than 24h.
         }
-        $dh = $now['hit'] - $base['hit'];
-        $dm = $now['miss'] - $base['miss'];
-        if ( $dh >= 0 && $dm >= 0 && ( $dh + $dm ) >= 50 ) {
-            $out['window'] = [
-                'ratio'   => $dh / ( $dh + $dm ),
-                'hits'    => $dh,
-                'misses'  => $dm,
-                'seconds' => $now['ts'] - $base['ts'],
-            ];
+        $from = max( $a['ts'], $cut );
+
+        if ( nppp_http_purge_traffic_interval_dirty( $a, $b, $gaps ) ) {
+            $left += $b['ts'] - $from;
+            if ( $first > 0 ) {
+                $left_in += $b['ts'] - $from;
+            }
+            continue;
         }
-        break; // oldest eligible sample only.
+
+        $h = $b['hit'] - $a['hit'];
+        $m = $b['miss'] - $a['miss'];
+        if ( $h < 0 || $m < 0 || nppp_http_purge_traffic_epoch_changed( $a['ns'], $b['ns'] ) ) {
+            continue; // Nginx restarted: the two ends are not comparable.
+        }
+
+        $dh      += $h;
+        $dm      += $m;
+        $organic += $b['ts'] - $from;
+        if ( $first === 0 ) {
+            $first = $from;
+        }
     }
 
-    $out['series'] = nppp_http_purge_traffic_series( $now, $samples );
+    if ( $organic >= 300 && ( $dh + $dm ) >= 50 ) {
+        $out['window'] = [
+            'ratio'    => $dh / ( $dh + $dm ),
+            'hits'     => $dh,
+            'misses'   => $dm,
+            'seconds'  => (int) $now['ts'] - $first,
+            'excluded' => $left_in,
+        ];
+    }
+
+    $out['paused'] = $out['window'] === null && ( $left > 0 || ! empty( $now['pl'] ) );
+    $out['series'] = nppp_http_purge_traffic_series( $now, $samples, 10, $gaps );
 
     return $out;
 }
@@ -396,31 +644,21 @@ function nppp_http_purge_traffic_summarize( array $now, array $samples ): array 
  * Pure: per-interval hit ratio history for the dashboard trend chart.
  *
  * Every pair of consecutive points (stored samples, then the current counters) is one interval.
- * Samples are only taken while an admin has the dashboard open (at most every 30 min), so
- * intervals have uneven length: each entry carries its own from/to timestamps and must be drawn
- * on a time axis, not by index. An interval is "decided" only with >= $min HIT+MISS; a counter
- * that went DOWN (Nginx restart) or a quiet interval gives ratio null, so the chart shows a gap
- * instead of noise. Only the last 24h are returned.
+ * Samples come from WP-Cron every 10 min and from dashboard loads when one is due, so intervals
+ * can differ in length: each entry carries its own from/to timestamps and must be drawn on a
+ * time axis, not by index. An interval is "decided" only with >= $min HIT+MISS; a counter that
+ * went DOWN or a changed namespace epoch (Nginx restart), a quiet interval, or an interval
+ * polluted by a Preload All crawl gives ratio null, so the chart shows a gap instead of noise
+ * (the polluted ones also carry "preload" => true). Only the last 24h are returned.
  *
- * @param array $now     {hit,miss,ts} from nppp_http_purge_traffic_fetch().
- * @param array $samples Stored list of {ts,hit,miss}, oldest first; malformed entries are skipped.
+ * @param array $now     {hit,miss,ts[,pl,ns]} from nppp_http_purge_traffic_fetch().
+ * @param array $samples Stored list of {ts,hit,miss[,pl,ns]}, oldest first; malformed entries are skipped.
  * @param int   $min     Minimum decided requests for an interval to get a ratio.
- * @return array<int,array{from:int,to:int,ratio:?float}>
+ * @param array $gaps    Finished preload cycles, see nppp_http_purge_traffic_gaps().
+ * @return array<int,array{from:int,to:int,ratio:?float,preload?:bool}>
  */
-function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 10 ): array {
-    $points = [];
-    foreach ( $samples as $s ) {
-        if ( is_array( $s ) && isset( $s['ts'], $s['hit'], $s['miss'] )
-            && is_numeric( $s['ts'] ) && is_numeric( $s['hit'] ) && is_numeric( $s['miss'] ) ) {
-            $points[] = [ 'ts' => (int) $s['ts'], 'hit' => (float) $s['hit'], 'miss' => (float) $s['miss'] ];
-        }
-    }
-
-    $last = end( $points );
-    if ( $last === false || (int) $now['ts'] > $last['ts'] ) {
-        $points[] = [ 'ts' => (int) $now['ts'], 'hit' => (float) $now['hit'], 'miss' => (float) $now['miss'] ];
-    }
-
+function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 10, array $gaps = [] ): array {
+    $points = nppp_http_purge_traffic_points( $now, $samples );
     $cut    = (int) $now['ts'] - DAY_IN_SECONDS;
     $min    = max( 1, $min );
     $series = [];
@@ -430,10 +668,18 @@ function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 
         if ( $b['ts'] <= $a['ts'] || $b['ts'] <= $cut ) {
             continue; // zero/negative length, or entirely older than 24h.
         }
-        $dh    = $b['hit'] - $a['hit'];
-        $dm    = $b['miss'] - $a['miss'];
-        $ratio = ( $dh >= 0 && $dm >= 0 && ( $dh + $dm ) >= $min ) ? $dh / ( $dh + $dm ) : null;
-        $series[] = [ 'from' => max( $a['ts'], $cut ), 'to' => $b['ts'], 'ratio' => $ratio ];
+
+        $row = [ 'from' => max( $a['ts'], $cut ), 'to' => $b['ts'], 'ratio' => null ];
+        if ( nppp_http_purge_traffic_interval_dirty( $a, $b, $gaps ) ) {
+            $row['preload'] = true;
+        } else {
+            $dh = $b['hit'] - $a['hit'];
+            $dm = $b['miss'] - $a['miss'];
+            if ( $dh >= 0 && $dm >= 0 && ( $dh + $dm ) >= $min && ! nppp_http_purge_traffic_epoch_changed( $a['ns'], $b['ns'] ) ) {
+                $row['ratio'] = $dh / ( $dh + $dm );
+            }
+        }
+        $series[] = $row;
     }
 
     return $series;
@@ -446,6 +692,7 @@ function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 
  *
  * Cached 20 s (a dashboard reload costs no request); a failure is cached 60 s so a dead
  * endpoint cannot add its 2 s timeout to every admin page. $fresh bypasses both.
+ * Every successful fetch also feeds the 24h sample list (see nppp_http_purge_traffic_next_samples()).
  *
  * @return array|null See nppp_http_purge_traffic_summarize().
  */
@@ -474,9 +721,10 @@ function nppp_http_purge_traffic_stats( bool $fresh = false ): ?array {
             set_transient( $key, 'fail', 60 );
             return null;
         }
+        $raw['pl'] = nppp_http_purge_traffic_preload_flag();
         set_transient( $key, $raw, 20 );
 
-        // Lost updates between two simultaneous admin loads only skip one sample: harmless.
+        // Lost updates between two simultaneous samplers only skip one sample: harmless.
         $stored  = get_option( 'nppp_traffic_samples', [] );
         $samples = nppp_http_purge_traffic_next_samples( is_array( $stored ) ? $stored : [], $raw );
         update_option( 'nppp_traffic_samples', $samples, false );
@@ -485,7 +733,85 @@ function nppp_http_purge_traffic_stats( bool $fresh = false ): ?array {
         $samples = is_array( $stored ) ? $stored : [];
     }
 
-    return nppp_http_purge_traffic_summarize( $raw, $samples );
+    return nppp_http_purge_traffic_summarize( $raw, $samples, nppp_http_purge_traffic_gaps() );
+}
+
+/**
+ * Same figures as nppp_http_purge_traffic_stats() but from the stored samples only: no request
+ * to Nginx, so the dashboard can render without waiting for the status endpoint. The newest
+ * sample stands in for "now". Null when HTTP Purge/the status path is not configured, nothing was
+ * sampled yet, or the newest sample is older than 30 min (the live fetch fills the card then).
+ *
+ * @return array|null See nppp_http_purge_traffic_summarize().
+ */
+function nppp_http_purge_traffic_stats_stored(): ?array {
+    if ( ! nppp_http_purge_enabled() || nppp_http_purge_queue_status_url() === '' ) {
+        return null;
+    }
+
+    $stored = get_option( 'nppp_traffic_samples', [] );
+    $points = [];
+    foreach ( ( is_array( $stored ) ? $stored : [] ) as $s ) {
+        $p = nppp_http_purge_traffic_point( $s );
+        if ( $p !== null ) {
+            $points[] = $p;
+        }
+    }
+
+    $now = array_pop( $points );
+    if ( $now === null || time() - $now['ts'] > 1800 ) {
+        return null;
+    }
+
+    return nppp_http_purge_traffic_summarize( $now, $points, nppp_http_purge_traffic_gaps() );
+}
+
+/**
+ * Should the background sampler run? Same conditions as nppp_http_purge_traffic_stats().
+ */
+function nppp_http_purge_traffic_sampling_wanted(): bool {
+    return nppp_http_purge_enabled() && nppp_http_purge_queue_status_url() !== '';
+}
+
+/**
+ * Keep the 10 minute sampler scheduled while the status endpoint is configured (admin_init,
+ * self-healing like nppp_schedule_index_updater()). The tick unschedules itself once HTTP Purge
+ * is switched off, so this only ever has to add the event.
+ */
+function nppp_http_purge_traffic_schedule(): void {
+    if ( wp_doing_ajax() ) {
+        return;
+    }
+
+    global $pagenow;
+    if ( isset( $pagenow ) && $pagenow === 'admin-post.php' ) {
+        return;
+    }
+
+    $hook = 'nppp_traffic_sample_event';
+    if ( wp_next_scheduled( $hook ) ) {
+        if ( wp_get_schedule( $hook ) === 'every_10min_npp' ) {
+            return;
+        }
+        wp_clear_scheduled_hook( $hook );
+    }
+
+    if ( nppp_http_purge_traffic_sampling_wanted() ) {
+        wp_schedule_event( time() + MINUTE_IN_SECONDS, 'every_10min_npp', $hook );
+    }
+}
+
+/**
+ * WP-Cron tick: take one sample, so the trend chart and the 24h window do not depend on someone
+ * opening the dashboard. One GET with a 2 s timeout (same as the dashboard fetch).
+ */
+function nppp_http_purge_traffic_sample_event(): void {
+    if ( ! nppp_http_purge_traffic_sampling_wanted() ) {
+        wp_clear_scheduled_hook( 'nppp_traffic_sample_event' );
+        return;
+    }
+
+    nppp_http_purge_traffic_stats( true );
 }
 
 /**
