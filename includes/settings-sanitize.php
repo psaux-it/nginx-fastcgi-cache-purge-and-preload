@@ -751,6 +751,16 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Traffic hit ratio: the stored samples are counters of ONE status endpoint. When HTTP Purge is
+    // switched or the status path changes they are no longer comparable with the new counters.
+    $nppp_prev_settings = get_option( 'nginx_cache_settings', [] );
+    $nppp_prev_settings = is_array( $nppp_prev_settings ) ? $nppp_prev_settings : [];
+    if ( ( $nppp_prev_settings['nppp_http_purge_enabled'] ?? 'no' ) !== ( $sanitized_input['nppp_http_purge_enabled'] ?? 'no' )
+        || ( $nppp_prev_settings['nppp_http_purge_queue_status_path'] ?? '' ) !== ( $sanitized_input['nppp_http_purge_queue_status_path'] ?? '' ) ) {
+        delete_option( 'nppp_traffic_samples' );
+        delete_transient( 'nppp_traffic_raw' );
+    }
+
     return $sanitized_input;
 }
 
