@@ -119,6 +119,12 @@ add_filter( 'cron_schedules', static function ( array $schedules ): array {
             'display'  => 'Every 5 Minutes-NPP',
         ];
     }
+    if ( ! isset( $schedules['every_10min_npp'] ) ) {
+        $schedules['every_10min_npp'] = [
+            'interval' => 10 * MINUTE_IN_SECONDS,
+            'display'  => 'Every 10 Minutes-NPP',
+        ];
+    }
     return $schedules;
 } );
 
@@ -192,6 +198,7 @@ foreach ([
     'nppp_f2b_cleanup_event',
     'nppp_f2b_enrich_event',
     'nppp_f2b_worker_event',
+    'nppp_traffic_sample_event',
 ] as $nppp_cron_event) {
     add_action($nppp_cron_event, 'nppp_load_bootstrap', 0);
 }
