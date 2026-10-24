@@ -254,8 +254,23 @@ function nppp_preload_cycle_start_set( int $timestamp ): void {
 
 /**
  * Forget the cycle start.
+ *
+ * Every way a Preload All cycle ends goes through here (completion tick, watchdog, Purge All,
+ * Stop Preload), so this is also where the finished cycle is handed to the traffic hit ratio:
+ * the requests the crawler made between start and now are left out of it
+ * (nppp_http_purge_traffic_mark_preload()).
+ *
+ * @param bool $mark False when the cycle record is only an orphan being tidied up (no crawl
+ *                   ran until now), so its age must not become an excluded period.
  */
-function nppp_preload_cycle_start_delete(): void {
+function nppp_preload_cycle_start_delete( bool $mark = true ): void {
+    if ( $mark && function_exists( 'nppp_http_purge_traffic_mark_preload' ) ) {
+        $from = nppp_preload_cycle_start_get( true );
+        if ( $from > 0 ) {
+            nppp_http_purge_traffic_mark_preload( $from, time() );
+        }
+    }
+
     nppp_state_delete_with_legacy( 'preload_cycle_start', nppp_preload_cycle_start_legacy_key() );
 }
 
