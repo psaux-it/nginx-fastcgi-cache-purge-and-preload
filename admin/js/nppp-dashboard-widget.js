@@ -299,5 +299,27 @@
                 });
             });
         })();
+
+        // Traffic hit ratio: the card is first painted from the stored samples (no Nginx request
+        // while the page renders); fetch the live counters here, once the page is up.
+        (function () {
+            var $row = $('#nppp-traffic-row');
+            if (!$row.length || !nppp_widget_data.traffic_nonce) { return; }
+
+            $.ajax({
+                url:    nppp_widget_data.ajaxurl,
+                method: 'POST',
+                data: {
+                    action:   'nppp_traffic_refresh',
+                    _wpnonce: nppp_widget_data.traffic_nonce
+                },
+                success: function (response) {
+                    // Server-escaped markup (nppp_render_traffic_row); '' hides the row.
+                    if (response && response.success && response.data && typeof response.data.traffic_html === 'string') {
+                        $row.html(response.data.traffic_html);
+                    }
+                }
+            });
+        })();
     });
 })(jQuery);
