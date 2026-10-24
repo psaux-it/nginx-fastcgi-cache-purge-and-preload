@@ -2,8 +2,13 @@
 /**
  * Tests for the traffic hit ratio code (sampling, restart detection, preload exclusion).
  *
- * Usage: php http-purge-test/traffic-test.php [path/to/plugin-root]
- * Exit code 0 = all passed.
+ * Usage: php http-purge-test/traffic-test.php [-v] [path/to/includes/purge-http.php | path/to/plugin-root]
+ *
+ * Same first argument as run.php, gen-scan.php, gen-index.php and purged-all-deferred.php (the runner
+ * passes $PLUGIN_FILE); a plugin root is accepted too, and no argument means the checkout this file is in.
+ * state.php and dashboard-widget.php are loaded from the same includes/ directory as purge-http.php.
+ * Quiet like the other harness scripts (only FAIL lines and the summary); -v or TRAFFIC_VERBOSE=1 lists every check.
+ * Exit code 0 = all passed, 1 = a check failed, 2 = bad usage.
  */
 
 error_reporting( E_ALL );
@@ -11,9 +16,24 @@ set_error_handler( static function ( $no, $str, $file, $line ) {
     throw new ErrorException( $str, 0, $no, $file, $line );
 } );
 
-$ROOT = realpath( $argv[1] ?? dirname( __DIR__ ) );
-if ( $ROOT === false || ! is_file( $ROOT . '/includes/purge-http.php' ) ) {
-    fwrite( STDERR, "usage: php traffic-test.php /path/to/plugin-root\n" );
+$VERBOSE = getenv( 'TRAFFIC_VERBOSE' ) === '1';
+$args    = [];
+foreach ( array_slice( $argv, 1 ) as $a ) {
+    if ( $a === '-v' ) { $VERBOSE = true; } else { $args[] = $a; }
+}
+
+$arg   = realpath( $args[0] ?? dirname( __DIR__ ) );
+$PURGE = null;
+$INC   = null;
+if ( $arg !== false && is_file( $arg ) ) {
+    $PURGE = $arg;                                 // the file under test, as the other harness scripts take it
+    $INC   = dirname( $arg );
+} elseif ( $arg !== false && is_dir( $arg . '/includes' ) ) {
+    $INC   = $arg . '/includes';                   // plugin root
+    $PURGE = $INC . '/purge-http.php';
+}
+if ( $INC === null || ! is_file( $PURGE ) || ! is_file( $INC . '/state.php' ) || ! is_file( $INC . '/dashboard-widget.php' ) ) {
+    fwrite( STDERR, "usage: php traffic-test.php [-v] path/to/includes/purge-http.php   (state.php and dashboard-widget.php must sit next to it)\n" );
     exit( 2 );
 }
 
@@ -30,7 +50,6 @@ $GLOBALS['TRANS']    = [];
 $GLOBALS['CRON']     = [];
 $GLOBALS['REQUESTS'] = 0;
 $GLOBALS['NGX']      = [ 'status' => 200, 'body' => '' ];
-$GLOBALS['CYCLE']    = 0;
 $pagenow             = 'index.php';
 
 class WP_Error {
@@ -73,10 +92,6 @@ function wp_remote_request( $url, $args = [] ) {
 function wp_remote_retrieve_header( $r, $n ) { return $r['headers'][ strtolower( $n ) ] ?? ''; }
 function wp_remote_retrieve_body( $r ) { return $r['body']; }
 function wp_remote_retrieve_response_code( $r ) { return $r['status']; }
-function nppp_preload_cycle_start_get_stub() { return (int) $GLOBALS['CYCLE']; }
-if ( ! function_exists( 'nppp_state_get_with_legacy' ) ) {
-    // real state.php is included below; this guard only documents that it is the real one.
-}
 
 // i18n / escaping stubs for the render test
 function __( $s, $d = '' ) { return $s; }
@@ -85,8 +100,8 @@ function esc_attr__( $s, $d = '' ) { return $s; }
 function esc_html( $s ) { return htmlspecialchars( (string) $s, ENT_QUOTES ); }
 function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, $d, '.', ',' ); }
 
-require_once $ROOT . '/includes/state.php';
-require_once $ROOT . '/includes/purge-http.php';
+require_once $INC . '/state.php';
+require_once $PURGE;
 
 // The real cycle getter reads an option; keep it, but make the test able to set it.
 function set_cycle( int $ts ): void { nppp_preload_cycle_start_set( $ts ); }
@@ -101,14 +116,18 @@ $GLOBALS['OPT']['nginx_cache_settings'] = [
 // ---------------------------------------------------------------------------------------------
 $PASS = 0;
 $FAIL = 0;
+function say( string $line ): void {
+    global $VERBOSE;
+    if ( $VERBOSE ) { echo $line; }
+}
 function t( string $name, bool $ok, string $detail = '' ): void {
     global $PASS, $FAIL;
     if ( $ok ) {
         $PASS++;
-        echo "  ok   $name\n";
+        say( "  ok   $name\n" );
     } else {
         $FAIL++;
-        echo "  FAIL $name" . ( $detail !== '' ? "  [$detail]" : '' ) . "\n";
+        echo "FAIL: $name" . ( $detail !== '' ? " [$detail]" : '' ) . "\n";
     }
 }
 function near( ?float $a, float $b, float $eps = 0.02 ): bool { return $a !== null && abs( $a - $b ) <= $eps; }
@@ -152,13 +171,13 @@ function ref_series( array $now, array $samples, int $min = 10 ): array {
 }
 
 // ---------------------------------------------------------------------------------------------
-echo "A. Preload exclusion (organic 400 HIT / 100 MISS per day, 5000 page crawl)\n";
+say( "A. Preload exclusion (organic 400 HIT / 100 MISS per day, 5000 page crawl)\n" );
 // ---------------------------------------------------------------------------------------------
 /**
  * 24h timeline, one sample every 10 min. A crawl runs during steps 60..63 (40 min).
  * $crawl_hit / $crawl_miss are the requests it adds in total.
  */
-function timeline( int $crawl_hit, int $crawl_miss, bool $flag, bool $mark_only = false ): array {
+function timeline( int $crawl_hit, int $crawl_miss, bool $flag ): array {
     $T0    = 1800000000;
     $steps = 144;
     $cs    = $T0 + 60 * 600 + 30;
@@ -184,7 +203,7 @@ foreach ( [ 'cold crawl (5000 MISS)' => [ 0, 5000, 0.8 ], 'warm crawl (5000 HIT)
     [ $now, $samples, $gaps ] = timeline( $c[0], $c[1], true );
     $old = ref_window( $now, $samples );
     $new = nppp_http_purge_traffic_summarize( $now, $samples, $gaps );
-    echo '       ' . $label . ': v2.1.9 shows ' . pct( $old['ratio'] ) . ', now shows ' . pct( $new['window']['ratio'] ?? null ) . "\n";
+    say( '       ' . $label . ': v2.1.9 shows ' . pct( $old['ratio'] ) . ', now shows ' . pct( $new['window']['ratio'] ?? null ) . "\n" );
     t( "$label: v2.1.9 baseline is polluted", ! near( $old['ratio'], $c[2], 0.1 ) );
     t( "$label: window is back to the organic ratio", isset( $new['window'] ) && near( $new['window']['ratio'], $c[2], 0.03 ), pct( $new['window']['ratio'] ?? null ) );
     t( "$label: crawl requests not counted", isset( $new['window'] ) && $new['window']['hits'] + $new['window']['misses'] < 600 );
@@ -218,7 +237,7 @@ $sm  = nppp_http_purge_traffic_summarize( $now, [ mk( $T, 0, 0 ), mk( $T + 600, 
 t( 'running crawl, no organic data: paused (lifetime ratio must not be shown)', $sm['paused'] === true && $sm['window'] === null );
 
 // ---------------------------------------------------------------------------------------------
-echo "B. Restart detection\n";
+say( "B. Restart detection\n" );
 // ---------------------------------------------------------------------------------------------
 $T   = 1800000000;
 $ep1 = [ 'main' => '0000000001' ];
@@ -228,7 +247,7 @@ $ep2 = [ 'main' => '0000000002' ];
 $old_samples = [ mk( $T, 100, 480, 0, $ep1 ) ];
 $now         = mk( $T + 7200, 2500, 500, 0, $ep2 ); // real traffic since the restart: 83.3%
 $ref         = ref_window( $now, $old_samples );
-echo '       v2.1.9 shows ' . pct( $ref['ratio'] ) . ' (real since restart: ' . pct( 2500 / 3000 ) . ")\n";
+say( '       v2.1.9 shows ' . pct( $ref['ratio'] ) . ' (real since restart: ' . pct( 2500 / 3000 ) . ")\n" );
 t( 'v2.1.9 would report a wrong window here', near( $ref['ratio'], 0.8333, 0.05 ) === false );
 $next = nppp_http_purge_traffic_next_samples( $old_samples, $now );
 t( 'epoch change drops the old history', count( $next ) === 1 && $next[0]['ts'] === $now['ts'] );
@@ -256,7 +275,7 @@ t( 'no namespaces at all: unchanged behaviour', count( $next ) === 2 );
 t( 'epoch_changed: equality only', nppp_http_purge_traffic_epoch_changed( [ 'a' => '0000000010' ], [ 'a' => '0000000002' ] ) === true );
 
 // ---------------------------------------------------------------------------------------------
-echo "C. Regression: no preload, no restart => identical to v2.1.9 (200 random timelines)\n";
+say( "C. Regression: no preload, no restart => identical to v2.1.9 (200 random timelines)\n" );
 // ---------------------------------------------------------------------------------------------
 mt_srand( 1234 );
 $same = true; $detail = '';
@@ -285,7 +304,23 @@ for ( $k = 0; $k < 200 && $same; $k++ ) {
 t( 'window + series identical to the v2.1.9 algorithm', $same, $detail );
 
 // ---------------------------------------------------------------------------------------------
-echo "D. Sample list: spacing, cap, shape, backward compatibility\n";
+say( "C2. Window gates: >= 300 s of counted intervals and >= 50 decided requests\n" );
+// ---------------------------------------------------------------------------------------------
+// These two gates decide "show a percentage" vs "wait, it would be noise". The random timelines above
+// never land on them (mutating either constant left every other check green), so pin the edges here.
+$T   = 1800000000;
+$win = static function ( int $secs, int $hit, int $miss ) use ( $T ) {
+    return nppp_http_purge_traffic_summarize( mk( $T + $secs, $hit, $miss ), [ mk( $T, 0, 0 ) ], [] )['window'];
+};
+t( 'gate: exactly 50 decided requests => window reported', $win( 600, 40, 10 ) !== null );
+t( 'gate: 49 decided requests => no window (noise)', $win( 600, 40, 9 ) === null );
+t( 'gate: 50 decided requests are HIT+MISS together, one side alone counts too', $win( 600, 0, 50 ) !== null && $win( 600, 50, 0 ) !== null );
+t( 'gate: exactly 300 s counted => window reported', $win( 300, 400, 100 ) !== null );
+t( 'gate: 299 s counted => no window', $win( 299, 400, 100 ) === null );
+t( 'gate: a reported window carries the exact ratio at the edge', ( $w = $win( 300, 40, 10 ) ) !== null && near( $w['ratio'], 0.8, 0.0001 ) );
+
+// ---------------------------------------------------------------------------------------------
+say( "D. Sample list: spacing, cap, shape, backward compatibility\n" );
 // ---------------------------------------------------------------------------------------------
 $s = nppp_http_purge_traffic_next_samples( [ mk( $T, 1, 1 ) ], mk( $T + 539, 2, 2 ) );
 t( 'no sample closer than 9 min', count( $s ) === 1 );
@@ -307,7 +342,7 @@ $p = nppp_http_purge_traffic_point( [ 'ts' => 1, 'hit' => 1, 'miss' => 1, 'ns' =
 t( 'ns sanitised (numeric name kept, bad name/epoch dropped)', $p['ns'] === [ 123 => '0000000001', 'ok_1' => '0000000003' ] || $p['ns'] === [ '123' => '0000000001', 'ok_1' => '0000000003' ] );
 
 // ---------------------------------------------------------------------------------------------
-echo "E. Status reply parsing (namespaces)\n";
+say( "E. Status reply parsing (namespaces)\n" );
 // ---------------------------------------------------------------------------------------------
 $eps = nppp_http_purge_traffic_epochs( [ 'namespaces' => [
     [ 'name' => 'main', 'epoch' => '0000000042' ],
@@ -323,7 +358,7 @@ t( 'at most 16 namespaces', count( nppp_http_purge_traffic_epochs( [ 'namespaces
 t( 'no namespaces key: empty map', nppp_http_purge_traffic_epochs( [] ) === [] );
 
 // ---------------------------------------------------------------------------------------------
-echo "F. Integration: stats(), stored read, cycle marks, sampler\n";
+say( "F. Integration: stats(), stored read, cycle marks, sampler\n" );
 // ---------------------------------------------------------------------------------------------
 $GLOBALS['NGX']['body'] = json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => 3000, 'miss' => 500, 'hit_ratio' => 0.857 ] ],
     'namespaces' => [ [ 'name' => 'main', 'epoch' => '0000000042', 'baseline' => '0000000000000001', 'serial' => '0000000000000001', 'rules' => false ] ] ] );
@@ -411,7 +446,7 @@ t( 'scheduler: nothing scheduled while HTTP Purge is off', ! isset( $GLOBALS['CR
 $GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'yes';
 
 // ---------------------------------------------------------------------------------------------
-echo "H. Preload All boundary samples (sampler slower than the pause between two cycles)\n";
+say( "H. Preload All boundary samples (sampler slower than the pause between two cycles)\n" );
 // ---------------------------------------------------------------------------------------------
 // pure: $force keeps a sample inside the 9 min spacing, the default does not.
 $T = 1800000000;
@@ -519,9 +554,9 @@ delete_transient( 'nppp_traffic_raw' );
 nppp_preload_cycle_start_delete( false );
 
 // ---------------------------------------------------------------------------------------------
-echo "G. Dashboard card rendering\n";
+say( "G. Dashboard card rendering\n" );
 // ---------------------------------------------------------------------------------------------
-require_once $ROOT . '/includes/dashboard-widget.php';
+require_once $INC . '/dashboard-widget.php';
 $summary = [ 'hit' => 10.0, 'miss' => 5000.0, 'ratio' => 0.002, 'window' => null, 'paused' => true, 'series' => [] ];
 $html = nppp_render_traffic_row( $summary );
 t( 'render: paused => explanatory text, no polluted lifetime percentage', strpos( $html, 'Preload traffic is left out' ) !== false && strpos( $html, 'nppp-traffic-pct' ) === false );
