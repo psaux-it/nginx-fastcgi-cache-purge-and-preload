@@ -637,7 +637,7 @@ function nppp_http_purge_traffic_summarize( array $now, array $samples, array $g
     }
 
     $out['paused'] = $out['window'] === null && ( $left > 0 || ! empty( $now['pl'] ) );
-    $out['series'] = nppp_http_purge_traffic_series( $now, $samples, 10, $gaps );
+    $out['series'] = nppp_http_purge_traffic_series_merged( $now, $samples, 5, $gaps );
 
     return $out;
 }
@@ -682,6 +682,73 @@ function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 
             }
         }
         $series[] = $row;
+    }
+
+    return $series;
+}
+
+/**
+ * Like nppp_http_purge_traffic_series(), but quiet stretches are merged instead of dropped.
+ *
+ * On a low-traffic site a single 10 min interval rarely reaches $min HIT+MISS, so the strict
+ * series stays empty and the chart waits (nearly) forever. Here consecutive clean intervals are
+ * accumulated from an anchor sample until the combined delta reaches $min, then emitted as ONE
+ * point spanning the whole stretch. A Preload All interval, a counter that went down or a
+ * changed namespace epoch (Nginx restart) still ends the stretch with a gap row. A trailing
+ * stretch that has not reached $min yet is emitted as a gap (ratio null) so the axis reaches
+ * "now"; it becomes a point once it reaches $min.
+ *
+ * @param array $now     {hit,miss,ts[,pl,ns]} from nppp_http_purge_traffic_fetch().
+ * @param array $samples Stored list of {ts,hit,miss[,pl,ns]}, oldest first.
+ * @param int   $min     Minimum decided requests per emitted point.
+ * @param array $gaps    Finished preload cycles, see nppp_http_purge_traffic_gaps().
+ * @return array<int,array{from:int,to:int,ratio:?float,preload?:bool}>
+ */
+function nppp_http_purge_traffic_series_merged( array $now, array $samples, int $min = 5, array $gaps = [] ): array {
+    $points = nppp_http_purge_traffic_points( $now, $samples );
+    $cut    = (int) $now['ts'] - DAY_IN_SECONDS;
+    $min    = max( 1, $min );
+    $series = [];
+    $anchor = null;
+    for ( $i = 1, $n = count( $points ); $i < $n; $i++ ) {
+        $a = $points[ $i - 1 ];
+        $b = $points[ $i ];
+        if ( $b['ts'] <= $a['ts'] || $b['ts'] <= $cut ) {
+            $anchor = null; // zero/negative length, or entirely older than 24h.
+            continue;
+        }
+        if ( $anchor === null ) {
+            $anchor = $a;
+        }
+
+        $row = [ 'from' => max( $anchor['ts'], $cut ), 'to' => $b['ts'], 'ratio' => null ];
+        if ( nppp_http_purge_traffic_interval_dirty( $a, $b, $gaps ) ) {
+            $row['preload'] = true;
+            $series[]       = $row;
+            $anchor         = null;
+            continue;
+        }
+
+        $dh = $b['hit'] - $anchor['hit'];
+        $dm = $b['miss'] - $anchor['miss'];
+        if ( $dh < 0 || $dm < 0 || nppp_http_purge_traffic_epoch_changed( $anchor['ns'], $b['ns'] ) ) {
+            $series[] = $row; // restart inside the stretch: show a gap.
+            $anchor   = null;
+            continue;
+        }
+        if ( ( $dh + $dm ) >= $min ) {
+            $row['ratio'] = $dh / ( $dh + $dm );
+            $series[]     = $row;
+            $anchor       = null;
+        }
+    }
+
+    // A stretch still below $min: keep it as a gap so the time axis still ends at "now".
+    if ( $anchor !== null && ! empty( $points ) ) {
+        $end = end( $points );
+        if ( $end['ts'] > $anchor['ts'] ) {
+            $series[] = [ 'from' => max( $anchor['ts'], $cut ), 'to' => $end['ts'], 'ratio' => null ];
+        }
     }
 
     return $series;
