@@ -126,7 +126,7 @@ function nppp_clear_plugin_cache($silent = false) {
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ( ! nppp_preload_job_active( $wp_filesystem ) ) {
         nppp_preload_phase_delete();
-        nppp_preload_cycle_start_delete();
+        nppp_preload_cycle_start_delete( false ); // orphan record, no crawl ran: nothing to exclude.
         nppp_preload_trigger_delete();
         $job_transients = array(
             'nppp_ping_token_'          . md5($static_key_base),
