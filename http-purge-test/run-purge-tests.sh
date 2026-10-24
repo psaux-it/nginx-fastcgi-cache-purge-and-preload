@@ -2,7 +2,8 @@
 # run-purge-tests.sh - run the purge-http.php harness (the counterpart of fail2ban-test/run-e2e.sh).
 #
 #   ./run-purge-tests.sh                          mock harness + real-nginx matrix (v4 build)
-#   ./run-purge-tests.sh --only mock              mock harness only (php CLI, no nginx)
+#   ./run-purge-tests.sh --only mock              mock harness only (php CLI, no nginx): run.php, gen-scan.php,
+#                                                 gen-index.php, purged-all-deferred.php, traffic-test.php
 #   ./run-purge-tests.sh --only matrix [SC ...]   real nginx only, optionally just the named scenarios
 #   ./run-purge-tests.sh --build                  build the nginx variant first if it is missing (see below)
 #   ./run-purge-tests.sh --ng v30 --only matrix sync ambig     other ngx_cache_purge build (v4 | v30 | v25)
@@ -72,6 +73,14 @@ if [ "$ONLY" = all ] || [ "$ONLY" = mock ]; then
     php "$HERE/gen-index.php" "$PLUGIN_FILE" | tail -n "${MOCK_TAIL:-25}" || RC=1
     echo; echo "== deferred Purge All follow-up"
     php "$HERE/purged-all-deferred.php" "$PLUGIN_FILE" | tail -n "${MOCK_TAIL:-25}" || RC=1
+    echo; echo "== traffic hit ratio: sampling, restart epoch, preload exclusion (traffic-test.php)"
+    # Loads state.php and dashboard-widget.php from the directory of $PLUGIN_FILE; a lone patched copy of
+    # purge-http.php has no siblings, so say so instead of failing the whole run.
+    if [ -f "$(dirname "$PLUGIN_FILE")/state.php" ] && [ -f "$(dirname "$PLUGIN_FILE")/dashboard-widget.php" ]; then
+        php "$HERE/traffic-test.php" "$PLUGIN_FILE" | tail -n "${MOCK_TAIL:-25}" || RC=1
+    else
+        echo "NOTE: state.php / dashboard-widget.php not next to $PLUGIN_FILE, traffic tests skipped"
+    fi
 fi
 
 if [ "$ONLY" = all ] || [ "$ONLY" = matrix ]; then
