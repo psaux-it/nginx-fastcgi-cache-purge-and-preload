@@ -484,6 +484,9 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_requisite_assets() {
             wp_localize_script('nppp-dashboard-widget-js', 'nppp_widget_data', array(
                 'ajaxurl'             => admin_url('admin-ajax.php'),
                 'ratio_refresh_nonce' => wp_create_nonce('nppp_refresh_cache_ratio'),
+                // Only when the status endpoint is configured: the JS skips the live traffic request otherwise.
+                'traffic_nonce'       => (function_exists('nppp_http_purge_traffic_sampling_wanted') && nppp_http_purge_traffic_sampling_wanted())
+                                         ? wp_create_nonce('nppp_traffic_refresh') : '',
             ));
         }
 
