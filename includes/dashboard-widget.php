@@ -654,6 +654,147 @@ function nppp_add_dashboard_widget() {
 }
 
 /**
+ * Level name of a traffic hit ratio (0..1). Thresholds mirror ratioColor() in
+ * nppp-dashboard-widget.js, so the Cache Coverage and Traffic cards use the same colours.
+ *
+ * @param float $ratio Hit ratio between 0 and 1.
+ * @return string 'good' | 'fair' | 'low'
+ */
+function nppp_traffic_level( float $ratio ): string {
+    $pct = $ratio * 100;
+    if ( $pct >= 70 ) {
+        return 'good';
+    }
+    return $pct >= 40 ? 'fair' : 'low';
+}
+
+/**
+ * Trend chart of the traffic hit ratio as inline SVG (numbers only, nothing user supplied).
+ *
+ * Time axis is fitted to the data (oldest sampled interval .. now), one step per sampled
+ * interval: intervals are uneven (see nppp_http_purge_traffic_series()), so a smooth line would
+ * imply precision that is not there. The value axis is fitted to the data too (a flat 0-100
+ * scale squashes e.g. a 23-44% range into a strip): the chart shows the shape, the figures
+ * next to it carry the level. The 70% reference is drawn only when it falls inside the axis.
+ * Colours come from CSS classes (nppp-tl-good|fair|low), never from inline styles.
+ *
+ * @param array $series 'series' of nppp_http_purge_traffic_summarize().
+ * @return array{html:string,lo:float,hi:float,span:int}|null Null with fewer than 2 decided intervals.
+ */
+function nppp_traffic_chart( array $series ): ?array {
+    $w   = 220;
+    $h   = 64;
+    $pad = 5;
+
+    $start = 0;
+    $end   = 0;
+    foreach ( $series as $p ) {
+        if ( is_array( $p ) && isset( $p['from'], $p['to'] ) ) {
+            $start = ( $start === 0 ) ? (int) $p['from'] : min( $start, (int) $p['from'] );
+            $end   = max( $end, (int) $p['to'] );
+        }
+    }
+    if ( $start <= 0 || $end <= $start ) {
+        return null;
+    }
+    $span = $end - $start;
+
+    $f = static function ( float $v ): string {
+        return number_format( $v, 1, '.', '' );
+    };
+    $x = static function ( int $ts ) use ( $start, $span, $w ): float {
+        return max( 0.0, min( (float) $w, ( $ts - $start ) / $span * $w ) );
+    };
+
+    $iv = [];
+    foreach ( $series as $p ) {
+        if ( ! is_array( $p ) || ! isset( $p['from'], $p['to'], $p['ratio'] ) ) {
+            continue; // no ratio (gap) or malformed: nothing to draw.
+        }
+        $x1 = $x( (int) $p['from'] );
+        $x2 = $x( (int) $p['to'] );
+        if ( $x2 - $x1 < 0.5 ) {
+            continue;
+        }
+        $iv[] = [ $x1, $x2, max( 0.0, min( 100.0, (float) $p['ratio'] * 100 ) ) ];
+    }
+    if ( count( $iv ) < 2 ) {
+        return null;
+    }
+
+    $pcts = array_column( $iv, 2 );
+    $lo   = (float) min( $pcts );
+    $hi   = (float) max( $pcts );
+
+    // Value axis: data range plus some air, at least 20 points tall, kept inside 0..100.
+    $dmin = max( 0.0, $lo - 8 );
+    $dmax = min( 100.0, $hi + 8 );
+    if ( $dmax - $dmin < 20 ) {
+        $dmin = min( max( 0.0, ( $dmin + $dmax ) / 2 - 10 ), 80.0 );
+        $dmax = $dmin + 20;
+    }
+    $y = static function ( float $pct ) use ( $h, $pad, $dmin, $dmax ): float {
+        return $pad + ( $h - 2 * $pad ) * ( 1 - ( $pct - $dmin ) / ( $dmax - $dmin ) );
+    };
+
+    $shapes = '';
+    $prev   = null;
+    $dot    = '';
+
+    foreach ( $iv as $s ) {
+        $lvl = nppp_traffic_level( $s[2] / 100 );
+        $yy  = $y( $s[2] );
+
+        // Thin joint between neighbouring intervals; none across a gap.
+        if ( $prev !== null && abs( $s[0] - $prev[0] ) < 1.0 ) {
+            $shapes .= '<line class="nppp-traffic-join" x1="' . $f( $s[0] ) . '" x2="' . $f( $s[0] )
+                     . '" y1="' . $f( $prev[1] ) . '" y2="' . $f( $yy ) . '"/>';
+        }
+        $shapes .= '<line class="nppp-tl-' . $lvl . '" x1="' . $f( $s[0] ) . '" x2="' . $f( $s[1] )
+                 . '" y1="' . $f( $yy ) . '" y2="' . $f( $yy ) . '"/>';
+
+        $prev = [ $s[1], $yy ];
+
+        // Marker on the right edge, coloured like the newest interval.
+        $dot = ( $s[1] >= $w - 0.5 )
+            ? '<i class="nppp-traffic-dot nppp-tl-' . $lvl . '" style="top:' . $f( $yy / $h * 100 ) . '%"></i>'
+            : '';
+    }
+
+    $has_ref   = ( $dmin <= 70 && $dmax >= 70 );
+    $ref_line  = '';
+    $ref_label = '';
+    if ( $has_ref ) {
+        $ry        = $y( 70.0 );
+        $ref_line  = '<line class="nppp-traffic-ref" x1="0" x2="' . $w . '" y1="' . $f( $ry ) . '" y2="' . $f( $ry ) . '"/>';
+        $ref_label = '<span class="nppp-traffic-reflabel" style="top:' . $f( $ry / $h * 100 ) . '%">70%</span>';
+    }
+
+    return [
+        'html' => '<div class="nppp-traffic-chart' . ( $has_ref ? ' nppp-traffic-hasref' : '' ) . '" aria-hidden="true">'
+                . '<svg viewBox="0 0 ' . $w . ' ' . $h . '" preserveAspectRatio="none">'
+                . $ref_line . $shapes . '</svg>' . $dot . $ref_label . '</div>',
+        'lo'   => $lo,
+        'hi'   => $hi,
+        'span' => $span,
+    ];
+}
+
+/**
+ * Escaped "N ago" label for the left end of the trend chart.
+ *
+ * @param int $seconds Length of the charted period.
+ */
+function nppp_traffic_ago( int $seconds ): string {
+    if ( $seconds < HOUR_IN_SECONDS ) {
+        /* translators: %d: number of minutes. */
+        return sprintf( esc_html__( '%dm ago', 'fastcgi-cache-purge-and-preload-nginx' ), max( 1, (int) round( $seconds / MINUTE_IN_SECONDS ) ) );
+    }
+    /* translators: %d: number of hours. */
+    return sprintf( esc_html__( '%dh ago', 'fastcgi-cache-purge-and-preload-nginx' ), (int) round( $seconds / HOUR_IN_SECONDS ) );
+}
+
+/**
  * Escaped HTML of the "Traffic hit ratio" card; '' when the status endpoint gave nothing.
  *
  * @param array|null $t Result of nppp_http_purge_traffic_stats().
@@ -663,46 +804,75 @@ function nppp_render_traffic_row( ?array $t ): string {
         return '';
     }
 
-    $tip   = esc_attr__( 'Counted by Nginx for every request with a native cache HIT or MISS (preload crawler included). BYPASS, EXPIRED, STALE, UPDATING and REVALIDATED are not counted. Counters reset when Nginx is restarted.', 'fastcgi-cache-purge-and-preload-nginx' );
-    $ratio = null;
-    $scope = '';
-    $sub   = '';
+    $tip    = esc_attr__( 'Counted by Nginx for every request with a native cache HIT or MISS (preload crawler included). BYPASS, EXPIRED, STALE, UPDATING and REVALIDATED are not counted. Counters reset when Nginx is restarted.', 'fastcgi-cache-purge-and-preload-nginx' );
+    $ratio  = null;
+    $hits   = 0.0;
+    $misses = 0.0;
+    $scope  = '';
+    $chart  = null;
 
     if ( $t['window'] !== null ) {
-        $w     = $t['window'];
-        $ratio = $w['ratio'];
-        $hours = max( 1, (int) round( $w['seconds'] / HOUR_IN_SECONDS ) );
+        $w      = $t['window'];
+        $ratio  = $w['ratio'];
+        $hits   = $w['hits'];
+        $misses = $w['misses'];
+        $hours  = max( 1, (int) round( $w['seconds'] / HOUR_IN_SECONDS ) );
         /* translators: %d: number of hours covered. */
-        $scope = sprintf( esc_html__( 'over last %dh', 'fastcgi-cache-purge-and-preload-nginx' ), $hours );
-        $sub   = sprintf(
-            /* translators: 1: HIT count, 2: MISS count. */
-            esc_html__( '%1$s HIT / %2$s MISS', 'fastcgi-cache-purge-and-preload-nginx' ),
-            esc_html( number_format_i18n( $w['hits'] ) ),
-            esc_html( number_format_i18n( $w['misses'] ) )
-        );
+        $scope  = sprintf( esc_html__( 'over last %dh', 'fastcgi-cache-purge-and-preload-nginx' ), $hours );
+        $chart  = nppp_traffic_chart( ( isset( $t['series'] ) && is_array( $t['series'] ) ) ? $t['series'] : [] );
     } elseif ( $t['ratio'] !== null ) {
-        $ratio = $t['ratio'];
-        $scope = esc_html__( 'since Nginx restart', 'fastcgi-cache-purge-and-preload-nginx' );
-        $sub   = esc_html__( 'Collecting data for a 24h window…', 'fastcgi-cache-purge-and-preload-nginx' );
+        $ratio  = $t['ratio'];
+        $hits   = $t['hit'];
+        $misses = $t['miss'];
+        $scope  = esc_html__( 'since Nginx restart', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
-    $html = '<div class="nppp-traffic-box" title="' . $tip . '">'
-          . '<div class="nppp-traffic-head"><span class="dashicons dashicons-chart-line"></span>'
-          . '<span class="nppp-traffic-title">' . esc_html__( 'Traffic hit ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+    $head = '<div class="nppp-traffic-head"><span class="dashicons dashicons-chart-line"></span>'
+          . '<span class="nppp-traffic-title">' . esc_html__( 'Traffic hit ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>'
+          . '<span class="nppp-traffic-rule"></span>'
+          . ( $scope !== '' ? '<span class="nppp-traffic-scope">' . $scope . '</span>' : '' )
+          . '<span class="nppp-traffic-info" tabindex="0" role="img" aria-label="' . $tip . '" data-tip="' . $tip . '">i</span>'
+          . '</div>';
 
     if ( $ratio === null ) {
-        return $html . '<span class="nppp-traffic-sub">' . esc_html__( 'No cache traffic observed yet', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+        return '<div class="nppp-traffic-box nppp-traffic-idle">' . $head
+             . '<span class="nppp-traffic-sub">' . esc_html__( 'No cache traffic observed yet', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
     }
 
-    $pct   = $ratio * 100;
-    $width = number_format( min( 100, max( 0, $pct ) ), 1, '.', '' );
+    $left = '<div class="nppp-traffic-left">'
+          . '<strong class="nppp-traffic-pct">' . esc_html( number_format_i18n( $ratio * 100, 1 ) ) . '<small>%</small></strong>'
+          . '<span class="nppp-traffic-counts">'
+          . '<span class="nppp-traffic-hit">&#x2714; ' . sprintf(
+              /* translators: %s: number of HIT requests. */
+              esc_html__( '%s HIT', 'fastcgi-cache-purge-and-preload-nginx' ),
+              esc_html( number_format_i18n( $hits ) )
+          ) . '</span>'
+          . '<span class="nppp-traffic-miss">&#x2718; ' . sprintf(
+              /* translators: %s: number of MISS requests. */
+              esc_html__( '%s MISS', 'fastcgi-cache-purge-and-preload-nginx' ),
+              esc_html( number_format_i18n( $misses ) )
+          ) . '</span>'
+          . '</span></div>';
 
-    return $html
-        . '<div class="nppp-traffic-main"><strong class="nppp-traffic-pct">' . esc_html( number_format_i18n( $pct, 1 ) ) . '%</strong>'
-        . '<span class="nppp-traffic-scope">' . $scope . '</span></div>'
-        . '<span class="nppp-traffic-bar"><i style="width:' . esc_attr( $width ) . '%"></i></span>'
-        . '<span class="nppp-traffic-sub">' . $sub . '</span>'
-        . '</div>';
+    if ( $chart !== null ) {
+        $right = '<div class="nppp-traffic-right">' . $chart['html'] . '<div class="nppp-traffic-foot">'
+               . '<span>' . nppp_traffic_ago( (int) $chart['span'] ) . '</span>'
+               . '<span class="nppp-traffic-mid">' . sprintf(
+                   /* translators: 1: lowest interval hit ratio, 2: highest (with % sign). */
+                   esc_html__( 'range %1$s–%2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                   esc_html( number_format_i18n( $chart['lo'] ) ) . '%',
+                   esc_html( number_format_i18n( $chart['hi'] ) ) . '%'
+               ) . '</span>'
+               . '<span>' . esc_html__( 'now', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>'
+               . '</div></div>';
+    } else {
+        $right = '<div class="nppp-traffic-right"><div class="nppp-traffic-chart nppp-traffic-collect"><span>'
+               . esc_html__( 'Collecting data for a 24h window…', 'fastcgi-cache-purge-and-preload-nginx' )
+               . '</span></div></div>';
+    }
+
+    return '<div class="nppp-traffic-box nppp-traffic-' . nppp_traffic_level( (float) $ratio ) . '">'
+         . $head . '<div class="nppp-traffic-split">' . $left . $right . '</div></div>';
 }
 
 // AJAX handler — refresh cache coverage ratio on demand from the dashboard widget.
