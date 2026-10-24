@@ -249,6 +249,16 @@ function nppp_preload_cycle_start_get( bool $fresh = false ): int {
  * Record the cycle start (12 hours, same horizon as the old transient).
  */
 function nppp_preload_cycle_start_set( int $timestamp ): void {
+    // Clean traffic sample just before the crawl starts (see nppp_http_purge_traffic_boundary()).
+    // The cycle must not start before that sample, or the interval ending in it counts as preload.
+    // Only the time the status request itself took is corrected (2 s timeout), never an older stamp.
+    if ( function_exists( 'nppp_http_purge_traffic_boundary' ) ) {
+        $sampled = nppp_http_purge_traffic_boundary();
+        if ( $sampled > $timestamp && $sampled - $timestamp <= 5 ) {
+            $timestamp = $sampled;
+        }
+    }
+
     nppp_state_set_with_legacy( 'preload_cycle_start', nppp_preload_cycle_start_legacy_key(), $timestamp, 12 * HOUR_IN_SECONDS );
 }
 
@@ -264,6 +274,7 @@ function nppp_preload_cycle_start_set( int $timestamp ): void {
  *                   ran until now), so its age must not become an excluded period.
  */
 function nppp_preload_cycle_start_delete( bool $mark = true ): void {
+    $from = 0;
     if ( $mark && function_exists( 'nppp_http_purge_traffic_mark_preload' ) ) {
         $from = nppp_preload_cycle_start_get( true );
         if ( $from > 0 ) {
@@ -272,6 +283,11 @@ function nppp_preload_cycle_start_delete( bool $mark = true ): void {
     }
 
     nppp_state_delete_with_legacy( 'preload_cycle_start', nppp_preload_cycle_start_legacy_key() );
+
+    // Clean traffic sample right after the crawl ended: the record is gone, so it carries no preload flag.
+    if ( $from > 0 && function_exists( 'nppp_http_purge_traffic_boundary' ) ) {
+        nppp_http_purge_traffic_boundary();
+    }
 }
 
 // ---------------------------------------------------------------------------
