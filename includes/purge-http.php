@@ -356,7 +356,10 @@ function nppp_http_purge_traffic_next_samples( array $samples, array $now ): arr
  * STALE, UPDATING and REVALIDATED are not in either counter, so this ratio is a "fresh HIT vs
  * cold MISS" figure, not an origin-offload figure. Preload crawler requests are included.
  *
- * @return array{hit:float,miss:float,ratio:?float,window:?array{ratio:float,hits:float,misses:float,seconds:int}}
+ * "series" is the per-interval ratio history for the dashboard trend chart, see
+ * nppp_http_purge_traffic_series().
+ *
+ * @return array{hit:float,miss:float,ratio:?float,window:?array{ratio:float,hits:float,misses:float,seconds:int},series:array<int,array{from:int,to:int,ratio:?float}>}
  */
 function nppp_http_purge_traffic_summarize( array $now, array $samples ): array {
     $total = $now['hit'] + $now['miss'];
@@ -384,7 +387,56 @@ function nppp_http_purge_traffic_summarize( array $now, array $samples ): array 
         break; // oldest eligible sample only.
     }
 
+    $out['series'] = nppp_http_purge_traffic_series( $now, $samples );
+
     return $out;
+}
+
+/**
+ * Pure: per-interval hit ratio history for the dashboard trend chart.
+ *
+ * Every pair of consecutive points (stored samples, then the current counters) is one interval.
+ * Samples are only taken while an admin has the dashboard open (at most every 30 min), so
+ * intervals have uneven length: each entry carries its own from/to timestamps and must be drawn
+ * on a time axis, not by index. An interval is "decided" only with >= $min HIT+MISS; a counter
+ * that went DOWN (Nginx restart) or a quiet interval gives ratio null, so the chart shows a gap
+ * instead of noise. Only the last 24h are returned.
+ *
+ * @param array $now     {hit,miss,ts} from nppp_http_purge_traffic_fetch().
+ * @param array $samples Stored list of {ts,hit,miss}, oldest first; malformed entries are skipped.
+ * @param int   $min     Minimum decided requests for an interval to get a ratio.
+ * @return array<int,array{from:int,to:int,ratio:?float}>
+ */
+function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 10 ): array {
+    $points = [];
+    foreach ( $samples as $s ) {
+        if ( is_array( $s ) && isset( $s['ts'], $s['hit'], $s['miss'] )
+            && is_numeric( $s['ts'] ) && is_numeric( $s['hit'] ) && is_numeric( $s['miss'] ) ) {
+            $points[] = [ 'ts' => (int) $s['ts'], 'hit' => (float) $s['hit'], 'miss' => (float) $s['miss'] ];
+        }
+    }
+
+    $last = end( $points );
+    if ( $last === false || (int) $now['ts'] > $last['ts'] ) {
+        $points[] = [ 'ts' => (int) $now['ts'], 'hit' => (float) $now['hit'], 'miss' => (float) $now['miss'] ];
+    }
+
+    $cut    = (int) $now['ts'] - DAY_IN_SECONDS;
+    $min    = max( 1, $min );
+    $series = [];
+    for ( $i = 1, $n = count( $points ); $i < $n; $i++ ) {
+        $a = $points[ $i - 1 ];
+        $b = $points[ $i ];
+        if ( $b['ts'] <= $a['ts'] || $b['ts'] <= $cut ) {
+            continue; // zero/negative length, or entirely older than 24h.
+        }
+        $dh    = $b['hit'] - $a['hit'];
+        $dm    = $b['miss'] - $a['miss'];
+        $ratio = ( $dh >= 0 && $dm >= 0 && ( $dh + $dm ) >= $min ) ? $dh / ( $dh + $dm ) : null;
+        $series[] = [ 'from' => max( $a['ts'], $cut ), 'to' => $b['ts'], 'ratio' => $ratio ];
+    }
+
+    return $series;
 }
 
 /**
