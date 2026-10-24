@@ -512,8 +512,10 @@ function nppp_dashboard_widget() {
         echo '</div>';
 
         // Traffic hit ratio reported by Nginx (ngx_cache_purge v4 status endpoint); empty when unavailable.
+        // Painted from the stored samples so the page never waits for the status endpoint;
+        // nppp-dashboard-widget.js loads the live figures right after (nppp_traffic_refresh).
         echo '<div id="nppp-traffic-row">'
-           . ( function_exists( 'nppp_http_purge_traffic_stats' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats() ) : '' )
+           . ( function_exists( 'nppp_http_purge_traffic_stats_stored' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats_stored() ) : '' )
            . '</div>';
 
         // Output the main NPP pluging settings statuses
@@ -804,7 +806,7 @@ function nppp_render_traffic_row( ?array $t ): string {
         return '';
     }
 
-    $tip    = esc_attr__( 'Counted by Nginx for every request with a native cache HIT or MISS (preload crawler included). BYPASS, EXPIRED, STALE, UPDATING and REVALIDATED are not counted. Counters reset when Nginx is restarted.', 'fastcgi-cache-purge-and-preload-nginx' );
+    $tip    = esc_attr__( 'Counted by Nginx for every request with a native cache HIT or MISS (periods when a Preload All was running are left out). BYPASS, EXPIRED, STALE, UPDATING and REVALIDATED are not counted. Counters reset when Nginx is restarted.', 'fastcgi-cache-purge-and-preload-nginx' );
     $ratio  = null;
     $hits   = 0.0;
     $misses = 0.0;
@@ -817,10 +819,13 @@ function nppp_render_traffic_row( ?array $t ): string {
         $hits   = $w['hits'];
         $misses = $w['misses'];
         $hours  = max( 1, (int) round( $w['seconds'] / HOUR_IN_SECONDS ) );
-        /* translators: %d: number of hours covered. */
+       /* translators: %d: number of hours covered. */
         $scope  = sprintf( esc_html__( 'over last %dh', 'fastcgi-cache-purge-and-preload-nginx' ), $hours );
+        if ( ! empty( $w['excluded'] ) ) {
+            $scope .= ' &middot; ' . esc_html__( 'preload excluded', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
         $chart  = nppp_traffic_chart( ( isset( $t['series'] ) && is_array( $t['series'] ) ) ? $t['series'] : [] );
-    } elseif ( $t['ratio'] !== null ) {
+    } elseif ( $t['ratio'] !== null && empty( $t['paused'] ) ) {
         $ratio  = $t['ratio'];
         $hits   = $t['hit'];
         $misses = $t['miss'];
@@ -835,8 +840,11 @@ function nppp_render_traffic_row( ?array $t ): string {
           . '</div>';
 
     if ( $ratio === null ) {
+        $idle = empty( $t['paused'] )
+            ? esc_html__( 'No cache traffic observed yet', 'fastcgi-cache-purge-and-preload-nginx' )
+            : esc_html__( 'Preload traffic is left out; waiting for regular traffic', 'fastcgi-cache-purge-and-preload-nginx' );
         return '<div class="nppp-traffic-box nppp-traffic-idle">' . $head
-             . '<span class="nppp-traffic-sub">' . esc_html__( 'No cache traffic observed yet', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+             . '<span class="nppp-traffic-sub">' . $idle . '</span></div>';
     }
 
     $left = '<div class="nppp-traffic-left">'
@@ -932,4 +940,24 @@ function nppp_refresh_cache_ratio_callback() {
 
     // nppp_get_cache_ratio returned N/A (no snapshot, empty snapshot, etc.)
     wp_send_json_success( [ 'na' => true, 'na_reason' => 'no_snapshot', 'traffic_html' => $traffic_html ] );
+}
+
+// AJAX handler — live traffic hit ratio card. Cheap by design (one status request, cached 20 s),
+// unlike nppp_refresh_cache_ratio which also rescans the cache directory.
+function nppp_traffic_refresh_callback() {
+    // Capability check
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( __( 'Permission denied.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
+
+    // Nonce check
+    if ( empty( $_POST['_wpnonce'] ) ||
+         ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_traffic_refresh' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
+
+    wp_send_json_success( [
+        'traffic_html' => function_exists( 'nppp_http_purge_traffic_stats' )
+            ? nppp_render_traffic_row( nppp_http_purge_traffic_stats() ) : '',
+    ] );
 }
