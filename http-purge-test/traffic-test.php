@@ -298,10 +298,11 @@ for ( $k = 0; $k < 200 && $same; $k++ ) {
             && $sm['window']['hits'] == $ref['hits'] && $sm['window']['misses'] == $ref['misses']
             && $sm['window']['seconds'] === $ref['seconds'] );
     $rs  = ref_series( $now, $samples );
-    $ns  = array_map( static fn( $r ) => [ 'from' => $r['from'], 'to' => $r['to'], 'ratio' => $r['ratio'] ], $sm['series'] );
+    // summarize() now feeds the chart from series_merged(); the strict series() stays pinned to the v2.1.9 reference.
+    $ns  = array_map( static fn( $r ) => [ 'from' => $r['from'], 'to' => $r['to'], 'ratio' => $r['ratio'] ], nppp_http_purge_traffic_series( $now, $samples, 10, [] ) );
     if ( ! $okw || $ns != $rs ) { $same = false; $detail = "trial $k window=" . ( $okw ? 'same' : 'DIFF' ) . ' series=' . ( $ns == $rs ? 'same' : 'DIFF' ); }
 }
-t( 'window + series identical to the v2.1.9 algorithm', $same, $detail );
+t( 'window + strict series() identical to the v2.1.9 algorithm', $same, $detail );
 
 // ---------------------------------------------------------------------------------------------
 say( "C2. Window gates: >= 300 s of counted intervals and >= 50 decided requests\n" );
@@ -569,6 +570,63 @@ $summary['window']['excluded'] = 0;
 t( 'render: nothing excluded => no extra label', strpos( nppp_render_traffic_row( $summary ), 'preload excluded' ) === false );
 t( 'render: null summary => empty', nppp_render_traffic_row( null ) === '' );
 t( 'render: tooltip no longer claims preload is included', strpos( $html, 'preload crawler included' ) === false );
+
+// ---------------------------------------------------------------------------------------------
+say( "H. Merged series (low-traffic sites)\n" );
+// ---------------------------------------------------------------------------------------------
+$M = 'nppp_http_purge_traffic_series_merged';
+// Low-traffic merge: real-world sample set (a burst, then 1-4 requests per 10 min) must still draw a chart
+$real = [ mk(1792863595,0,0), mk(1792864141,310,142), mk(1792864772,313,142), mk(1792865401,314,142), mk(1792866000,314,142), mk(1792866566,317,143) ];
+$now  = [ 'hit' => 317.0, 'miss' => 143.0, 'ts' => 1792867166, 'ns' => [] ];
+$old  = nppp_http_purge_traffic_series( $now, $real, 10, [] );
+$new  = $M( $now, $real, 5, [] );
+$dec  = fn( $s ) => count( array_filter( $s, fn( $r ) => $r['ratio'] !== null ) );
+t( 'merge/low-traffic: old algorithm has <2 decided points (chart missing)', $dec( $old ) < 2, 'old decided=' . $dec( $old ) );
+t( 'merge/low-traffic: merged algorithm has >=2 decided points (chart shows)', $dec( $new ) >= 2, 'new decided=' . $dec( $new ) );
+$sm = nppp_http_purge_traffic_summarize( $now, $real, [] );
+$html = nppp_render_traffic_row( $sm );
+t( 'merge/low-traffic: widget renders an SVG chart, not "Collecting"', strpos( $html, 'Collecting data' ) === false && strpos( $html, '<svg' ) !== false );
+
+// 2. Dense traffic (every step >= min, nothing dirty): must equal the old algorithm exactly
+$same = true; $detail = '';
+mt_srand( 7 );
+for ( $k = 0; $k < 400 && $same; $k++ ) {
+    $ts = 1780000000; $h = 0.0; $m = 0.0; $smp = [];
+    $steps = mt_rand( 3, 30 );
+    for ( $i = 0; $i < $steps; $i++ ) { $smp[] = mk( $ts, $h, $m ); $ts += mt_rand( 540, 700 ); $h += mt_rand( 5, 300 ); $m += mt_rand( 5, 100 ); }
+    $nw = [ 'hit' => $h, 'miss' => $m, 'ts' => $ts, 'ns' => [] ];
+    $a = array_map( fn( $r ) => [ $r['from'], $r['to'], $r['ratio'] ], nppp_http_purge_traffic_series( $nw, $smp, 10, [] ) );
+    $b = array_map( fn( $r ) => [ $r['from'], $r['to'], $r['ratio'] ], $M( $nw, $smp, 10, [] ) );
+    if ( $a != $b ) { $same = false; $detail = "trial $k"; }
+}
+t( 'dense traffic: merged == old series (no behaviour change when traffic is healthy)', $same, $detail );
+
+// 3. Structural invariants on random sparse/dirty/restart data
+$ok = true; $why = '';
+mt_srand( 11 );
+for ( $k = 0; $k < 600 && $ok; $k++ ) {
+    $ts = 1780000000; $h = 0.0; $m = 0.0; $smp = []; $gaps = [];
+    $steps = mt_rand( 2, 40 );
+    for ( $i = 0; $i < $steps; $i++ ) {
+        $smp[] = mk( $ts, $h, $m );
+        $ts += mt_rand( 540, 700 );
+        if ( mt_rand( 0, 9 ) === 0 ) { $h = 0.0; $m = 0.0; }            // counter reset (restart)
+        $h += mt_rand( 0, 6 ); $m += mt_rand( 0, 3 );                    // sparse traffic
+        if ( mt_rand( 0, 14 ) === 0 ) { $gaps[] = [ $ts - 700, $ts - 100 ]; }
+    }
+    $nw  = [ 'hit' => $h, 'miss' => $m, 'ts' => $ts, 'ns' => [] ];
+    $ser = $M( $nw, $smp, 5, $gaps );
+    $prev = 0;
+    foreach ( $ser as $r ) {
+        if ( $r['from'] < $prev ) { $ok = false; $why = "trial $k overlap"; break; }
+        if ( $r['to'] <= $r['from'] ) { $ok = false; $why = "trial $k zero-length"; break; }
+        if ( $r['ratio'] !== null && ( $r['ratio'] < 0 || $r['ratio'] > 1 ) ) { $ok = false; $why = "trial $k bad ratio"; break; }
+        if ( $r['ratio'] !== null && ! empty( $r['preload'] ) ) { $ok = false; $why = "trial $k preload row has ratio"; break; }
+        $prev = $r['to'];
+    }
+    if ( $ok && $ser !== [] && end( $ser )['to'] !== $ts ) { $ok = false; $why = "trial $k axis does not end at now (ends " . ( $ts - end( $ser )['to'] ) . 's early)'; }
+}
+t( 'invariants: ordered, non-overlapping, ratios sane, preload rows ratio-free, axis ends at now', $ok, $why );
 
 // ---------------------------------------------------------------------------------------------
 echo "\n$PASS passed, $FAIL failed\n";
