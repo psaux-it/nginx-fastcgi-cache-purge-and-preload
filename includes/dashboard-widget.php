@@ -747,20 +747,32 @@ function nppp_traffic_chart( array $series ): ?array {
         $lvl = nppp_traffic_level( $s[2] / 100 );
         $yy  = $y( $s[2] );
 
-        // Thin joint between neighbouring intervals; none across a gap.
-        if ( $prev !== null && abs( $s[0] - $prev[0] ) < 1.0 ) {
+        if ( $prev !== null ) {
+            // Stretch without a ratio (Preload All running, or too little traffic): hold the
+            // previous level as a faint dotted line so the trend does not fall apart.
+            if ( $s[0] - $prev[0] >= 1.0 ) {
+                $shapes .= '<line class="nppp-traffic-gap nppp-tl-' . $prev[2] . '" x1="' . $f( $prev[0] ) . '" x2="' . $f( $s[0] )
+                         . '" y1="' . $f( $prev[1] ) . '" y2="' . $f( $prev[1] ) . '"/>';
+            }
+            // Thin joint to the next level (across a gap too).
             $shapes .= '<line class="nppp-traffic-join" x1="' . $f( $s[0] ) . '" x2="' . $f( $s[0] )
                      . '" y1="' . $f( $prev[1] ) . '" y2="' . $f( $yy ) . '"/>';
         }
         $shapes .= '<line class="nppp-tl-' . $lvl . '" x1="' . $f( $s[0] ) . '" x2="' . $f( $s[1] )
                  . '" y1="' . $f( $yy ) . '" y2="' . $f( $yy ) . '"/>';
 
-        $prev = [ $s[1], $yy ];
+        $prev = [ $s[1], $yy, $lvl ];
+    }
 
-        // Marker on the right edge, coloured like the newest interval.
-        $dot = ( $s[1] >= $w - 0.5 )
-            ? '<i class="nppp-traffic-dot nppp-tl-' . $lvl . '" style="top:' . $f( $yy / $h * 100 ) . '%"></i>'
-            : '';
+    // Marker on the right edge ("now"), coloured like the newest known interval.
+    if ( $prev !== null ) {
+        $held = ( $w - $prev[0] >= 1.0 );
+        if ( $held ) {
+            $shapes .= '<line class="nppp-traffic-gap nppp-tl-' . $prev[2] . '" x1="' . $f( $prev[0] ) . '" x2="' . $w
+                     . '" y1="' . $f( $prev[1] ) . '" y2="' . $f( $prev[1] ) . '"/>';
+        }
+        $dot = '<i class="nppp-traffic-dot' . ( $held ? ' nppp-traffic-held' : '' ) . ' nppp-tl-' . $prev[2]
+             . '" style="top:' . $f( $prev[1] / $h * 100 ) . '%"></i>';
     }
 
     $has_ref   = ( $dmin <= 70 && $dmax >= 70 );
