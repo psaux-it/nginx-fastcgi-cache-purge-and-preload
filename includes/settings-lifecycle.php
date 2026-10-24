@@ -30,6 +30,9 @@ function nppp_reset_plugin_settings_on_deactivation() {
     // deactivation.
     wp_clear_scheduled_hook('nppp_f2b_cleanup_event');
 
+    // Traffic hit ratio sampler. The samples themselves are kept, only uninstall wipes data.
+    wp_clear_scheduled_hook('nppp_traffic_sample_event');
+
     // Fail2ban RIPEstat enrichment worker: stop its reconciliation tick and
     // terminate the detached CLI process. Like preload, it is a nohup child
     // that would otherwise outlive deactivation.
