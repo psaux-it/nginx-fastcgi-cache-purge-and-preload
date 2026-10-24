@@ -34,7 +34,14 @@ $GLOBALS['CYCLE']    = 0;
 $pagenow             = 'index.php';
 
 class WP_Error {
-    public function __construct( public $code = '', public $message = '' ) {}
+    public $code;
+    public $message;
+
+    public function __construct( $code = '', $message = '' ) {
+        $this->code    = $code;
+        $this->message = $message;
+    }
+
     public function get_error_messages() { return [ $this->message ]; }
 }
 function is_wp_error( $x ) { return $x instanceof WP_Error; }
@@ -58,6 +65,9 @@ function wp_schedule_event( $ts, $rec, $h ) { $GLOBALS['CRON'][ $h ] = [ 'ts' =>
 function wp_clear_scheduled_hook( $h ) { unset( $GLOBALS['CRON'][ $h ] ); return 1; }
 function wp_remote_request( $url, $args = [] ) {
     $GLOBALS['REQUESTS']++;
+    if ( ! empty( $GLOBALS['NGX']['delay'] ) ) {
+        sleep( (int) $GLOBALS['NGX']['delay'] ); // slow status endpoint: the clock moves on during the request.
+    }
     return [ 'status' => $GLOBALS['NGX']['status'], 'body' => $GLOBALS['NGX']['body'], 'headers' => [ 'cache-purge-code' => 'status' ] ];
 }
 function wp_remote_retrieve_header( $r, $n ) { return $r['headers'][ strtolower( $n ) ] ?? ''; }
@@ -399,6 +409,114 @@ t( 'tick: unschedules itself when HTTP Purge is off', ! isset( $GLOBALS['CRON'][
 nppp_http_purge_traffic_schedule();
 t( 'scheduler: nothing scheduled while HTTP Purge is off', ! isset( $GLOBALS['CRON']['nppp_traffic_sample_event'] ) );
 $GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'yes';
+
+// ---------------------------------------------------------------------------------------------
+echo "H. Preload All boundary samples (sampler slower than the pause between two cycles)\n";
+// ---------------------------------------------------------------------------------------------
+// pure: $force keeps a sample inside the 9 min spacing, the default does not.
+$T = 1800000000;
+$two = nppp_http_purge_traffic_next_samples( [ mk( $T, 10, 10 ) ], mk( $T + 60, 20, 20 ) );
+t( 'next_samples: inside 9 min => not kept (unchanged)', count( $two ) === 1 );
+$two = nppp_http_purge_traffic_next_samples( [ mk( $T, 10, 10 ) ], mk( $T + 60, 20, 20 ), true );
+t( 'next_samples: force => kept', count( $two ) === 2 && $two[1]['ts'] === $T + 60 );
+$two = nppp_http_purge_traffic_next_samples( [ mk( $T, 10, 10 ) ], mk( $T + 60, 5, 5 ), true );
+t( 'next_samples: force does not bypass restart detection (counter went down)', count( $two ) === 1 && $two[0]['ts'] === $T + 60 );
+
+// pure: the failing timeline. One sample every 3 h, a 30 min crawl in the middle of an interval.
+$gap = [ [ $T - 2 * 3600, $T - 2 * 3600 + 1800 ] ];
+$old = nppp_http_purge_traffic_summarize( mk( $T, 6100, 4010 ), [ mk( $T - 3 * 3600, 1000, 100 ) ], $gap );
+t( 'sparse sampler, no boundary samples: whole 3 h interval is lost, card waits', $old['window'] === null && $old['paused'] === true );
+$new = nppp_http_purge_traffic_summarize(
+    mk( $T, 6100, 4010 ),
+    [ mk( $T - 3 * 3600, 1000, 100 ), mk( $T - 2 * 3600, 1100, 110 ), mk( $T - 2 * 3600 + 1800, 6000, 4000 ) ],
+    $gap
+);
+t( 'sparse sampler + boundary samples: window = organic traffic only', $new['window'] !== null && near( $new['window']['ratio'], 200 / 220, 0.001 ) && (int) $new['window']['hits'] === 200 && (int) $new['window']['misses'] === 20, pct( $new['window']['ratio'] ?? null ) );
+t( 'sparse sampler + boundary samples: the crawl is reported as excluded', ( $new['window']['excluded'] ?? 0 ) === 1800 );
+
+// integration: start/end of a cycle each take one clean sample.
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'yes';
+$GLOBALS['OPT']['nppp_traffic_gaps']    = [];
+$GLOBALS['OPT']['nppp_traffic_samples'] = [];
+delete_option( 'nppp_st_preload_cycle_start' );
+delete_transient( 'nppp_traffic_raw' );
+$GLOBALS['NGX']['body'] = json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => 500, 'miss' => 50 ] ] ] );
+
+$GLOBALS['REQUESTS'] = 0;
+set_cycle( time() );
+$sm = $GLOBALS['OPT']['nppp_traffic_samples'];
+t( 'cycle start: one request, one sample', $GLOBALS['REQUESTS'] === 1 && count( $sm ) === 1 );
+t( 'cycle start: sample is clean (taken before the cycle record exists)', ! isset( $sm[0]['pl'] ) );
+t( 'cycle start: cycle record is set afterwards', nppp_preload_cycle_start_get( true ) > 0 );
+
+$GLOBALS['NGX']['body'] = json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => 900, 'miss' => 4000 ] ] ] );
+$GLOBALS['REQUESTS'] = 0;
+nppp_preload_cycle_start_delete();
+$sm = $GLOBALS['OPT']['nppp_traffic_samples'];
+t( 'cycle end: one request, one more sample inside the 9 min spacing', $GLOBALS['REQUESTS'] === 1 && count( $sm ) === 2 );
+t( 'cycle end: sample is clean (taken after the cycle record is gone)', ! isset( $sm[1]['pl'] ) && nppp_preload_cycle_start_get( true ) === 0 );
+t( 'cycle end: the cycle is still recorded as a left-out period', count( nppp_http_purge_traffic_gaps() ) === 1 );
+
+$GLOBALS['REQUESTS'] = 0;
+nppp_preload_cycle_start_delete();
+t( 'cycle end without a cycle: no request', $GLOBALS['REQUESTS'] === 0 && count( $GLOBALS['OPT']['nppp_traffic_samples'] ) === 2 );
+set_cycle( time() - 5000 );
+$GLOBALS['REQUESTS'] = 0;
+nppp_preload_cycle_start_delete( false );
+t( 'orphan cleanup (mark=false): no request, no sample', $GLOBALS['REQUESTS'] === 0 );
+
+// HTTP Purge off / no status path: nothing at all.
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'no';
+$GLOBALS['OPT']['nppp_traffic_samples'] = [];
+$GLOBALS['REQUESTS'] = 0;
+set_cycle( time() );
+nppp_preload_cycle_start_delete();
+t( 'HTTP Purge off: cycle start/end make no request and store no sample', $GLOBALS['REQUESTS'] === 0 && $GLOBALS['OPT']['nppp_traffic_samples'] === [] );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'yes';
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = '';
+$GLOBALS['REQUESTS'] = 0;
+set_cycle( time() );
+nppp_preload_cycle_start_delete();
+t( 'no status path: cycle start/end make no request', $GLOBALS['REQUESTS'] === 0 );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'npp_status';
+
+// endpoint down: cycle start/end must not fail or throw, the cycle bookkeeping is untouched.
+$GLOBALS['NGX']['status'] = 503;
+delete_transient( 'nppp_traffic_raw' );
+$GLOBALS['OPT']['nppp_traffic_gaps'] = [];
+set_cycle( time() - 600 );
+nppp_preload_cycle_start_delete();
+t( 'endpoint down: no exception, cycle still recorded and cleared', count( nppp_http_purge_traffic_gaps() ) === 1 && nppp_preload_cycle_start_get( true ) === 0 );
+$GLOBALS['NGX']['status'] = 200;
+delete_transient( 'nppp_traffic_raw' );
+
+// slow status request: the cycle is stamped in one second, the boundary sample lands in the next.
+// The cycle (left-out period) must not begin before that sample, otherwise the organic interval
+// ending in it is dropped as preload and the card never gets a window.
+$GLOBALS['OPT']['nppp_traffic_gaps']    = [];
+$GLOBALS['OPT']['nppp_traffic_samples'] = [ mk( time() - 600, 100, 10 ) ];
+delete_option( 'nppp_st_preload_cycle_start' );
+delete_transient( 'nppp_traffic_raw' );
+$GLOBALS['NGX']['body']  = json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => 300, 'miss' => 20 ] ] ] );
+$GLOBALS['NGX']['delay'] = 1;
+set_cycle( time() );
+$sm = $GLOBALS['OPT']['nppp_traffic_samples'];
+t( 'slow status request: boundary sample stored', count( $sm ) === 2 );
+t( 'slow status request: cycle record starts at or after the boundary sample', count( $sm ) === 2 && nppp_preload_cycle_start_get( true ) >= $sm[1]['ts'], nppp_preload_cycle_start_get( true ) . ' vs ' . ( $sm[1]['ts'] ?? 0 ) );
+$GLOBALS['NGX']['body'] = json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => 300, 'miss' => 520 ] ] ] );
+nppp_preload_cycle_start_delete();
+$GLOBALS['NGX']['delay'] = 0;
+delete_transient( 'nppp_traffic_raw' );
+$ser = nppp_http_purge_traffic_stats_stored()['series'] ?? [];
+t( 'slow status request: the interval before the cycle stays organic', isset( $ser[0] ) && empty( $ser[0]['preload'] ) && near( $ser[0]['ratio'], 200 / 210, 0.001 ), json_encode( $ser[0] ?? null ) );
+// failed boundary request: the cycle start is left alone.
+$GLOBALS['NGX']['status'] = 503;
+delete_transient( 'nppp_traffic_raw' );
+set_cycle( 1800000123 );
+t( 'endpoint down at cycle start: cycle record keeps the given timestamp', nppp_preload_cycle_start_get( true ) === 1800000123 );
+$GLOBALS['NGX']['status'] = 200;
+delete_transient( 'nppp_traffic_raw' );
+nppp_preload_cycle_start_delete( false );
 
 // ---------------------------------------------------------------------------------------------
 echo "G. Dashboard card rendering\n";
