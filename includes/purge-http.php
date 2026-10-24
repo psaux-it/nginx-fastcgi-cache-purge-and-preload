@@ -507,9 +507,11 @@ function nppp_http_purge_traffic_points( array $now, array $samples ): array {
  *
  * @param array $samples Stored list of {ts,hit,miss[,pl,ns]}; anything malformed is discarded.
  * @param array $now     {hit,miss,ts[,pl,ns]} from nppp_http_purge_traffic_fetch().
+ * @param bool  $force   Keep $now even when the last sample is younger than 9 min. Used for the
+ *                       Preload All start/end boundary samples (see nppp_http_purge_traffic_boundary()).
  * @return array<int,array{ts:int,hit:float,miss:float,pl?:int,ns?:array<string,string>}>
  */
-function nppp_http_purge_traffic_next_samples( array $samples, array $now ): array {
+function nppp_http_purge_traffic_next_samples( array $samples, array $now, bool $force = false ): array {
     $clean = [];
     foreach ( $samples as $s ) {
         $p = nppp_http_purge_traffic_point( $s );
@@ -528,7 +530,7 @@ function nppp_http_purge_traffic_next_samples( array $samples, array $now ): arr
             $last  = false;
         }
 
-        if ( $last === false || $cur['ts'] - $last['ts'] >= 540 ) {
+        if ( $last === false || $force || $cur['ts'] - $last['ts'] >= 540 ) {
             $clean[] = $cur;
         }
     }
@@ -694,9 +696,11 @@ function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 
  * endpoint cannot add its 2 s timeout to every admin page. $fresh bypasses both.
  * Every successful fetch also feeds the 24h sample list (see nppp_http_purge_traffic_next_samples()).
  *
+ * @param bool $fresh        Bypass the 20 s / 60 s caches.
+ * @param bool $force_sample Store the fetched counters even inside the 9 min sample spacing.
  * @return array|null See nppp_http_purge_traffic_summarize().
  */
-function nppp_http_purge_traffic_stats( bool $fresh = false ): ?array {
+function nppp_http_purge_traffic_stats( bool $fresh = false, bool $force_sample = false ): ?array {
     if ( ! nppp_http_purge_enabled() ) {
         return null;
     }
@@ -726,7 +730,7 @@ function nppp_http_purge_traffic_stats( bool $fresh = false ): ?array {
 
         // Lost updates between two simultaneous samplers only skip one sample: harmless.
         $stored  = get_option( 'nppp_traffic_samples', [] );
-        $samples = nppp_http_purge_traffic_next_samples( is_array( $stored ) ? $stored : [], $raw );
+        $samples = nppp_http_purge_traffic_next_samples( is_array( $stored ) ? $stored : [], $raw, $force_sample );
         update_option( 'nppp_traffic_samples', $samples, false );
     } else {
         $stored  = get_option( 'nppp_traffic_samples', [] );
@@ -734,6 +738,28 @@ function nppp_http_purge_traffic_stats( bool $fresh = false ): ?array {
     }
 
     return nppp_http_purge_traffic_summarize( $raw, $samples, nppp_http_purge_traffic_gaps() );
+}
+
+/**
+ * Take one sample right now, whatever the sampler cadence. Called when a Preload All cycle starts
+ * (before the cycle record exists, so the sample is clean) and when it ends (after the record is
+ * gone, so the sample is clean too). The interval sample -> cycle start is then organic and the
+ * cycle itself is exactly the left-out period. Without these two samples the cycle edges fall
+ * somewhere inside a sampler interval and the whole interval is discarded as "preload": with a
+ * sampler slower than the pause between two cycles (WP-Cron starved, dashboard-only sampling)
+ * no interval would ever stay clean and the card would wait for regular traffic forever.
+ * One GET with a 2 s timeout; a no-op while HTTP Purge or its status path is not configured.
+ *
+ * @return int A time at or after the stored sample's timestamp, 0 when no sample was taken. A cycle
+ *             start must not be earlier than it: the interval that ends in the start sample is
+ *             organic only while the cycle (the left-out period) begins at or after that sample.
+ */
+function nppp_http_purge_traffic_boundary(): int {
+    if ( ! nppp_http_purge_traffic_sampling_wanted() ) {
+        return 0;
+    }
+
+    return nppp_http_purge_traffic_stats( true, true ) === null ? 0 : time();
 }
 
 /**
