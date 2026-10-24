@@ -31,6 +31,8 @@ http-purge-test/run-purge-tests.sh --build --only matrix sync ambig   # first ru
 | --- | --- |
 | `run-purge-tests.sh` | Entry point: runs mock and/or matrix, builds nginx on demand, exits `1` on failure. |
 | `run.php` | Mock harness: stubbed WordPress functions, scripted HTTP answers. |
+| `gen-scan.php`, `gen-index.php`, `purged-all-deferred.php` | Further mock suites (generation-mode scans and index, deferred Purge All follow-up); run by the same entry point. |
+| `traffic-test.php` | Mock suite for the traffic hit ratio (sampling, restart detection, Preload All exclusion, dashboard card). |
 | `e2e.php` | Real-nginx scenarios (one per invocation). |
 | `matrix.sh` | Per scenario: configure nginx, run `e2e.php`, print `PASS` / `FAIL` / `SKIP`. |
 | `nginx.sh` | Writes `nginx.conf` for one mode, restarts nginx (and php-fpm), empties the cache. |
@@ -118,6 +120,19 @@ http-purge-test/run-purge-tests.sh --build --ng v25 --only matrix
 | Response timeout | A timed-out Purge All is waited out through the directory; a single-purge timeout is not. |
 | Preload gate | Plain crawl command byte-identical when nothing is pending; otherwise `( trap; poll; exec crawl )`, valid POSIX `sh`, 30 s / 900 s / 7200 s wait bounds. |
 | Persisted marker | Pending Purge All stored as a non-autoloaded option; survives the request and an object-cache flush; gates a later request's crawl; expires with the gate bounds; dropped once the queue is idle. Dead status endpoint still gates (shell gate gives up after 5 failed polls); expired, malformed or URL-less markers never gate. |
+
+### Traffic hit ratio (`traffic-test.php`)
+
+| Area | Pinned down |
+| --- | --- |
+| Preload exclusion | A 5000-page crawl (cold or warm) does not move the 24 h window off the organic ratio; flagged samples alone are enough, a crawl shorter than the sample spacing is caught by the finished-cycle mark; a running crawl with no organic data pauses the card instead of showing the polluted lifetime ratio. |
+| Restart detection | A changed namespace epoch drops the history even when the new counters are already higher; a counter that went down does too; an added namespace (reload) does not; `summarize()` and `series()` refuse to compare across epochs on their own. |
+| Regression | With no preload and no restart, window and series equal the v2.1.9 algorithm on 200 random timelines. |
+| Window gates | Edge values of the two gates that decide percentage vs. noise: 50 decided requests (49 is noise) and 300 s of counted intervals (299 s is not enough). |
+| Sample list | 9 min spacing, 24 h age, 170-entry cap, malformed entries, marker storage, `$force` boundary samples that still honour restart detection. |
+| Status reply | Namespace parsing (valid kept, malformed skipped, at most 16). |
+| Integration | `stats()`, the stored read (no request to Nginx), cycle start/end boundary samples, finished-cycle windows (cap, pruning, junk), sampler scheduling and self-healing, HTTP Purge off, no status path, endpoint down, slow status request. |
+| Dashboard card | Paused text, lifetime fallback, "preload excluded" label, empty summary. |
 
 ### Real-nginx scenarios
 
@@ -223,6 +238,7 @@ Part B, waiter dead (killed), WP-Cron alone:
 
 ```bash
 php http-purge-test/run.php includes/purge-http.php                    # mock
+php http-purge-test/traffic-test.php includes/purge-http.php           # traffic hit ratio (add -v to list every check)
 
 http-purge-test/build-nginx.sh releases/stable-4.0 http-purge-test/ng/nginx-run      # v4
 http-purge-test/build-nginx.sh releases/stable-3.0 http-purge-test/ng/nginx-run303   # v3.0
