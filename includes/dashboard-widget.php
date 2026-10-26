@@ -671,6 +671,27 @@ function nppp_traffic_level( float $ratio ): string {
 }
 
 /**
+ * Plain-text tooltip of one chart step or of the "now" marker (escape at the call site).
+ *
+ * @param float $pct      Interval hit ratio in percent.
+ * @param int   $requests HIT+MISS behind it, 0 when unknown.
+ * @param bool  $held     True when the level is only carried forward up to "now".
+ * @param int   $until    End of the measured interval (Unix time), 0 when unknown.
+ */
+function nppp_traffic_point_label( float $pct, int $requests, bool $held, int $until ): string {
+    $label = number_format_i18n( $pct, 1 ) . '%';
+    if ( $requests > 0 ) {
+        /* translators: %s: number of HIT+MISS requests behind a hit ratio. */
+        $label .= ' · ' . sprintf( _n( '%s request', '%s requests', $requests, 'fastcgi-cache-purge-and-preload-nginx' ), number_format_i18n( $requests ) );
+    }
+    if ( $held && $until > 0 ) {
+        /* translators: %s: time of day of the last measurement. */
+        $label .= ' · ' . sprintf( __( 'last measured %s, held until now', 'fastcgi-cache-purge-and-preload-nginx' ), wp_date( get_option( 'time_format' ), $until ) );
+    }
+    return $label;
+}
+
+/**
  * Trend chart of the traffic hit ratio as inline SVG (numbers only, nothing user supplied).
  *
  * Time axis is fitted to the data (oldest sampled interval .. now), one step per sampled
@@ -680,10 +701,17 @@ function nppp_traffic_level( float $ratio ): string {
  * next to it carry the level. The 70% reference is drawn only when it falls inside the axis.
  * Colours come from CSS classes (nppp-tl-good|fair|low), never from inline styles.
  *
- * @param array $series 'series' of nppp_http_purge_traffic_summarize().
+ * The headline figure is volume weighted (sum of HITs / sum of requests) while every step on the
+ * chart is one interval of equal weight, so the two can legitimately differ. $avg (the headline
+ * ratio, 0..1) is therefore drawn as a labelled line, which ties the chart to the number next to
+ * it. Each step and the "now" marker carry a tooltip with their request count; a hollow marker
+ * is the last measured level held up to "now", not a fresh measurement.
+ *
+ * @param array      $series 'series' of nppp_http_purge_traffic_summarize().
+ * @param float|null $avg    Headline ratio (0..1) of the same window, or null to omit the average line.
  * @return array{html:string,lo:float,hi:float,span:int}|null Null with fewer than 2 decided intervals.
  */
-function nppp_traffic_chart( array $series ): ?array {
+function nppp_traffic_chart( array $series, ?float $avg = null ): ?array {
     $w   = 220;
     $h   = 64;
     $pad = 5;
@@ -718,7 +746,13 @@ function nppp_traffic_chart( array $series ): ?array {
         if ( $x2 - $x1 < 0.5 ) {
             continue;
         }
-        $iv[] = [ $x1, $x2, max( 0.0, min( 100.0, (float) $p['ratio'] * 100 ) ) ];
+        $iv[] = [
+            $x1,
+            $x2,
+            max( 0.0, min( 100.0, (float) $p['ratio'] * 100 ) ),
+            (int) round( (float) ( $p['hits'] ?? 0 ) + (float) ( $p['misses'] ?? 0 ) ),
+            (int) $p['to'],
+        ];
     }
     if ( count( $iv ) < 2 ) {
         return null;
@@ -727,10 +761,11 @@ function nppp_traffic_chart( array $series ): ?array {
     $pcts = array_column( $iv, 2 );
     $lo   = (float) min( $pcts );
     $hi   = (float) max( $pcts );
+    $avgp = $avg !== null ? max( 0.0, min( 100.0, $avg * 100 ) ) : null;
 
-    // Value axis: data range plus some air, at least 20 points tall, kept inside 0..100.
-    $dmin = max( 0.0, $lo - 8 );
-    $dmax = min( 100.0, $hi + 8 );
+    // Value axis: data range (and the average line) plus some air, at least 20 points tall, kept inside 0..100.
+    $dmin = max( 0.0, min( $lo, $avgp ?? $lo ) - 8 );
+    $dmax = min( 100.0, max( $hi, $avgp ?? $hi ) + 8 );
     if ( $dmax - $dmin < 20 ) {
         $dmin = min( max( 0.0, ( $dmin + $dmax ) / 2 - 10 ), 80.0 );
         $dmax = $dmin + 20;
@@ -759,9 +794,10 @@ function nppp_traffic_chart( array $series ): ?array {
                      . '" y1="' . $f( $prev[1] ) . '" y2="' . $f( $yy ) . '"/>';
         }
         $shapes .= '<line class="nppp-tl-' . $lvl . '" x1="' . $f( $s[0] ) . '" x2="' . $f( $s[1] )
-                 . '" y1="' . $f( $yy ) . '" y2="' . $f( $yy ) . '"/>';
+                 . '" y1="' . $f( $yy ) . '" y2="' . $f( $yy ) . '"><title>'
+                 . esc_html( nppp_traffic_point_label( $s[2], $s[3], false, $s[4] ) ) . '</title></line>';
 
-        $prev = [ $s[1], $yy, $lvl ];
+        $prev = [ $s[1], $yy, $lvl, $s[2], $s[3], $s[4] ];
     }
 
     // Marker on the right edge ("now"), coloured like the newest known interval.
@@ -772,20 +808,79 @@ function nppp_traffic_chart( array $series ): ?array {
                      . '" y1="' . $f( $prev[1] ) . '" y2="' . $f( $prev[1] ) . '"/>';
         }
         $dot = '<i class="nppp-traffic-dot' . ( $held ? ' nppp-traffic-held' : '' ) . ' nppp-tl-' . $prev[2]
+             . '" title="' . esc_attr( nppp_traffic_point_label( $prev[3], $prev[4], $held, $prev[5] ) )
              . '" style="top:' . $f( $prev[1] / $h * 100 ) . '%"></i>';
     }
 
     $has_ref   = ( $dmin <= 70 && $dmax >= 70 );
     $ref_line  = '';
     $ref_label = '';
-    if ( $has_ref ) {
-        $ry        = $y( 70.0 );
-        $ref_line  = '<line class="nppp-traffic-ref" x1="0" x2="' . $w . '" y1="' . $f( $ry ) . '" y2="' . $f( $ry ) . '"/>';
-        $ref_label = '<span class="nppp-traffic-reflabel" style="top:' . $f( $ry / $h * 100 ) . '%">70%</span>';
+    $ay        = $avgp !== null ? $y( $avgp ) : null;
+    $ry        = $has_ref ? $y( 70.0 ) : null;
+    $avg_lvl   = $avgp !== null ? nppp_traffic_level( $avgp / 100 ) : '';
+
+    if ( $ry !== null ) {
+        $ref_line = '<line class="nppp-traffic-ref" x1="0" x2="' . $w . '" y1="' . $f( $ry ) . '" y2="' . $f( $ry ) . '"/>';
+    }
+    if ( $ay !== null ) {
+        // Drawn after the reference line so it stays on top when both are close.
+        $ref_line .= '<line class="nppp-traffic-avg nppp-tl-' . $avg_lvl . '" x1="0" x2="' . $w
+                   . '" y1="' . $f( $ay ) . '" y2="' . $f( $ay ) . '"/>';
     }
 
+    // Gutter labels: keep both, always inside the chart. When the lines are closer than one
+    // label height, push the labels apart instead of dropping one.
+    $labels = [];
+    if ( $ry !== null ) {
+        $labels[] = [
+            'y'     => $ry,
+            'class' => 'nppp-traffic-reflabel',
+            'title' => '',
+            'text'  => '70%',
+        ];
+    }
+    if ( $ay !== null ) {
+        $labels[] = [
+            'y'     => $ay,
+            'class' => 'nppp-traffic-avglabel nppp-tl-' . $avg_lvl,
+            'title' => __( 'Average of the whole period, the same figure as the large percentage', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'text'  => number_format_i18n( $avgp ) . '%',
+        ];
+    }
+    $label_h      = 12.0;
+    $top_limit    = $label_h / 2;
+    $bottom_limit = $h - $label_h / 2;
+    foreach ( $labels as $i => $l ) {
+        $labels[ $i ]['y'] = max( $top_limit, min( $bottom_limit, $l['y'] ) );
+    }
+    if ( count( $labels ) === 2 ) {
+        usort( $labels, static function ( array $a, array $b ): int {
+            return $a['y'] <=> $b['y'];
+        } );
+        $dist = $labels[1]['y'] - $labels[0]['y'];
+        if ( $dist < $label_h ) {
+            $shift           = ( $label_h - $dist ) / 2;
+            $labels[0]['y'] -= $shift;
+            $labels[1]['y'] += $shift;
+            if ( $labels[0]['y'] < $top_limit ) {
+                $labels[1]['y'] += $top_limit - $labels[0]['y'];
+                $labels[0]['y']  = $top_limit;
+            }
+            if ( $labels[1]['y'] > $bottom_limit ) {
+                $labels[0]['y'] -= $labels[1]['y'] - $bottom_limit;
+                $labels[1]['y']  = $bottom_limit;
+            }
+        }
+    }
+    foreach ( $labels as $l ) {
+        $ref_label .= '<span class="' . esc_attr( $l['class'] ) . '"'
+                    . ( $l['title'] !== '' ? ' title="' . esc_attr( $l['title'] ) . '"' : '' )
+                    . ' style="top:' . $f( $l['y'] / $h * 100 ) . '%">' . esc_html( $l['text'] ) . '</span>';
+    }
+    $gutter = $ry !== null || $ay !== null;
+
     return [
-        'html' => '<div class="nppp-traffic-chart' . ( $has_ref ? ' nppp-traffic-hasref' : '' ) . '" aria-hidden="true">'
+        'html' => '<div class="nppp-traffic-chart' . ( $gutter ? ' nppp-traffic-hasref' : '' ) . '" aria-hidden="true">'
                 . '<svg viewBox="0 0 ' . $w . ' ' . $h . '" preserveAspectRatio="none">'
                 . $ref_line . $shapes . '</svg>' . $dot . $ref_label . '</div>',
         'lo'   => $lo,
@@ -836,7 +931,7 @@ function nppp_render_traffic_row( ?array $t ): string {
         if ( ! empty( $w['excluded'] ) ) {
             $scope .= ' &middot; ' . esc_html__( 'preload excluded', 'fastcgi-cache-purge-and-preload-nginx' );
         }
-        $chart  = nppp_traffic_chart( ( isset( $t['series'] ) && is_array( $t['series'] ) ) ? $t['series'] : [] );
+        $chart  = nppp_traffic_chart( ( isset( $t['series'] ) && is_array( $t['series'] ) ) ? $t['series'] : [], (float) $w['ratio'] );
     } elseif ( $t['ratio'] !== null && empty( $t['paused'] ) ) {
         $ratio  = $t['ratio'];
         $hits   = $t['hit'];
