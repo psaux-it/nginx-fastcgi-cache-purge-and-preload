@@ -512,8 +512,8 @@ add_filter('rest_pre_dispatch', function($result, $server, $request) {
     if (!is_null($result)) return $result;
 
     $route = $request->get_route();
-    if (strpos($route, '/wc/') !== 0 &&
-        strpos($route, '/wp/v2/') !== 0) return $result;
+    if (stripos($route, '/wc/') !== 0 &&
+        stripos($route, '/wp/v2/') !== 0) return $result;
 
     // Only load bootstrap for content-modifying requests
     $method = $request->get_method();
