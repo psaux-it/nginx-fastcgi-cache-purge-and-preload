@@ -2862,6 +2862,32 @@ function nppp_http_purge_try_first( string $url ) {
 }
 
 /**
+ * True when the URL path contains a "." or ".." segment, in any encoding a client or nginx
+ * would resolve before location matching.
+ *
+ * The purge URL is built as <origin>/<single purge path><page path>. libcurl collapses a raw
+ * "/../" on the client side, and nginx decodes "%2e%2e" / "..%2f" and normalizes the decoded
+ * URI before it picks a location. Either way "<single purge path>/../<other>" ends up in a
+ * DIFFERENT nginx location than the one this plugin meant to call (Purge All endpoint,
+ * localhost-only status/admin locations), sent from the server itself so IP ACLs pass.
+ * Decodes repeatedly and fails closed if the value keeps changing.
+ */
+function nppp_http_purge_path_has_dot_segment( string $path ): bool {
+    $p = $path;
+    for ( $i = 0; $i < 4; $i++ ) {
+        if ( preg_match( '#(?:^|[/\x5c])\.{1,2}(?:[/\x5c]|$)#', $p ) ) {
+            return true;
+        }
+        $d = rawurldecode( $p );
+        if ( $d === $p ) {
+            return false;
+        }
+        $p = $d;
+    }
+    return true;
+}
+
+/**
  * The single purge itself; see nppp_http_purge_try_first() for the contract.
  */
 function nppp_http_purge_try_first_core( string $url ) {
@@ -2902,6 +2928,17 @@ function nppp_http_purge_try_first_core( string $url ) {
 
     if ( preg_match( '/[\x00-\x20\x7F]/', $path . $query ) ) {
         return false; // control characters or whitespace: never put those on the wire
+    }
+
+    // Dot-segments would let the page path climb out of the single purge location and hit
+    // another nginx location of the same origin (Purge All endpoint, localhost-only locations).
+    if ( nppp_http_purge_path_has_dot_segment( $path ) ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: %s: page URL */
+            __( 'INFO HTTP PURGE SINGLE: Skipped %s because its path contains dot-segments (. or ..). Using the filesystem purge instead.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            nppp_http_purge_log_page( $url )
+        ), true, false );
+        return false;
     }
 
     if ( nppp_http_purge_is_wildcard_url( $url ) ) {
