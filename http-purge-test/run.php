@@ -239,8 +239,6 @@ foreach ( [
     'non-ascii path'     => "https://example.com/caf\xC3\xA9/",
     'non-ascii query'    => "https://example.com/p/?q=caf\xC3\xA9",
     'double slash'       => 'https://example.com/a//b/',
-    'dot segment'        => 'https://example.com/a/../b/',
-    'single dot'         => 'https://example.com/a/./b/',
 ] as $label => $url ) {
     foreach ( [ [ 412, '' ], [ 200, 'no_match' ] ] as [ $st, $cd ] ) {
         t_reset();
@@ -901,8 +899,6 @@ foreach ( [
     'non-ascii path'     => "https://example.com/caf\xC3\xA9/",
     'non-ascii query'    => "https://example.com/p/?q=caf\xC3\xA9",
     'double slash'       => 'https://example.com/a//b/',
-    'dot segment'        => 'https://example.com/a/../b/',
-    'single dot'         => 'https://example.com/a/./b/',
     'backslash'          => 'https://example.com/a\\b/',
 ] as $label => $url ) {
     foreach ( [ [ 200, 'purged' ], [ 204, 'purged' ], [ 200, 'invalidated' ], [ 200, '' ] ] as [ $st, $cd ] ) {
@@ -936,6 +932,65 @@ nppp_http_purge_try_first( 'https://example.com/a//b/' );
 is_( $seen, [ false, 'repeated slashes' ], 'trust_purged filter receives the default and the reason' );
 is_( nppp_http_purge_key_ambiguity_reason( 'https://www.example.com/a/' ), '', 'ambiguity is about the key only: host/scheme are handled elsewhere' );
 is_( nppp_http_purge_untrusted_miss_reason( 'https://example.com/a//b/' ), 'repeated slashes', 'miss reason still reports the ambiguity first' );
+
+/* Dot segments (security(http-purge) 04b0c9b): a "." / ".." segment lets the page path climb out of the single purge
+ * location (libcurl collapses a raw "/../", nginx decodes %2e%2e / ..%2f and normalizes the URI), so the request would
+ * land on ANOTHER location of the same origin (Purge All, localhost-only locations). The single purge is skipped BEFORE
+ * any request: nothing is sent, nothing is learned or locked, one log-only info notice, the filesystem layers purge. */
+$dot_urls = [
+    'dot segment'               => 'https://example.com/a/../b/',
+    'single dot'                => 'https://example.com/a/./b/',
+    'leading dot segment'       => 'https://example.com/../b/',
+    'trailing dot segment'      => 'https://example.com/a/..',
+    'trailing single dot'       => 'https://example.com/a/.',
+    'encoded dots'              => 'https://example.com/a/%2e%2e/b/',
+    'upper-case encoded dots'   => 'https://example.com/a/%2E%2E/b/',
+    'dots + encoded slash'      => 'https://example.com/a/..%2fb/',
+    'encoded slash + dots'      => 'https://example.com/a%2f..%2fb/',
+    'double encoded dots'       => 'https://example.com/a/%252e%252e/b/',
+    'backslash separator'       => 'https://example.com/a/..\\b/',
+    'encoded backslash'         => 'https://example.com/a/..%5cb/',
+];
+foreach ( $dot_urls as $label => $dot_url ) {
+    foreach ( [ [ 200, 'purged' ], [ 200, 'invalidated' ], [ 412, '' ] ] as [ $st, $cd ] ) {
+        t_reset();
+        $dot_filter_called = false;
+        t_filter( 'nppp_http_purge_url', function ( $u ) use ( &$dot_filter_called ) { $dot_filter_called = true; return $u; } );
+        Q( R( $st, $cd ) );
+        is_( nppp_http_purge_try_first( $dot_url ), false, "dot segments ($label, $st $cd) -> false so the filesystem layers purge the page" );
+        is_( nreq(), 0, "dot segments ($label, $st $cd): nothing is sent to nginx" );
+        is_( $dot_filter_called, false, "dot segments ($label, $st $cd): nppp_http_purge_url filter is not consulted" );
+        is_( locks_keys(), [], "dot segments ($label, $st $cd): no lock" );
+        is_( nppp_http_purge_state()['ns'] ?? [], [], "dot segments ($label, $st $cd): generation mode not learned" );
+        ok( count( $GLOBALS['T']['notices'] ) === 1
+            && $GLOBALS['T']['notices'][0][0] === 'info'
+            && notice_has( 'dot-segments' )
+            && all_log_only(), "dot segments ($label, $st $cd): exactly one log-only info notice" );
+    }
+}
+
+/* the helper itself: harmless paths pass, every spelling of . / .. is caught, an endlessly re-encoded value fails closed */
+foreach ( [ '/', '/a/b/', '/a.b/', '/a/b.c/', '/a/.hidden/', '/a/..b/', '/a/b../', '/a/.../', '/.well-known/acme/', '/caf%C3%A9/', '/100%25/', '/a%2Fb/', '/a/%41/', '/a//b/' ] as $dot_path ) {
+    is_( nppp_http_purge_path_has_dot_segment( $dot_path ), false, "dot-segment helper: harmless path $dot_path" );
+}
+foreach ( [ '/..', '/.', '/a/..', '/a/.', '/a/../b/', '/a/./b/', '\\..\\', '/a\\..\\b/', '/%2e%2e', '/%2e/', '/a/%2E%2E/b/', '/a/..%2fb/', '/a%2f..%2fb/', '/a/%252e%252e/b/', '/a/..%5cb/' ] as $dot_path ) {
+    is_( nppp_http_purge_path_has_dot_segment( $dot_path ), true, "dot-segment helper: caught $dot_path" );
+}
+$dot_deep = '/a/%41/';
+for ( $i = 0; $i < 6; $i++ ) { $dot_deep = str_replace( '%', '%25', $dot_deep ); }
+is_( nppp_http_purge_path_has_dot_segment( $dot_deep ), true, 'dot-segment helper: a value that keeps changing after four decode rounds fails closed' );
+
+/* nothing else changes: dots in a segment name or only in the query are not path dot-segments */
+t_reset(); Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( 'https://example.com/a/?x=../b' ), true, 'dots only in the query are not a path dot-segment: purged -> true' );
+is_( nreq(), 1, 'dots only in the query: request sent' );
+t_reset(); Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( 'https://example.com/a/b..c/.hidden/' ), true, 'dots inside a segment name are fine: purged -> true' );
+is_( nreq(), 1, 'dots inside a segment name: request sent' );
+
+/* the ambiguity reasons stay (public reason API, trust_* filters, Purge All and wildcard paths use them) */
+is_( nppp_http_purge_key_ambiguity_reason( 'https://example.com/a/../b/' ), 'dot segments', 'dot segments still count as key ambiguity' );
+is_( nppp_http_purge_untrusted_miss_reason( 'https://example.com/a/./b/' ), 'dot segments', 'miss reason still reports dot segments' );
 
 /* Purge All response timeout: waited for like a 202 (directory proof) */
 $D = mkcache( 3 ); sleep( 2 );
