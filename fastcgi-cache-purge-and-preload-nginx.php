@@ -379,7 +379,7 @@ function nppp_mask_ip( string $raw ): string {
 // ---------------------------------------------------------------------------
 add_action('rest_api_init', function (): void {
     $rest_route = $GLOBALS['wp']->query_vars['rest_route'] ?? '';
-    if (strpos($rest_route, 'nppp_nginx_cache') === false) {
+    if (stripos($rest_route, 'nppp_nginx_cache') === false) {
         return;
     }
 
@@ -679,7 +679,7 @@ add_action('rest_api_init', function (): void {
         return;
     }
 
-    if ( ! preg_match( '#^/nppp_f2b/v1/event/?$#i', $nppp_ep10_route ) ) {
+    if ( ! preg_match( '#^/nppp_f2b/v1/event$#i', untrailingslashit( $nppp_ep10_route ) ) ) {
         return;
     }
 
