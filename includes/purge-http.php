@@ -702,7 +702,7 @@ function nppp_http_purge_traffic_series( array $now, array $samples, int $min = 
  * @param array $samples Stored list of {ts,hit,miss[,pl,ns]}, oldest first.
  * @param int   $min     Minimum decided requests per emitted point.
  * @param array $gaps    Finished preload cycles, see nppp_http_purge_traffic_gaps().
- * @return array<int,array{from:int,to:int,ratio:?float,preload?:bool}>
+ * @return array<int,array{from:int,to:int,ratio:?float,preload?:bool,hits?:float,misses?:float}>
  */
 function nppp_http_purge_traffic_series_merged( array $now, array $samples, int $min = 5, array $gaps = [] ): array {
     $points = nppp_http_purge_traffic_points( $now, $samples );
@@ -737,9 +737,11 @@ function nppp_http_purge_traffic_series_merged( array $now, array $samples, int 
             continue;
         }
         if ( ( $dh + $dm ) >= $min ) {
-            $row['ratio'] = $dh / ( $dh + $dm );
-            $series[]     = $row;
-            $anchor       = null;
+            $row['ratio']  = $dh / ( $dh + $dm );
+            $row['hits']   = $dh;
+            $row['misses'] = $dm;
+            $series[]      = $row;
+            $anchor        = null;
         }
     }
 
