@@ -207,10 +207,19 @@ function nppp_is_internal_url(string $url): bool {
     $ref_base  = $strip_www($ref_host);
     $home_base = $strip_www($home_host);
 
-    // (optional) require same port if home_url() includes one
+    // Port must match. When home_url() has no explicit port (the usual case) the old check
+    // accepted ANY port on the site host (https://example.com:6379/), so the preload wget
+    // could be pointed at arbitrary services listening on the site's own address.
+    // Without a home port only the scheme default (or no port) is accepted.
     $home_port = $home['port'] ?? null;
     $ref_port  = $ref['port']  ?? null;
-    $port_ok   = ($home_port === null) || ((string)$home_port === (string)$ref_port);
+    if ($home_port !== null) {
+        $port_ok = ($ref_port !== null) && ((int) $home_port === (int) $ref_port);
+    } else {
+        $port_ok = ($ref_port === null)
+            || ($scheme === 'https' && (int) $ref_port === 443)
+            || ($scheme === 'http'  && (int) $ref_port === 80);
+    }
 
     return ($ref_base === $home_base) && $port_ok;
 }
