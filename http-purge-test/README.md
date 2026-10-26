@@ -110,10 +110,11 @@ http-purge-test/run-purge-tests.sh --build --ng v25 --only matrix
 | Success bodies | v4 `Cache-Purge-Code` (header or JSON body); v2/v3 `200` bodies in html/json/xml/text. A page merely containing `Key:` or an empty/foreign `200` is not a purge. |
 | Method learning | Foreign `200` or `405` with `Allow: PURGE` is retried once with `PURGE`; working method remembered per scope (single, all) and dropped when it stops working. |
 | Misses | `412`, `200`/`204 no_match` → `'miss'`, only for unambiguous URLs on the same host and scheme. |
-| Ambiguous URLs | Percent-encoding, non-ASCII, `//`, dot segments, backslashes are never trusted (nginx decodes `$1` and may have deleted a different entry). Overridable via `nppp_http_purge_trust_miss` / `trust_purged`. |
+| Ambiguous URLs | Percent-encoding, non-ASCII, `//`, backslashes are never trusted (nginx decodes `$1` and may have deleted a different entry). Overridable via `nppp_http_purge_trust_miss` / `trust_purged`. Dot segments are stricter, see *Dot segments*. |
 | Locks | Which answer arms which lock (`single`, `all`, `*`) and for how long (15 min unreachable, 1 h config fault, 5 min transient module error); `400`, `429`, `delete_failed`, `scan_failed` and read timeouts arm none; locks never block the other scope. |
 | Config issues | `key_mismatch`, `cache_unavailable` remembered for a day, shown as a settings notice, cleared by the next good answer. |
 | URL guards | Wildcards (`*`, `%2A`), control chars, no host, host ≠ `Host` header, `nppp_http_purge_url` filter. |
+| Dot segments | A `.` / `..` path segment (raw, `%2e`, `..%2f`, double-encoded, `\` separator; a value that keeps changing after four decode rounds fails closed) would let the request leave the single purge location (libcurl collapses `/../`, nginx normalizes the decoded URI). The single purge is skipped before any request: nothing sent, `nppp_http_purge_url` not consulted, no lock, no generation mode learned, one log-only `info` notice; the filesystem layers purge the page. Dots inside a segment name (`/b..c/`, `/.hidden/`) or only in the query are unaffected. |
 | Transport | Read timeout (nginx alive: no lock) vs connect failure (locks `*`); exceptions contained. |
 | Purge All and 202 | Baseline status poll, wait for two idle samples, failure on exhausted retries or rising file errors, wait capped by the lock TTL, `$pending` hand-off when the queue is still busy. |
 | Directory proof | Cache scanner, `200` cross-check against leftover old files, best effort without a status endpoint. |
