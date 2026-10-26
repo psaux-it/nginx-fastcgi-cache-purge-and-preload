@@ -453,7 +453,7 @@
     display: flex;
     flex-direction: column;
     gap: 9px;
-    padding: 12px 14px 14px;
+    padding: 12px 12px 14px;
     margin: 0 0 8px;
     background: #fafafa;
     border-top: 1px solid #e0e0e0;
@@ -570,13 +570,13 @@
 .nppp-traffic-split {
     display: flex;
     flex-wrap: wrap;
-    gap: 14px;
+    gap: 10px;
     align-items: stretch;
 }
 
 .nppp-traffic-left {
     flex: 0 0 auto;
-    min-width: 112px;
+    min-width: 0;
 }
 
 .nppp-traffic-pct {
@@ -619,7 +619,7 @@
 /* Trend chart */
 .nppp-traffic-right {
     display: flex;
-    flex: 1 1 150px;
+    flex: 1 1 140px;
     flex-direction: column;
     gap: 4px;
     min-width: 0;
@@ -666,11 +666,11 @@
 
 /* Room on the right for the "70%" reference label (only when the line is drawn) */
 .nppp-traffic-hasref svg {
-    width: calc(100% - 28px);
+    width: calc(100% - 24px);
 }
 
 .nppp-traffic-hasref .nppp-traffic-dot {
-    right: 24px;
+    right: 20px;
 }
 
 .nppp-traffic-reflabel {
