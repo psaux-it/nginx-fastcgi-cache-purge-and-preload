@@ -666,11 +666,26 @@
 
 /* Room on the right for the "70%" reference label (only when the line is drawn) */
 .nppp-traffic-hasref svg {
-    width: calc(100% - 24px);
+    width: calc(100% - 28px);
 }
 
 .nppp-traffic-hasref .nppp-traffic-dot {
-    right: 20px;
+    right: 24px;
+}
+
+.nppp-traffic-chart line.nppp-traffic-avg {
+    stroke-width: 1.25;
+    opacity: 0.85;
+}
+
+.nppp-traffic-avglabel {
+    position: absolute;
+    right: 0;
+    margin-top: -6px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 12px;
+    cursor: help;
 }
 
 .nppp-traffic-reflabel {
