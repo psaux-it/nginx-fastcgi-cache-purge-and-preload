@@ -1759,7 +1759,10 @@ function nppp_http_purge_classify( string $scope, array $res ): string {
  * says something about the key nginx built, not about the page's own entry:
  *   - a "miss" does not mean "the page is not cached";
  *   - a "purged" does not mean "the page is gone" (/p/%41/ deletes /p/A/).
- * A percent sign in the QUERY is not ambiguous: $args is passed through raw.
+ * A percent sign in the QUERY is ambiguous too: nginx passes $args through raw, but the
+ * HTTP API rewrites the query before it is sent (WordPress' bundled Requests upper-cases
+ * hex, %d9 -> %D9, and decodes unreserved escapes, %41 -> A), so the key nginx builds is
+ * no longer the page's own key.
  */
 function nppp_http_purge_key_ambiguity_reason( string $url ): string {
     $path  = (string) wp_parse_url( $url, PHP_URL_PATH );
@@ -1767,6 +1770,9 @@ function nppp_http_purge_key_ambiguity_reason( string $url ): string {
 
     if ( strpos( $path, '%' ) !== false ) {
         return 'percent-encoded path';
+    }
+    if ( strpos( $query, '%' ) !== false ) {
+        return 'percent-encoded query';
     }
     if ( preg_match( '/[^\x20-\x7E]/', $path . $query ) ) {
         return 'non-ASCII characters';

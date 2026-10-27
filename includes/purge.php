@@ -126,6 +126,72 @@ function nppp_purge_get_index(): array {
 }
 
 /**
+ * Canonical spelling of a cache key (host + request URI).
+ *
+ * nginx keys the cache on the raw $request_uri, so ONE page can be cached under several
+ * file names: WordPress permalinks and term links use lower-case hex (%d9) while its search
+ * links use upper-case (%D9); wget (the plugin's own preload) always sends upper-case unless the
+ * safexec shim is told otherwise; a link a visitor clicks is sent as written; and some clients
+ * send raw UTF-8 bytes. All of these are the same page. This maps every spelling to one form:
+ * raw bytes >= 0x80 become %XX and escape hex is upper-cased.
+ */
+function nppp_purge_canon_key( string $key ): string {
+    $key = preg_replace_callback(
+        '/[\x80-\xFF]/',
+        static fn( array $m ): string => sprintf( '%%%02X', ord( $m[0] ) ),
+        $key
+    );
+    return preg_replace_callback(
+        '/%[0-9a-f]{2}/i',
+        static fn( array $m ): string => strtoupper( $m[0] ),
+        (string) $key
+    );
+}
+
+/**
+ * True when $key can be cached under more than one spelling: an escape with a hex letter
+ * (%d9 / %D9) or an escape >= 0x80 (also sent as a raw byte). %20, %41 ... have only one.
+ */
+function nppp_purge_key_has_spellings( string $key ): bool {
+    return (bool) preg_match( '/%(?:[89A-Fa-f][0-9A-Fa-f]|[0-7][A-Fa-f])/', $key );
+}
+
+/**
+ * Canonical key => pending key, built once per scan so every cache file is matched with
+ * one array lookup (no extra pass over the cache).
+ */
+function nppp_purge_canon_map( array $pending ): array {
+    $map = [];
+    foreach ( array_keys( $pending ) as $k ) {
+        $k = (string) $k;
+        $map[ nppp_purge_canon_key( $k ) ] ??= $k;
+    }
+    return $map;
+}
+
+/**
+ * ripgrep (--no-unicode) alternative for one pending key that matches every spelling:
+ * %[Dd]9 for hex case, and (?:%[Dd]9|\xD9) for escapes >= 0x80 (raw byte).
+ */
+function nppp_purge_key_rg_alt( string $key ): string {
+    $out = '';
+    foreach ( preg_split( '/(%[0-9A-Fa-f]{2})/', $key, -1, PREG_SPLIT_DELIM_CAPTURE ) as $i => $part ) {
+        if ( $i % 2 === 0 ) {
+            $out .= preg_quote( $part, '/' );
+            continue;
+        }
+        $hex  = strtoupper( substr( $part, 1 ) );
+        $esc  = '%' . preg_replace_callback(
+            '/[A-F]/',
+            static fn( array $m ): string => '[' . $m[0] . strtolower( $m[0] ) . ']',
+            $hex
+        );
+        $out .= hexdec( $hex ) >= 0x80 ? '(?:' . $esc . '|\\x' . $hex . ')' : $esc;
+    }
+    return $out;
+}
+
+/**
  * Validate inputs, acquire lock, and build the unified targets map.
  *
  * $ctx['targets'] is an immutable snapshot of all URLs to process (primary + related).
@@ -562,6 +628,23 @@ function nppp_purge_fp2_index( array &$ctx ): bool {
             continue;
         }
 
+        // A key with several spellings (%d9 / %D9 / raw UTF-8) is not settled by the index:
+        // it only knows the spellings a scan has already seen, so an unseen one would stay
+        // cached while this layer reports success. FP3/FP4 match every spelling.
+        // Filter: return false to restore index trust (exact key only, as before).
+        if ( nppp_purge_key_has_spellings( (string) $key )
+            && (bool) apply_filters( 'nppp_fp2_skip_spelling_keys', true, (string) $key )
+        ) {
+            if ( $target['is_primary'] ) {
+                nppp_display_admin_notice( 'info', sprintf(
+                    /* translators: %s: Page URL that is percent-encoded */
+                    __( 'INFO INDEX SKIPPED: %s is percent-encoded and may be cached under several spellings (%%d9, %%D9, raw UTF-8). Running full recursive scan (RG - PHP Iterative)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $target['decoded']
+                ), true, false );
+            }
+            continue;
+        }
+
         if ( ! isset( $index[ $key ] ) ) {
             if ( $target['is_primary'] ) {
                 nppp_display_admin_notice( 'info', sprintf(
@@ -810,8 +893,9 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         }
     }
 
+    // Every spelling of every pending key (hex case, raw UTF-8); PHP re-checks each hit below.
     $url_alts = implode( '|', array_map(
-        fn( string $u ): string => preg_quote( $u, '/' ) . '(?:[[:space:]]|$)',
+        fn( string $u ): string => nppp_purge_key_rg_alt( $u ) . '(?:[[:space:]]|$)',
         array_keys( $ctx['pending'] )
     ) );
 
@@ -862,6 +946,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
     $regex        = $ctx['regex'];
     $regex_tested = false;
     $candidates   = [];
+    $canon_map    = nppp_purge_canon_map( $ctx['pending'] );
 
     foreach ( array_filter( $out, 'strlen' ) as $raw_line ) {
         $raw_line = trim( $raw_line );
@@ -890,7 +975,8 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
                 nppp_purge_post_purge( $ctx );
                 return 'error';
             }
-            if ( ! filter_var( 'https://' . trim( $rx[1] ) . trim( $rx[2] ), FILTER_VALIDATE_URL ) ) {
+            // Canonical form: a raw UTF-8 key is valid for nginx but not a "valid URL" for PHP.
+            if ( ! filter_var( 'https://' . nppp_purge_canon_key( trim( $rx[1] ) . trim( $rx[2] ) ), FILTER_VALIDATE_URL ) ) {
                 nppp_display_admin_notice( 'error', sprintf(
                     /* translators: %s: Page URL */
                     __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>$host$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -906,8 +992,9 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
             }
         }
 
-        $constructed = trim( $rx[1] ) . trim( $rx[2] );
-        if ( ! isset( $ctx['pending'][ $constructed ] ) ) {
+        // Same page, any spelling: resolve to the pending key (see nppp_purge_canon_key()).
+        $constructed = $canon_map[ nppp_purge_canon_key( trim( $rx[1] ) . trim( $rx[2] ) ) ] ?? null;
+        if ( $constructed === null ) {
             continue;
         }
 
@@ -1055,6 +1142,7 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
     // Validated once per key shape: a legacy key (scheme+method+host+uri) and a generation key
     // (p4:<ns>:<epoch>:<gen>:<logical key>) can sit in the same cache dir.
     $regex_tested    = [ 'legacy' => false, 'p4' => false ];
+    $canon_map       = nppp_purge_canon_map( $ctx['pending'] );
 
     try {
         $iterator = new RecursiveIteratorIterator(
@@ -1102,7 +1190,8 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
                     nppp_purge_post_purge( $ctx );
                     return 'error';
                 }
-                if ( ! filter_var( 'https://' . trim( $matches[1] ) . trim( $matches[2] ), FILTER_VALIDATE_URL ) ) {
+                // Canonical form: a raw UTF-8 key is valid for nginx but not a "valid URL" for PHP.
+                if ( ! filter_var( 'https://' . nppp_purge_canon_key( trim( $matches[1] ) . trim( $matches[2] ) ), FILTER_VALIDATE_URL ) ) {
                     nppp_display_admin_notice( 'error', sprintf(
                         /* translators: %s: Page URL */
                         __( 'ERROR REGEX: Nginx cache purge failed for page %s, please check the <strong>Cache Key Regex</strong> option in the plugin <strong>Advanced options</strong> section and ensure the <strong>regex</strong> is parsing <strong>$host$request_uri</strong> portion correctly.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1119,8 +1208,9 @@ function nppp_purge_fp4_scan( array &$ctx ): string {
                 }
             }
 
-            $constructed = trim( $matches[1] ) . trim( $matches[2] );
-            if ( ! isset( $ctx['pending'][ $constructed ] ) ) {
+            // Same page, any spelling: resolve to the pending key (see nppp_purge_canon_key()).
+            $constructed = $canon_map[ nppp_purge_canon_key( trim( $matches[1] ) . trim( $matches[2] ) ) ] ?? null;
+            if ( $constructed === null ) {
                 continue;
             }
 

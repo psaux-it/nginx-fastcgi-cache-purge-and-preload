@@ -47,6 +47,20 @@ function nppp_display_human_url( $url, $force_scheme = null ) {
 }
 
 /**
+ * Raw bytes >= 0x80 in a cache key (a client that sends UTF-8 unencoded) become %XX.
+ * nginx stores such a key as-is, but FILTER_VALIDATE_URL rejects it: the row vanished from the
+ * list, and if that file was scanned first the whole list failed with a false ERROR REGEX.
+ * Hex case of existing escapes is left untouched.
+ */
+function nppp_adv_encode_raw_bytes( string $s ): string {
+    return preg_replace_callback(
+        '/[\x80-\xFF]/',
+        static fn( array $m ): string => sprintf( '%%%02X', ord( $m[0] ) ),
+        $s
+    ) ?? $s;
+}
+
+/**
  * Matching key that ignores encoding differences:
  * - scheme normalized to current site scheme
  * - host lowercased
@@ -1527,7 +1541,7 @@ function nppp_extract_cached_urls_rg(
                     ),
                 ];
             }
-            if ( filter_var( 'https://' . trim( $m[1] ) . trim( $m[2] ), FILTER_VALIDATE_URL ) === false ) {
+            if ( filter_var( 'https://' . trim( $m[1] ) . nppp_adv_encode_raw_bytes( trim( $m[2] ) ), FILTER_VALIDATE_URL ) === false ) {
                 return [
                     'error' => sprintf(
                         /* translators: 1: Cache Key Regex option name. 2: Advanced Options section name. */
@@ -1547,7 +1561,7 @@ function nppp_extract_cached_urls_rg(
 
         // Build URL
         $host        = trim( $m[1] );
-        $request_uri = trim( $m[2] );
+        $request_uri = nppp_adv_encode_raw_bytes( trim( $m[2] ) );
         $url_encoded = $scheme . '://' . $host . $request_uri;
 
         if ( filter_var( $url_encoded, FILTER_VALIDATE_URL ) === false ) {
@@ -1791,7 +1805,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
                 if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                     // Build the URL
                     $host = trim($matches[1]);
-                    $request_uri = trim($matches[2]);
+                    $request_uri = nppp_adv_encode_raw_bytes( trim($matches[2]) );
                     $constructed_url = $host . $request_uri;
 
                     // Test parsed URL via regex with FILTER_VALIDATE_URL
@@ -1827,7 +1841,7 @@ function nppp_extract_cached_urls($wp_filesystem, $nginx_cache_path) {
             if (preg_match($regex, $content, $matches) && isset($matches[1], $matches[2])) {
                 // Build the URL
                 $host = trim($matches[1]);
-                $request_uri = trim($matches[2]);
+                $request_uri = nppp_adv_encode_raw_bytes( trim($matches[2]) );
 
                 // Keep the encoded URI for internal consistency
                 $constructed_url_encoded = $host . $request_uri;
