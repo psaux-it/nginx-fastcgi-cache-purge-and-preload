@@ -94,13 +94,19 @@ document.addEventListener('DOMContentLoaded', function() {
         npppFrontToast(window.nppp_front_data.message, window.nppp_front_data.type, 5000);
     }
 
-    var url = new URL(window.location.href);
-    if (url.searchParams.has('nppp_front') || url.searchParams.has('redirect_nonce')) {
-        url.searchParams.delete('nppp_front');
-        url.searchParams.delete('redirect_nonce');
-
-        if (window.history.replaceState) {
-            window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
+    // Remove only our two args and keep every other byte of the query as-is.
+    // URLSearchParams.delete() re-serializes the query (%20 -> +, x[] -> x%5B%5D) and would rewrite the URL
+    // to a different cache key on reload.
+    var nppp_pairs = window.location.search ? window.location.search.slice(1).split('&') : [];
+    var nppp_kept = [];
+    nppp_pairs.forEach(function(pair) {
+        var name = pair.split('=')[0];
+        try { name = decodeURIComponent(name); } catch (e) {}
+        if (name !== 'nppp_front' && name !== 'redirect_nonce') {
+            nppp_kept.push(pair);
         }
+    });
+    if (nppp_kept.length !== nppp_pairs.length && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname + (nppp_kept.length ? '?' + nppp_kept.join('&') : '') + window.location.hash);
     }
 });
