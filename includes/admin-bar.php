@@ -26,6 +26,40 @@ function nppp_idna_host(string $host): string {
     return $host;
 }
 
+// Remove OUR transient args (nppp_front, redirect_nonce) from a URL without touching any other byte.
+// remove_query_arg() re-parses and rebuilds the query string (%20 -> +, a=&b -> a&b, x[] -> x%5B0%5D,
+// a.b -> a_b), so the result no longer equals nginx's $request_uri and the purge misses the cache file.
+function nppp_strip_front_args(string $url): string {
+    $original = $url;
+    $qpos     = strpos($url, '?');
+    if ($qpos === false) {
+        return $url;
+    }
+    $frag = '';
+    $hpos = strpos($url, '#');
+    if ($hpos !== false && $hpos > $qpos) {
+        $frag = substr($url, $hpos);
+        $url  = substr($url, 0, $hpos);
+    }
+    $base    = substr($url, 0, $qpos);
+    $query   = substr($url, $qpos + 1);
+    $keep    = array();
+    $removed = false;
+    foreach (explode('&', $query) as $pair) {
+        $name = rawurldecode(explode('=', $pair, 2)[0]);
+        if ($name === 'nppp_front' || $name === 'redirect_nonce') {
+            $removed = true;
+            continue;
+        }
+        $keep[] = $pair;
+    }
+    if (!$removed) {
+        return $original; // nothing of ours in there: hand the URL back untouched
+    }
+    $query = implode('&', $keep);
+    return $base . ($query !== '' ? '?' . $query : '') . $frag;
+}
+
 // Build the exact URL the browser is on (percent-encoded path preserved)
 function nppp_get_current_front_url() {
     $scheme = is_ssl() ? 'https' : 'http';
@@ -42,7 +76,7 @@ function nppp_get_current_front_url() {
         : '/';
 
     // Keep the raw path/query but strip our own args
-    $req = remove_query_arg(array('nppp_front', 'redirect_nonce'), $req);
+    $req = nppp_strip_front_args($req);
 
     // Normalize leading slash only
     $req = '/' . ltrim( $req, '/' );
@@ -188,7 +222,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
                 'id'     => 'purge-cache-single',
                 'title'  => __( 'Purge This Page', 'fastcgi-cache-purge-and-preload-nginx' ),
                 'href'   => wp_nonce_url(
-                    add_query_arg( 'from', $from_url, admin_url('admin.php?action=nppp_purge_cache_single') ),
+                    add_query_arg( 'from', rawurlencode( $from_url ), admin_url('admin.php?action=nppp_purge_cache_single') ),
                     'purge_cache_nonce'
                 ),
             ));
@@ -199,7 +233,7 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
                 'id'     => 'preload-cache-single',
                 'title'  => __( 'Preload This Page', 'fastcgi-cache-purge-and-preload-nginx' ),
                 'href'   => wp_nonce_url(
-                    add_query_arg( 'from', $from_url, admin_url('admin.php?action=nppp_preload_cache_single') ),
+                    add_query_arg( 'from', rawurlencode( $from_url ), admin_url('admin.php?action=nppp_preload_cache_single') ),
                     'preload_cache_nonce'
                 ),
             ));
@@ -366,7 +400,7 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         }
 
         // Now that it’s decoded, strip our transient args if present
-        $candidate_raw = remove_query_arg(array('nppp_front','redirect_nonce'), $candidate_raw);
+        $candidate_raw = nppp_strip_front_args($candidate_raw);
         $front_target = $candidate_raw;
 
         // 3) Only encode path if it has non-ASCII; otherwise keep EXACTLY as supplied
