@@ -249,7 +249,18 @@ foreach ( [
 }
 t_reset();
 Q( R( 200, 'no_match' ) );
-is_( nppp_http_purge_try_first( 'https://example.com/a/?x=%41' ), 'miss', 'percent only in query is not ambiguous (raw $args)' );
+is_( nppp_http_purge_try_first( 'https://example.com/a/?x=%41' ), false, 'percent in query is ambiguous (HTTP client rewrites %41 -> A): miss -> false so disk decides' );
+/* query characters the HTTP client rewrites (cat[]=3 -> cat%5B%5D=3) are ambiguous too */
+foreach ( [ 'brackets' => '?cat[]=3', 'pipe' => '?a|b=1', 'braces' => '?f={x}', 'caret' => '?q=a^b', 'backtick' => '?q=a`b', 'quote' => '?q=a"b', 'lt-gt' => '?q=<a>', 'backslash' => '?q=a\\b' ] as $label => $qs ) {
+    t_reset(); Q( R( 200, 'no_match' ) );
+    is_( nppp_http_purge_try_first( 'https://example.com/a/' . $qs ), false, "query $label is rewritten by the client: miss -> false" );
+    is_( nppp_http_purge_key_ambiguity_reason( 'https://example.com/a/' . $qs ), 'query characters rewritten by the HTTP client', "query $label: ambiguity reason" );
+}
+/* plain queries keep the fast path */
+foreach ( [ '?page=2&sort=price', '?utm_source=a.b-c_d~e&ref=x+y', '?a=b;c=d&e=!$\'()*,:@/?' ] as $qs ) {
+    t_reset(); Q( R( 200, 'no_match' ) );
+    is_( nppp_http_purge_try_first( 'https://example.com/a/' . $qs ), 'miss', "plain query $qs stays trusted" );
+}
 t_reset();
 t_filter( 'nppp_http_purge_trust_miss', fn( $trust, $url, $why ) => false );
 Q( R( 412 ) );
@@ -917,7 +928,9 @@ foreach ( [
     }
 }
 t_reset(); Q( R( 200, 'purged' ) );
-is_( nppp_http_purge_try_first( 'https://example.com/a/?x=%41' ), true, 'percent only in the query is not ambiguous (raw $args): purged -> true' );
+is_( nppp_http_purge_try_first( 'https://example.com/a/?x=%41' ), false, 'percent in the query is ambiguous (HTTP client rewrites %41 -> A): purged -> false' );
+t_reset(); Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( 'https://example.com/shop/?cat[]=3' ), false, 'query brackets are rewritten by the client: purged -> false' );
 t_reset(); Q( R( 200, 'purged' ) );
 is_( nppp_http_purge_try_first( 'https://example.com/plain/path/?a=1&b=2' ), true, 'plain url: purged -> true' );
 t_reset(); Q( R( 200, 'invalidated' ) );
