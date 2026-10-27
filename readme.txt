@@ -342,9 +342,10 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Fixed: The Fail2Ban enrichment worker no longer needs the PHP CLI binary's directory in open_basedir; the binary is now verified by running it instead of with is_file()/is_executable().
 * Fixed: "Purge/Preload This Page" now targets the exact page URL; pages with multiple query parameters or percent-encoded slugs were reported as "not currently found in cache".
 * Fixed: The redirect and address-bar cleanup after a single-page Purge/Preload no longer rewrite the query string (%20 to +, repeated parameters, []), so the next click hits the same cache key.
+* Fixed: Purge now successfully removes all spellings of percent-encoded or raw UTF-8 cache keys (lower-case hex, upper-case hex, and raw bytes) instead of leaving silent stale files or triggering false "ERROR REGEX" warnings.
 * Security: HTTP Purge now skips single-page URLs whose path contains dot-segments ("..", "%2e%2e"), which could reach other locations of the same origin such as Purge All.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All. Existing sites with Preload Related Pages ON and Auto Preload OFF will start preloading related pages on auto-purge.
-* Changed: With ngx_cache_purge v4 generation mode and a Purge Queue Status Path set, Status and Advanced tabs now use the namespace state from the status endpoint to leave out cache files Nginx has already invalidated (after Purge All or a full restart) but not yet deleted. Without the status path or on older/no modules nothing changes.
+* Perf: Optimized ripgrep prefiltering and canonical key generation (`canon_key`) in FP3/FP4 scans to prevent multi-spelling regex slowdowns on percent-encoded slugs.
 * Tested: Tested with Nginx (1.31.6), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0) and aaPanel (8.0.6).
 
 = 2.1.8 (2026-09-25) =
