@@ -110,11 +110,11 @@ function nppp_render_mobile_fab(): void {
         $preload_url = $setup_url;
     } else {
         $purge_url = wp_nonce_url(
-            add_query_arg('from', $from_url, admin_url('admin.php?action=nppp_purge_cache_single')),
+            add_query_arg('from', rawurlencode($from_url), admin_url('admin.php?action=nppp_purge_cache_single')),
             'purge_cache_nonce'
         );
         $preload_url = wp_nonce_url(
-            add_query_arg('from', $from_url, admin_url('admin.php?action=nppp_preload_cache_single')),
+            add_query_arg('from', rawurlencode($from_url), admin_url('admin.php?action=nppp_preload_cache_single')),
             'preload_cache_nonce'
         );
     }
