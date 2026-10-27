@@ -136,16 +136,31 @@ function nppp_purge_get_index(): array {
  * raw bytes >= 0x80 become %XX and escape hex is upper-cased.
  */
 function nppp_purge_canon_key( string $key ): string {
-    $key = preg_replace_callback(
-        '/[\x80-\xFF]/',
-        static fn( array $m ): string => sprintf( '%%%02X', ord( $m[0] ) ),
-        $key
-    );
-    return preg_replace_callback(
-        '/%[0-9a-f]{2}/i',
-        static fn( array $m ): string => strtoupper( $m[0] ),
-        (string) $key
-    );
+    // Every ASCII page without an escape or a raw byte is already canonical.
+    if ( ! preg_match( '/[%\x80-\xFF]/', $key ) ) {
+        return $key;
+    }
+
+    // One strtr() pass over a 356-entry table (every %xx spelling with a lower-case hex
+    // letter => upper case, every raw byte >= 0x80 => %XX): about 3x faster than two
+    // preg_replace_callback() passes on a percent-encoded key, and this runs once per cache file.
+    static $tbl = null;
+    if ( $tbl === null ) {
+        $tbl = [];
+        for ( $i = 0; $i < 256; $i++ ) {
+            $u = sprintf( '%02X', $i );
+            $l = strtolower( $u );
+            foreach ( [ $l[0] . $u[1], $u[0] . $l[1], $l ] as $v ) {
+                if ( $v !== $u ) {
+                    $tbl[ '%' . $v ] = '%' . $u;
+                }
+            }
+            if ( $i >= 0x80 ) {
+                $tbl[ chr( $i ) ] = '%' . $u;
+            }
+        }
+    }
+    return strtr( $key, $tbl );
 }
 
 /**
@@ -903,7 +918,7 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         '%s%s -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config --no-heading %s %s',
         $rg_cmd_prefix,
         escapeshellarg( $rg_bin ),
-        escapeshellarg( '^KEY: .*(' . $url_alts . ')' ),
+        escapeshellarg( 'KEY: .*(' . $url_alts . ')' ),
         escapeshellarg( $rg_scan_path )
     );
 
@@ -962,6 +977,12 @@ function nppp_purge_fp3_rg( array &$ctx ): string {
         $filepath = trim( $parts[0] );
         $key_line = trim( $parts[1] );
         if ( $filepath === '' || $key_line === '' ) {
+            continue;
+        }
+
+        // Pattern is not line-anchored (an anchor makes rg lose its literal prefilter): drop any
+        // line where "KEY: " is not the line start.
+        if ( strncmp( $key_line, 'KEY:', 4 ) !== 0 ) {
             continue;
         }
 
