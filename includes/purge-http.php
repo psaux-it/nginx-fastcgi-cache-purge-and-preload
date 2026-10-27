@@ -5,113 +5,16 @@
  *              Supports single URL purge and full cache purge (purge all) via
  *              dedicated nginx location blocks, and falls back to the filesystem
  *              workflow whenever HTTP cannot prove the work is finished.
+ *
  * Version: 2.1.8
  * Author: Hasan CALISIR
  * Author Email: hasan.calisir@psauxit.com
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  *
- * Module Credit & Repository:
+ * Module Credit:
  *   This plugin utilizes the denji's ngx_cache_purge module fork.
  *   Official GitHub Repository: https://github.com/nginx-modules/ngx_cache_purge
- *
- * Module compatibility (one code path, no version switch):
- *   - ngx_cache_purge 2.3           single purge.
- *   - ngx_cache_purge 2.5.x / 3.0.x single purge + purge_all. On 2.5.x the Purge All
- *                                   location also needs fastcgi_pass, otherwise nginx
- *                                   answers 404 and the plugin silently falls back.
- *   - ngx_cache_purge 4.x           reads the "Cache-Purge-Code" response header
- *                                   (the module's own result catalog). When the
- *                                   header is absent the HTTP status table of
- *                                   v2/v3 is used, so older modules keep working.
- *
- * -------------------------------------------------------------------------------
- * Public API
- * -------------------------------------------------------------------------------
- * nppp_http_purge_try_first( $url )  returns  true | 'miss' | false
- *   true   — the entry is gone: v2/v3 "200", v4 "purged" or "invalidated", AND the
- *            URL is unambiguous (nginx and the cache file build the same key).
- *   'miss' — nginx says the URL is not cached (v2.5/v3 "412", v4 "200 no_match")
- *            AND the URL is unambiguous, so the filesystem scan may be skipped.
- *   false  — everything else, including a "purged" for an ambiguous URL (nginx may
- *            have deleted a different entry than the real one); the caller continues
- *            with index / rg / scan.
- *
- * nppp_http_purge_all()              returns  true | false
- *   true   — nginx finished the full purge (200 purged / no_match / invalidated),
- *            or a "202 accepted" background job was PROVEN finished, or a request
- *            that TIMED OUT was waited out until nginx had removed every old file: the queue
- *            status endpoint (cache_purge_queue_status) showed the queue idle
- *            twice in a row without new cleanup errors; without a status endpoint
- *            it is best effort (no cache file older than the purge is left, plus
- *            a short grace period for nginx to finish its pass).
- *   false  — fall back to the filesystem purge. After a 202 or a response timeout
- *            this is only returned AFTER waiting (see nppp_http_purge_all()), so the
- *            sweep and the preload that follow do not start while nginx is still
- *            deleting.
- *            A caller that passes the optional by-reference $pending argument gets one
- *            more outcome: a 202 whose queue is verifiably still working after the wait
- *            budget returns false with $pending filled instead. The caller must then
- *            NOT run the filesystem purge (nginx is already deleting; a second sweep
- *            only races it) and must hold the preload back until the queue is idle:
- *            nppp_http_purge_gate_command() does that inside the spawned shell, so the
- *            user's request is never blocked for the long tail.
- *
- * -------------------------------------------------------------------------------
- * What changed versus the v3.0.3-era implementation
- * -------------------------------------------------------------------------------
- *   - v4 contract: 412/404 no longer exist for a miss ("200 no_match"), every
- *     module answer carries Cache-Purge-Code, "cache_purge_response_type none"
- *     answers 204, wrong method answers 405 with an Allow header.
- *   - A "miss" is only trusted when nginx and the cache file agree on the key.
- *     nginx builds $1 from the DECODED uri while the cache key uses the raw
- *     $request_uri, so "%xx", non-ASCII, "//" and dot-segments are ambiguous.
- *   - A 200 that does not come from the module (a location that falls through
- *     to the site itself) is no longer reported as "purged".
- *   - A single-URL problem (400/414) no longer disables HTTP Purge for the site.
- *   - Locks are scoped: "single", "all" (separate nginx locations, separate
- *     allow lists) and "*" (connection level). They live in the same transient
- *     as before so status.php / uninstall.php keep clearing them.
- *   - PHP's execution limit is only ever raised, never lowered, so the
- *     filesystem fallback keeps the set_time_limit(0) that purge.php set.
- *   - Connection timeout is separate from the response timeout, so a firewall
- *     that drops packets costs seconds, not the whole 30 s Purge All budget.
- *   - Responses are capped at 16 KB.
- *   - 202 accepted (cache_purge_background_queue on) is WAITED for before the
- *     caller sweeps or preloads. The plugin cannot know that the queue is on, and
- *     measured: a preload that starts while the nginx walk is still queued loses
- *     pages to it. Proof = queue status endpoint when configured, else the cache
- *     directory (files whose ctime predates the purge are gone) + grace period.
- *   - A finished Purge All (200 purged / no_match) is cross-checked against the
- *     plugin's own cache path: files older than the purge still there means nginx
- *     purged another zone or a delete failed silently, so the filesystem purge
- *     still runs. Skipped for "invalidated" (files legitimately remain).
- *   - A URL whose host differs from the Host header the plugin sends (www alias,
- *     multisite domain) is never sent: nginx would purge the HOME host's key and
- *     the plugin would report success while the real entry stays cached.
- *   - A miss is only trusted for GET requests whose host and scheme match the
- *     real URL; an exception inside the transport counts as "unreachable".
- *   - A 202 from the SINGLE endpoint means it is bound to a wildcard / purge_all
- *     location (exact keys never answer 202): locked, instead of wiping the whole
- *     cache on every single purge.
- *   - A "purged" / "invalidated" for an AMBIGUOUS single URL is no longer a success.
- *     nginx decodes $1, so purging /p/%41/ deletes /p/A/ and answers 200 while the
- *     real entry stays HIT. Only the decode-ambiguous shapes count (percent-encoded
- *     path, non-ASCII, "//", dot segments, backslash); the index / filesystem layers
- *     purge those. Filter: nppp_http_purge_trust_purged.
- *   - A Purge All whose request TIMES OUT is waited for like a 202: the synchronous
- *     walk is still running inside nginx, and falling back at once let the sweep and
- *     the preload race it. Proof = the cache directory (a synchronous walk is not part
- *     of the queue status). Unproven -> false (filesystem purge).
- *
- * -------------------------------------------------------------------------------
- * Known limitation (Vary)
- * -------------------------------------------------------------------------------
- *   ngx_cache_purge 3.0 with cache_purge_vary_aware on answers 412 when the REQUESTED
- *   variant is not cached, without cleaning the variants that are. The plugin trusts
- *   that 412 as "miss", so stale variants can stay cached. The documented NPP config
- *   uses fastcgi_ignore_headers Vary, so only setups that honour Vary are affected;
- *   for them use the nppp_http_purge_trust_miss filter (return false) or Purge All.
  *
  * -------------------------------------------------------------------------------
  * Filters
@@ -1771,11 +1674,11 @@ function nppp_http_purge_key_ambiguity_reason( string $url ): string {
     if ( strpos( $path, '%' ) !== false ) {
         return 'percent-encoded path';
     }
-    if ( strpos( $query, '%' ) !== false ) {
-        return 'percent-encoded query';
-    }
     if ( preg_match( '/[^\x20-\x7E]/', $path . $query ) ) {
         return 'non-ASCII characters';
+    }
+    if ( preg_match( '/[^A-Za-z0-9\-._~!$&\'()*+,;=:@\/?]/', $query ) ) {
+        return 'query characters rewritten by the HTTP client';
     }
     if ( strpos( $path, '//' ) !== false ) {
         return 'repeated slashes';
