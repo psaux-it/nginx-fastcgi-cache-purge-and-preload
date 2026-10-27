@@ -60,6 +60,39 @@ function nppp_strip_front_args(string $url): string {
     return $base . ($query !== '' ? '?' . $query : '') . $frag;
 }
 
+// Append OUR transient args (nppp_front, redirect_nonce) to a URL without touching any other byte.
+// add_query_arg() re-parses and re-encodes the whole query (%20 -> +, %d9 -> %D9, a=1&a=2 -> a=2, x[] -> x%5B0%5D),
+// so the page the admin lands on is a different URL than the one nginx keyed the cache on.
+function nppp_append_front_args(string $url, array $args): string {
+    $url  = nppp_strip_front_args($url); // never duplicate our own args
+    $frag = '';
+    $hpos = strpos($url, '#');
+    if ($hpos !== false) {
+        $frag = substr($url, $hpos);
+        $url  = substr($url, 0, $hpos);
+    }
+    $add = array();
+    foreach ($args as $k => $v) {
+        $add[] = rawurlencode((string) $k) . '=' . rawurlencode((string) $v);
+    }
+    if (strpos($url, '?') === false) {
+        $sep = '?';
+    } else {
+        $last = substr($url, -1);
+        $sep  = ($last === '?' || $last === '&') ? '' : '&';
+    }
+    $result = $url . $sep . implode('&', $add) . $frag;
+
+    // wp_safe_redirect() runs wp_sanitize_redirect(), which silently DELETES ASCII chars outside its
+    // allow-list (| $ ' " { } ^ ...), e.g. ?q=a|b would arrive as ?q=ab (different content). Percent-encode
+    // those so they survive; every char the sanitizer already accepts (incl. existing %XX) is left untouched.
+    $encoded = preg_replace_callback('/[^a-z0-9\-~+_.?#=&;,\/:%!*\[\]()@\x80-\xff]/i', static function ($m) {
+        return sprintf('%%%02X', ord($m[0]));
+    }, $result);
+
+    return $encoded === null ? $result : $encoded; // preg_* returns null on error; never break the redirect
+}
+
 // Build the exact URL the browser is on (percent-encoded path preserved)
 function nppp_get_current_front_url() {
     $scheme = is_ssl() ? 'https' : 'http';
@@ -155,7 +188,7 @@ function nppp_front_error_notice(string $msg, ?string $target_url = null, string
     $nonce = wp_create_nonce('nppp_redirect_nonce');
     set_transient($key, array('message' => $msg, 'type' => $type), 60);
 
-    $redirect_url = add_query_arg(['nppp_front' => $key, 'redirect_nonce' => $nonce], $safe);
+    $redirect_url = nppp_append_front_args($safe, ['nppp_front' => $key, 'redirect_nonce' => $nonce]);
     wp_safe_redirect($redirect_url);
     exit;
 }
@@ -510,12 +543,12 @@ function nppp_handle_fastcgi_cache_actions_admin_bar() {
         ), 60);
 
         // Add nonce as a query parameter
-        $redirect_url = add_query_arg(
+        $redirect_url = nppp_append_front_args(
+            $current_page_url,
             array(
                 'nppp_front' => $status_message_transient_key,
                 'redirect_nonce' => $nonce_redirect,
-            ),
-            $current_page_url
+            )
         );
     } else {
         // Redirect to the settings page with the status message and message type as query parameters
