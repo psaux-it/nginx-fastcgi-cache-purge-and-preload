@@ -86,14 +86,6 @@ function nppp_render_mobile_fab(): void {
         return;
     }
 
-    // Gate: bail inside wp-admin even if is_admin() somehow missed it.
-    if (isset($_SERVER['REQUEST_URI'])) {
-        $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
-        if (strpos($request_uri, 'wp-admin') !== false) {
-            return;
-        }
-    }
-
     // Determine whether initial setup is still pending.
     $nppp_setup_loaded = class_exists('\\NPPP\\Setup');
     $needs_setup = $nppp_setup_loaded && \NPPP\Setup::nppp_needs_setup();
