@@ -243,10 +243,8 @@ function nppp_add_fastcgi_cache_buttons_admin_bar($wp_admin_bar) {
 
     // Add single "Purge" and "Preload" admin-bar parent menus for front-end
     if (isset($_SERVER['REQUEST_URI']) && !empty($_SERVER['REQUEST_URI'])) {
-        $request_uri = sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI']));
-
-        // Check if the URI does not contain 'wp-admin'
-        if (!$needs_setup && strpos($request_uri, 'wp-admin') === false) {
+        // Front-end only. is_admin() is authoritative
+        if (!$needs_setup && !is_admin()) {
             $from_url = nppp_get_current_front_url();
 
             // Purge This Page
