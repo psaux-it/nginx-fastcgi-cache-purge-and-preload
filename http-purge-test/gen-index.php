@@ -128,6 +128,8 @@ $HELPERS = [];
 foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_gen_mode_seen', 'nppp_gen_mode_active', 'nppp_index_merge_hits' ] as $fn ) { $HELPERS[ $fn ] = load_fn( "$INC/advanced.php", $fn, true ); }
 foreach ( [ 'nppp_purge_live_index_paths' ] as $fn ) { $HELPERS[ $fn ] = load_fn( "$INC/purge.php", $fn, true ); }
 foreach ( [ 'nppp_purge_fp1_index_file_exists', 'nppp_purge_fp1_http', 'nppp_purge_fp2_index', 'nppp_purge_fp4_scan', 'nppp_purge_flush_write_back', 'nppp_purge_post_purge' ] as $fn ) { load_fn( "$INC/purge.php", $fn ); }
+// Spelling helpers (16c0031d, 8efc87fb): FP2 skips multi-spelling keys, FP3/FP4 match through the canonical key.
+foreach ( [ 'nppp_purge_canon_key', 'nppp_purge_key_has_spellings', 'nppp_purge_canon_map', 'nppp_purge_key_rg_alt' ] as $fn ) { load_fn( "$INC/purge.php", $fn ); }
 foreach ( [ 'nppp_head_fast', 'nppp_read_head' ] as $fn ) { load_fn( "$INC/wp-filesystem.php", $fn ); }
 $RX = ( include "$INC/preload-defaults.php" )['cache_key_regex'];
 

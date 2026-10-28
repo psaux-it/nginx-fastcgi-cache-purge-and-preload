@@ -32,6 +32,7 @@ http-purge-test/run-purge-tests.sh --build --only matrix sync ambig   # first ru
 | `run-purge-tests.sh` | Entry point: runs mock and/or matrix, builds nginx on demand, exits `1` on failure. |
 | `run.php` | Mock harness: stubbed WordPress functions, scripted HTTP answers. |
 | `gen-scan.php`, `gen-index.php`, `purged-all-deferred.php` | Further mock suites (generation-mode scans and index, deferred Purge All follow-up); run by the same entry point. |
+| `spelling-test.php` | Mock suite for keys cached under several spellings (`%d9` / `%D9` / raw UTF-8): canonical key, FP2 skip, FP3 (rg) and FP4 (PHP scan) purge every spelling, rg command keeps its literal prefilter. |
 | `traffic-test.php` | Mock suite for the traffic hit ratio (sampling, restart detection, Preload All exclusion, dashboard card). |
 | `e2e.php` | Real-nginx scenarios (one per invocation). |
 | `matrix.sh` | Per scenario: configure nginx, run `e2e.php`, print `PASS` / `FAIL` / `SKIP`. |

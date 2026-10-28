@@ -98,7 +98,11 @@ function __( $s, $d = '' ) { return $s; }
 function esc_html__( $s, $d = '' ) { return $s; }
 function esc_attr__( $s, $d = '' ) { return $s; }
 function esc_html( $s ) { return htmlspecialchars( (string) $s, ENT_QUOTES ); }
+function esc_attr( $s ) { return htmlspecialchars( (string) $s, ENT_QUOTES ); }
 function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, $d, '.', ',' ); }
+// 37e7bc53: chart tooltips (nppp_traffic_point_label) use _n(), wp_date() and the time_format option.
+function _n( $single, $plural, $n, $d = '' ) { return (int) $n === 1 ? $single : $plural; }
+function wp_date( $format, $ts = null, $tz = null ) { return gmdate( $format, $ts ?? time() ); }
 
 require_once $INC . '/state.php';
 require_once $PURGE;

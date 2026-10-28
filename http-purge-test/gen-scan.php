@@ -94,6 +94,8 @@ function load_fn( string $file, string $fn, bool $optional = false ): void {
 }
 foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_annotate_variant_counts', 'nppp_extract_cached_urls',
             'nppp_extract_cached_urls_rg' ] as $fn ) { load_fn( "$INC/advanced.php", $fn ); }
+// Called by both extractors (16c0031d): raw UTF-8 bytes in a key become %XX before FILTER_VALIDATE_URL.
+load_fn( "$INC/advanced.php", 'nppp_adv_encode_raw_bytes' );
 // Helpers that nppp_drop_stale_generations() calls: absent on the unpatched plugin, in which case only the legacy behaviour is checked.
 // nppp_gen_mode_note_seen() comes from the Gen Index patch and is needed once the two patch sets are merged.
 foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_generation_count_live' ] as $fn ) { load_fn( "$INC/advanced.php", $fn, true ); }
