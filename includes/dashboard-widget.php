@@ -115,86 +115,30 @@ function nppp_check_preload_status_widget() {
     return false;
 }
 
-// Show Next Run: Scheduled event in widget
-function nppp_get_active_cron_events_widget() {
-    // Get all scheduled events
+// Next scheduled preload run in the site timezone, null when none is scheduled
+function nppp_get_next_cron_run_widget() {
     $events = _get_cron_array();
-
-    // npp plugin's schedule event hook name
     $plugin_hook = 'npp_cache_preload_event';
-
-    // Initialize a flag to track if events are found
-    $has_events = false;
-
-    // Get the WordPress timezone string
     $timezone_string = wp_timezone_string();
 
-    // Check if there are any scheduled events for npp
-    if (!empty($events) && !empty($timezone_string)) {
-        // Loop through each scheduled event
-        foreach ($events as $timestamp => $cron) {
-            foreach ($cron as $hook => $args) {
-                // Check if the hook matches the npp's hook name
-                if ($hook === $plugin_hook) {
-                    // Set the flag to indicate that events are found
-                    $has_events = true;
+    if (empty($events) || !is_array($events) || empty($timezone_string)) {
+        return null;
+    }
 
-                    // Convert the timestamp to a DateTime object
-                    $next_run_datetime = new DateTime('@' . $timestamp);
-
-                    // Set the timezone to the WordPress timezone
-                    $next_run_datetime->setTimezone(new DateTimeZone(wp_timezone_string()));
-
-                    // Format the DateTime object
-                    $next_run_formatted = $next_run_datetime->format('Y-m-d H:i:s');
-
-                    // Format the scheduled event information
-                    echo '<div class="nppp-scheduled-event">';
-                        echo '<div class="nppp-cron-info">';
-                            echo '<td style="padding: 6px 15px; width: 75%;">';
-                                echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
-                                echo '<span class="nppp-next-run">' . sprintf(
-                                    /* translators: %s: formatted next run time */
-                                    esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                                    '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($next_run_formatted) . '</strong>'
-                                ) . '</span>';
-                            echo '</td>';
-                            echo '<td style="padding: 6px 15px; text-align: center;">';
-                                echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;"></span>';
-                            echo '</td>';
-                        echo '</div>';
-                    echo '</div>';
-
-                    // Exit the inner loop
-                    break;
-                }
-            }
-
-            // Exit the outer loop
-            if ($has_events) {
-                break;
+    // Events are ordered by timestamp, the first match is the next run
+    foreach ($events as $timestamp => $cron) {
+        if (is_array($cron) && isset($cron[$plugin_hook])) {
+            try {
+                $next_run = new DateTime('@' . $timestamp);
+                $next_run->setTimezone(new DateTimeZone($timezone_string));
+                return $next_run->format('Y-m-d H:i:s');
+            } catch (Exception $e) {
+                return null;
             }
         }
     }
 
-    // If no matching event was found
-    if (!$has_events) {
-        echo '<div class="nppp-scheduled-event">';
-            echo '<div class="nppp-cron-info">';
-                echo '<td style="padding: 6px 15px; width: 75%;">';
-                    echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
-                    echo '<span class="nppp-next-run">' . sprintf(
-                        /* translators: %s: formatted next run time */
-                        esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                        '<strong style="color: #2196f3; font-size: 12px;">' . esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
-                    ) . '</span>';
-                echo '</td>';
-                echo '<td style="padding: 6px 15px; text-align: center;">';
-                    echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;"></span>';
-                echo '</td>';
-            echo '</div>';
-        echo '</div>';
-    }
+    return null;
 }
 
 // NPP dashboard widget content
@@ -518,115 +462,139 @@ function nppp_dashboard_widget() {
            . ( function_exists( 'nppp_http_purge_traffic_stats_stored' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats_stored() ) : '' )
            . '</div>';
 
-        // Output the main NPP pluging settings statuses
-        echo '<table style="width: 100%; border-collapse: collapse;">';
-            foreach ($statuses as $key => $status_info) {
-                $status = $status_info['status'];
-                $icon = $status_info['icon'];
+        // Build one tile per option. States: on (green), off (red),
+        // na (gray, lock) and wait (amber, configured but no activity seen yet).
+        $nppp_count_on    = 0;
+        $nppp_count_off   = 0;
+        $nppp_count_other = 0;
+        $nppp_tiles_html  = '';
+        $nppp_strip_html  = '';
 
-                // Determine the Dashicon and color based on status
-                // Four possible states: Enabled (green), Disabled (red),
-                // Unavailable (gray + lock), Waiting (amber + clock — set up
-                // but no activity observed yet, e.g. Fail2Ban before its
-                // first event).
-                $is_unavailable = ! empty($status_info['unavailable']);
-                $is_waiting     = ! empty($status_info['waiting']);
-                if ($is_unavailable) {
-                    $status_icon  = 'dashicons-lock';
-                    $status_color = '#999999';
-                } elseif ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
-                    $status_icon  = 'dashicons-yes-alt';
-                    $status_color = '#5cb85c';
-                } elseif ($is_waiting) {
-                    $status_icon  = 'dashicons-clock';
-                    $status_color = '#f0ad4e';
-                } else {
-                    $status_icon  = 'dashicons-dismiss';
-                    $status_color = '#d9534f';
-                }
+        foreach ($statuses as $key => $status_info) {
+            $status = $status_info['status'];
 
-                echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
-                    echo '<td style="padding: 8px 15px; color: #555; font-weight: 500; width: 60%;">';
-                        echo '<span class="dashicons ' . esc_attr( $icon ) . '" style="font-size: 18px; margin-right: 8px;"></span>';
-                        echo esc_html($status_info['label']);
-                    echo '</td>';
-                    echo '<td style="padding: 8px 15px; text-align: center; font-size: 16px;">';
-                        echo '<span class="dashicons ' . esc_attr( $status_icon ) . '" style="color: ' . esc_attr( $status_color ) . '; font-size: 18px;"></span>';
-                    echo '</td>';
-                echo '</tr>';
-
-                // Show the HTTP Purge mode Nginx was last seen answering in: under "HTTP Purge"
-                if ($key === 'http_purge' && $status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
-                    $nppp_http_mode = function_exists('nppp_http_purge_observed_mode') ? nppp_http_purge_observed_mode() : null;
-                    if ($nppp_http_mode !== null) {
-                        $nppp_http_mode_label = nppp_http_purge_mode_label($nppp_http_mode['mode']);
-                        $nppp_http_mode_tip   = sprintf(
-                            /* translators: 1: "Purge All" or "single URL purge", 2: human readable time difference, e.g. "3 mins" */
-                            __('Observed on %1$s, %2$s ago', 'fastcgi-cache-purge-and-preload-nginx'),
-                            $nppp_http_mode['scope'] === 'all'
-                                ? __('Purge All', 'fastcgi-cache-purge-and-preload-nginx')
-                                : __('single URL purge', 'fastcgi-cache-purge-and-preload-nginx'),
-                            human_time_diff($nppp_http_mode['at'], time())
-                        );
-                    } else {
-                        $nppp_http_mode_label = __('Not detected yet', 'fastcgi-cache-purge-and-preload-nginx');
-                        $nppp_http_mode_tip   = __('The mode is detected from the next HTTP purge answer of Nginx.', 'fastcgi-cache-purge-and-preload-nginx');
-                    }
-
-                    echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
-                        echo '<td style="padding: 6px 15px; width: 75%;" title="' . esc_attr($nppp_http_mode_tip) . '">';
-                            echo '<div class="nppp-http-purge-mode">';
-                                echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
-                                echo '<span>' . sprintf(
-                                    /* translators: %s: HTTP Purge mode (Sync, Async Background Queue, Invalidation) */
-                                    esc_html__('Mode: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                                    '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($nppp_http_mode_label) . '</strong>'
-                                ) . '</span>';
-                            echo '</div>';
-                        echo '</td>';
-                        echo '<td style="padding: 6px 15px; text-align: center;">';
-                            echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;" title="' . esc_attr($nppp_http_mode_tip) . '"></span>';
-                        echo '</td>';
-                    echo '</tr>';
-                }
-
-                // Show Last Run: under "Auto Preload"
-                if ($key === 'auto_preload') {
-                    if ($last_preload_complete_date) {
-                        echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
-                            echo '<td style="padding: 6px 15px; width: 75%;">';
-                                // Format the Preload Last complete date
-                                echo '<div class="nppp-preload-complete-date">';
-                                    echo '<div class="nppp-preload-widget-info">';
-                                        // Use Dashicon for the right arrow icon
-                                        echo '<span class="dashicons dashicons-arrow-right-alt2" style="font-size: 18px; vertical-align: middle; margin-right: 8px;"></span>';
-
-                                        // Display the preload complete date
-                                        echo '<span class="nppp-preload-last-date">' . sprintf(
-                                            /* translators: %s: formatted preload last complete time */
-                                            esc_html__('Last Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
-                                            '<strong style="color: #2196f3; font-size: 12px;">' . esc_html($last_preload_complete_date) . '</strong>'
-                                            ) . '</span>';
-                                    echo '</div>';
-                                echo '</div>';
-                            echo '</td>';
-
-                            echo '<td style="padding: 6px 15px; text-align: center;">';
-                                echo '<span class="dashicons dashicons-info" style="font-size: 18px; color: orange;"></span>';
-                            echo '</td>';
-                        echo '</tr>';
-                    }
-                }
-
-                // Show Next Run: under "Scheduled Cache" if enabled
-                if ($key === 'scheduled_cache' && $status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
-                    echo '<tr style="border-bottom: 1px solid #f1f1f1;">';
-                        // Call the function to display the next scheduled event
-                        nppp_get_active_cron_events_widget();
-                    echo '</tr>';
-                }
+            if (!empty($status_info['unavailable'])) {
+                $state       = 'na';
+                $status_icon = 'dashicons-lock';
+            } elseif ($status === __('Enabled', 'fastcgi-cache-purge-and-preload-nginx')) {
+                $state       = 'on';
+                $status_icon = 'dashicons-yes-alt';
+            } elseif (!empty($status_info['waiting'])) {
+                $state       = 'wait';
+                $status_icon = 'dashicons-clock';
+            } else {
+                $state       = 'off';
+                $status_icon = 'dashicons-dismiss';
             }
-        echo '</table>';
+
+            if ($state === 'on') {
+                $nppp_count_on++;
+            } elseif ($state === 'off') {
+                $nppp_count_off++;
+            } else {
+                $nppp_count_other++;
+            }
+
+            // Secondary line (already escaped) and tooltip of the tile
+            $note = '';
+            $tip  = '';
+
+            // HTTP Purge: mode Nginx was last seen answering in
+            if ($key === 'http_purge' && $state === 'on') {
+                $nppp_http_mode = function_exists('nppp_http_purge_observed_mode') ? nppp_http_purge_observed_mode() : null;
+                if ($nppp_http_mode !== null) {
+                    $nppp_http_mode_label = nppp_http_purge_mode_label($nppp_http_mode['mode']);
+                    $tip = sprintf(
+                        /* translators: 1: "Purge All" or "single URL purge", 2: human readable time difference, e.g. "3 mins" */
+                        __('Observed on %1$s, %2$s ago', 'fastcgi-cache-purge-and-preload-nginx'),
+                        $nppp_http_mode['scope'] === 'all'
+                            ? __('Purge All', 'fastcgi-cache-purge-and-preload-nginx')
+                            : __('single URL purge', 'fastcgi-cache-purge-and-preload-nginx'),
+                        human_time_diff($nppp_http_mode['at'], time())
+                    );
+                } else {
+                    $nppp_http_mode_label = __('Not detected yet', 'fastcgi-cache-purge-and-preload-nginx');
+                    $tip = __('The mode is detected from the next HTTP purge answer of Nginx.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                $note = '<span class="nppp-setting-note">' . sprintf(
+                    /* translators: %s: HTTP Purge mode (Sync, Async Background Queue, Invalidation) */
+                    esc_html__('Mode: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    '<strong class="nppp-setting-val">' . esc_html($nppp_http_mode_label) . '</strong>'
+                ) . '</span>';
+            }
+
+            // Auto Preload: completion time of the last preload
+            if ($key === 'auto_preload' && $last_preload_complete_date) {
+                $note = '<span class="nppp-setting-note">' . sprintf(
+                    /* translators: %s: formatted preload last complete time */
+                    esc_html__('Last Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    '<strong class="nppp-setting-val">' . esc_html($last_preload_complete_date) . '</strong>'
+                ) . '</span>';
+            }
+
+            // Scheduled Cache: next scheduled preload
+            if ($key === 'scheduled_cache' && $state === 'on') {
+                $next_run = nppp_get_next_cron_run_widget();
+                $note = '<span class="nppp-setting-note">' . sprintf(
+                    /* translators: %s: formatted next run time */
+                    esc_html__('Next Run: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    '<strong class="nppp-setting-val">' . ($next_run !== null
+                        ? esc_html($next_run)
+                        : esc_html__('No event found', 'fastcgi-cache-purge-and-preload-nginx')) . '</strong>'
+                ) . '</span>';
+            }
+
+            $nppp_tiles_html .= '<div class="nppp-setting nppp-st-' . esc_attr($state) . '"'
+                . ($tip !== '' ? ' title="' . esc_attr($tip) . '"' : '') . '>'
+                . '<span class="dashicons ' . esc_attr($status_info['icon']) . ' nppp-setting-icon" aria-hidden="true"></span>'
+                . '<span class="nppp-setting-text">'
+                    . '<span class="nppp-setting-label">' . esc_html($status_info['label']) . '</span>'
+                    . $note
+                . '</span>'
+                . '<span class="dashicons ' . esc_attr($status_icon) . ' nppp-setting-state" aria-hidden="true" title="' . esc_attr($status) . '"></span>'
+                . '<span class="screen-reader-text">' . esc_html($status) . '</span>'
+                . '</div>';
+
+            $nppp_strip_html .= '<i class="nppp-seg nppp-st-' . esc_attr($state) . '" title="'
+                . esc_attr($status_info['label'] . ': ' . $status) . '"></i>';
+        }
+
+        // Summary line of the collapsed header
+        $nppp_summary = [
+            sprintf(
+                /* translators: %d: number of enabled options */
+                esc_html__('%d on', 'fastcgi-cache-purge-and-preload-nginx'),
+                $nppp_count_on
+            ),
+            sprintf(
+                /* translators: %d: number of disabled options */
+                esc_html__('%d off', 'fastcgi-cache-purge-and-preload-nginx'),
+                $nppp_count_off
+            ),
+        ];
+        if ($nppp_count_other > 0) {
+            $nppp_summary[] = '<span title="' . esc_attr__('Unavailable or waiting', 'fastcgi-cache-purge-and-preload-nginx') . '">'
+                . sprintf(
+                    /* translators: %d: number of options that are unavailable or waiting */
+                    esc_html__('%d other', 'fastcgi-cache-purge-and-preload-nginx'),
+                    $nppp_count_other
+                ) . '</span>';
+        }
+
+        // Output the settings panel, collapsed by default
+        echo '<details id="nppp-settings" class="nppp-settings">';
+            echo '<summary class="nppp-settings-toggle">';
+                echo '<span class="nppp-settings-head">';
+                    echo '<span class="dashicons dashicons-admin-settings nppp-settings-icon" aria-hidden="true"></span>';
+                    echo '<span class="nppp-settings-title">' . esc_html__('Settings', 'fastcgi-cache-purge-and-preload-nginx') . '</span>';
+                    echo '<span class="nppp-settings-sum">' . implode(' &middot; ', $nppp_summary) . '</span>';
+                    echo '<span class="dashicons dashicons-arrow-down-alt2 nppp-settings-chev" aria-hidden="true"></span>';
+                echo '</span>';
+                echo '<span class="nppp-settings-strip" aria-hidden="true">' . $nppp_strip_html . '</span>';
+            echo '</summary>';
+            echo '<div class="nppp-settings-grid">' . $nppp_tiles_html . '</div>';
+        echo '</details>';
 
         // Output the "Give Star" and "Configure Settings" bottom buttons
         echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
