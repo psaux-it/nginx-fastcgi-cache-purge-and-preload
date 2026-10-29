@@ -321,5 +321,23 @@
                 }
             });
         })();
+
+        // Settings panel: restore and remember the open state
+        (function () {
+            var panel = document.getElementById('nppp-settings');
+            var key   = 'nppp_widget_settings_open';
+
+            if (!panel) { return; }
+
+            try {
+                if (window.localStorage.getItem(key) === '1') { panel.open = true; }
+            } catch (e) { /* storage unavailable */ }
+
+            panel.addEventListener('toggle', function () {
+                try {
+                    window.localStorage.setItem(key, panel.open ? '1' : '0');
+                } catch (e) { /* storage unavailable */ }
+            });
+        })();
     });
 })(jQuery);
