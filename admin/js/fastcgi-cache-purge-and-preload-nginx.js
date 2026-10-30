@@ -965,15 +965,29 @@ $(document).ready(function() {
                         $(tblSel).DataTable().destroy(true);
                     }
 
-                    // Inject fresh HTML and show placeholder
+                    // PERF: Inject the HTML and run the DataTables init while the
+                    // placeholder is still display:none. On a table with thousands of rows
+                    // every DOM write made by DataTables (classes, aria attributes, row
+                    // detach for paging, Responsive measurements) would otherwise trigger
+                    // style/layout work on a visible 20k+ row tree. v2.1.9
                     $premiumPlaceholder
                         .stop(true, true)
                         .css('opacity', 0)
-                        .html(response)
-                        .show();
+                        .hide()
+                        .html(response);
 
-                    // Init DT for the newly injected table
+                    // Init DT for the newly injected table (still hidden)
                     initializePremiumTable();
+
+                    // Reveal now that only one page of rows is left in the DOM.
+                    // Responsive/column widths cannot be measured while display:none,
+                    // so measure once here, right after the reveal.
+                    $premiumPlaceholder.show();
+                    if ($.fn.dataTable.isDataTable(tblSel)) {
+                        var dtShown = $(tblSel).DataTable();
+                        dtShown.columns.adjust();
+                        if (dtShown.responsive) dtShown.responsive.recalc();
+                    }
 
                     // Hide the preloader now that content is loaded
                     hidePreloader();
