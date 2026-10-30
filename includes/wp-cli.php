@@ -633,6 +633,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *     wp npp settings set nginx_cache_purge_on_update yes
      *     wp npp settings set nginx_cache_limit_rate 2048
      *     wp npp settings set nginx_cache_path /var/cache/nginx/fastcgi
+     *     wp npp settings set nppp_http_purge_queue_status_path npp_purge_status
+     *     wp npp settings set nppp_http_purge_queue_status_path ""
      *
      * @when after_wp_load
      */
@@ -1207,7 +1209,11 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $key   = (string) ( $args[1] ?? '' );
         $value = (string) ( $args[2] ?? '' );
 
-        if ( $key === '' || $value === '' ) {
+        // The Cache Status Path is the one optional setting: an explicit empty value ("") clears it,
+        // like emptying the field on the Settings page. A missing value stays a usage error.
+        $clears_status_path = ( $key === 'nppp_http_purge_queue_status_path' && array_key_exists( 2, $args ) );
+
+        if ( $key === '' || ( $value === '' && ! $clears_status_path ) ) {
             WP_CLI::error( __( 'Usage: wp npp settings set <key> <value>', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
@@ -1410,9 +1416,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 WP_CLI::error( __( 'ERROR: Mobile User Agent exceeds the maximum allowed length of 512 characters.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         } elseif ( $key === 'nppp_http_purge_queue_status_path' ) {
-            // Mirror settings-sanitize.php: letters, digits, hyphens, underscores, slashes.
+            // Mirror settings-sanitize.php: letters, digits, hyphens, underscores, slashes; empty clears the path.
             $sanitized = trim( sanitize_text_field( $value ), " \t\n\r/" );
-            if ( $sanitized === '' || ! preg_match( '/^[a-zA-Z0-9_\-\/]+$/', $sanitized ) ) {
+            if ( $sanitized !== '' && ! preg_match( '/^[a-zA-Z0-9_\-\/]+$/', $sanitized ) ) {
                 WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Cache Status Path must contain only letters, digits, hyphens, underscores, and slashes (e.g. "purge_status").', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         } elseif ( $key === 'nppp_http_purge_suffix' ) {
@@ -1428,6 +1434,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             $sanitized = sanitize_text_field( $value );
         }
 
+        $prev_value       = (string) ( $settings[ $key ] ?? '' );
         $settings[ $key ] = $sanitized;
 
         // When bypass_path_restriction turns OFF, re-validate the stored cache path.
@@ -1445,6 +1452,21 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         update_option( 'nginx_cache_settings', $settings );
+
+        // Mirror settings-sanitize.php. The pre-2.1.9 standalone option is migrated away: while the setting
+        // is empty nppp_http_purge_queue_status_url() falls back to it, so a cleared path would come back.
+        $legacy_path = '';
+        if ( $key === 'nppp_http_purge_queue_status_path' ) {
+            $legacy_path = (string) get_option( 'nppp_http_purge_queue_status_path', '' );
+            delete_option( 'nppp_http_purge_queue_status_path' );
+        }
+        // The stored traffic samples are counters of ONE status endpoint: drop them when the path or the
+        // HTTP Purge switch changes (a legacy path that was just removed counts as a change too).
+        if ( in_array( $key, [ 'nppp_http_purge_queue_status_path', 'nppp_http_purge_enabled' ], true )
+            && ( $prev_value !== $sanitized || $legacy_path !== '' ) ) {
+            delete_option( 'nppp_traffic_samples' );
+            delete_transient( 'nppp_traffic_raw' );
+        }
 
         /* translators: 1: Settings key name 2: New value */
         WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
