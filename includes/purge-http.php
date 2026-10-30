@@ -193,11 +193,16 @@ function nppp_http_purge_queue_status_url(): string {
  * path, endpoint denied or unreachable, missing "responses" object, non-numeric or negative
  * values). Never throws, makes one GET.
  *
+ * @param string      $url
+ * @param string|null $why Optional, out: why null was returned ('' on success), see
+ *                         nppp_http_purge_traffic_failure() plus no_counters | bad_reply. Costs no extra request.
  * @return array{hit:float,miss:float,ts:int,ns:array<string,string>}|null
  */
-function nppp_http_purge_traffic_fetch( string $url ): ?array {
+function nppp_http_purge_traffic_fetch( string $url, ?string &$why = null ): ?array {
+    $why = '';
     $res = nppp_http_purge_fetch( 'GET', $url, 2 );
     if ( $res['error'] !== '' || $res['status'] !== 200 || $res['code'] !== 'status' ) {
+        $why = nppp_http_purge_traffic_failure( $res );
         return null;
     }
 
@@ -205,12 +210,14 @@ function nppp_http_purge_traffic_fetch( string $url ): ?array {
     $r    = ( is_array( $json ) && isset( $json['cache']['responses'] ) && is_array( $json['cache']['responses'] ) )
           ? $json['cache']['responses'] : null;
     if ( $r === null || ! isset( $r['hit'], $r['miss'] ) ) {
+        $why = is_array( $json ) ? 'no_counters' : 'bad_reply';
         return null;
     }
 
     // uint64 counters beyond PHP_INT_MAX decode as float: accept both, reject the rest.
     foreach ( [ 'hit', 'miss' ] as $k ) {
         if ( ( ! is_int( $r[ $k ] ) && ! is_float( $r[ $k ] ) ) || $r[ $k ] < 0 || ! is_finite( (float) $r[ $k ] ) ) {
+            $why = 'bad_reply';
             return null;
         }
     }
@@ -665,6 +672,124 @@ function nppp_http_purge_traffic_series_merged( array $now, array $samples, int 
 }
 
 /**
+ * Pure: why a status endpoint request did not return a status document, from a
+ * nppp_http_purge_fetch() result. Same vocabulary as nppp_http_purge_queue_snapshot(), plus
+ * "timeout" and "server_error" (HTTP 5xx), which are passing trouble and never raise the
+ * Settings advisory.
+ *
+ * @param array $res nppp_http_purge_fetch() result.
+ * @return string unreachable | timeout | not_found | denied | server_error | not_status | bad_reply
+ */
+function nppp_http_purge_traffic_failure( array $res ): string {
+    $error = (string) ( $res['error'] ?? '' );
+    if ( $error === 'timeout' ) {
+        return 'timeout';
+    }
+    if ( $error !== '' ) {
+        return 'unreachable';
+    }
+
+    $status = (int) ( $res['status'] ?? 0 );
+    if ( $status === 404 ) {
+        return 'not_found';
+    }
+    if ( $status === 401 || $status === 403 ) {
+        return 'denied';
+    }
+    if ( $status >= 500 ) {
+        return 'server_error';
+    }
+
+    return $status === 200 ? 'not_status' : 'bad_reply';
+}
+
+/**
+ * Remembers that the Dashboard "Traffic hit ratio" could not be read from the configured Cache
+ * Status Path, so the Settings page can say why the card is missing (otherwise it just never
+ * appears). Own state row (nppp_st_traffic_hint, swept on uninstall), independent of the Purge All
+ * advisory of nppp_http_purge_hint_set(). Only reasons that point at the setting or at Nginx's
+ * configuration are kept; a slow answer or an HTTP 5xx is passing trouble and leaves the stored
+ * state alone. An unchanged advisory younger than 6 hours causes no write.
+ *
+ * @param string $why Reason from nppp_http_purge_traffic_fetch().
+ * @param string $url The status URL that failed (binds the advisory to that path).
+ */
+function nppp_http_purge_traffic_hint_set( string $why, string $url ): void {
+    if ( ! in_array( $why, [ 'unreachable', 'not_found', 'denied', 'not_status', 'bad_reply', 'no_counters' ], true ) ) {
+        return;
+    }
+
+    $u   = substr( md5( $url ), 0, 8 );
+    $cur = nppp_state_get( 'traffic_hint' );
+    if ( is_array( $cur )
+        && ( $cur['why'] ?? '' ) === $why
+        && ( $cur['u'] ?? '' ) === $u
+        && ( time() - (int) ( $cur['at'] ?? 0 ) ) < 6 * HOUR_IN_SECONDS ) {
+        return;
+    }
+
+    nppp_state_set( 'traffic_hint', [ 'why' => $why, 'u' => $u, 'at' => time() ], DAY_IN_SECONDS );
+}
+
+/**
+ * Forgets the traffic advisory (the status endpoint answered). Writes only when one is stored.
+ */
+function nppp_http_purge_traffic_hint_clear(): void {
+    if ( nppp_state_get( 'traffic_hint' ) !== null ) {
+        nppp_state_delete( 'traffic_hint' );
+    }
+}
+
+/**
+ * Advisory for the Settings page, shown under the Cache Status Path field: the path is set but the
+ * last live read of it failed, so the Dashboard "Traffic hit ratio" card stays hidden. Info level:
+ * nothing is lost, and on a host that does not run ngx_cache_purge v4 an unanswered path is the
+ * whole explanation. Hidden while HTTP Purge is off, the path is empty, or the stored failure belongs
+ * to another path (the next read re-checks it).
+ *
+ * @return array{level:string,text:string}|null
+ */
+function nppp_http_purge_traffic_status_hint(): ?array {
+    if ( ! nppp_http_purge_enabled() ) {
+        return null;
+    }
+
+    $url = nppp_http_purge_queue_status_url();
+    if ( $url === '' ) {
+        return null;
+    }
+
+    $hint = nppp_state_get( 'traffic_hint' );
+    if ( ! is_array( $hint )
+        || ( $hint['u'] ?? '' ) !== substr( md5( $url ), 0, 8 )
+        || (int) ( $hint['at'] ?? 0 ) <= time() - DAY_IN_SECONDS ) {
+        return null;
+    }
+
+    $reasons = [
+        'unreachable' => __( 'the endpoint could not be reached', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'not_found'   => __( 'HTTP 404, the location does not exist in Nginx (or ngx_cache_purge is older than v4)', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'denied'      => __( 'access was denied (HTTP 401/403), check allow/deny of that location', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'not_status'  => __( 'the path is served by something other than a cache_purge_queue_status location', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'bad_reply'   => __( 'the reply was not a queue status document', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'no_counters' => __( 'the reply is a JSON document without HIT/MISS counters, so it does not come from a cache_purge_queue_status location', 'fastcgi-cache-purge-and-preload-nginx' ),
+    ];
+    $why = is_string( $hint['why'] ?? null ) ? $hint['why'] : '';
+    if ( ! isset( $reasons[ $why ] ) ) {
+        return null;
+    }
+
+    return [
+        'level' => 'info',
+        'text'  => sprintf(
+            /* translators: %s: why the status endpoint failed */
+            __( 'Dashboard "Traffic hit ratio": the configured Cache Status Path did not answer like a cache_purge_queue_status endpoint: %s. The card stays hidden until it does. Purge All is not affected. Fix the location or the path; NPP checks again automatically.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $reasons[ $why ]
+        ),
+    ];
+}
+
+/**
  * Traffic hit ratio of Nginx itself (ngx_cache_purge v4 status endpoint), or null when it
  * is not available. Complements, never replaces, the disk based Cache Coverage:
  * coverage = how much of the site is warm; this = how much real traffic was served warm.
@@ -697,11 +822,14 @@ function nppp_http_purge_traffic_stats( bool $fresh = false, bool $force_sample 
     }
 
     if ( ! is_array( $raw ) ) {
-        $raw = nppp_http_purge_traffic_fetch( $url );
+        $why = '';
+        $raw = nppp_http_purge_traffic_fetch( $url, $why );
         if ( $raw === null ) {
             set_transient( $key, 'fail', 60 );
+            nppp_http_purge_traffic_hint_set( $why, $url ); // the Settings page tells the administrator why the card is missing
             return null;
         }
+        nppp_http_purge_traffic_hint_clear();
         $raw['pl'] = nppp_http_purge_traffic_preload_flag();
         set_transient( $key, $raw, 20 );
 

@@ -977,9 +977,15 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Create the location in Nginx first (see Help > HTTP Purge) and restrict it with allow/deny. Default: empty.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <?php
                                 $nppp_qs_hint = function_exists( 'nppp_http_purge_queue_status_hint' ) ? nppp_http_purge_queue_status_hint() : null;
+                                $nppp_tr_hint = function_exists( 'nppp_http_purge_traffic_status_hint' ) ? nppp_http_purge_traffic_status_hint() : null;
                                 if ( is_array( $nppp_qs_hint ) ) :
                                 ?>
                                 <div class="notice notice-<?php echo esc_attr( $nppp_qs_hint['level'] ); ?> notice-nppp inline"><p><?php echo esc_html( $nppp_qs_hint['text'] ); ?></p></div>
+                                <?php
+                                // The Purge All advisory above already names a failing path; this one covers the hit ratio card alone.
+                                elseif ( is_array( $nppp_tr_hint ) ) :
+                                ?>
+                                <div class="notice notice-<?php echo esc_attr( $nppp_tr_hint['level'] ); ?> notice-nppp inline"><p><?php echo esc_html( $nppp_tr_hint['text'] ); ?></p></div>
                                 <?php
                                 elseif ( function_exists( 'nppp_http_purge_enabled' ) && nppp_http_purge_enabled()
                                     && function_exists( 'nppp_http_purge_queue_status_url' ) && nppp_http_purge_queue_status_url() === '' ) :

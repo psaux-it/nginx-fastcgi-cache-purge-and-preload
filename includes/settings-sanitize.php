@@ -762,6 +762,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
         || ( $nppp_prev_settings['nppp_http_purge_queue_status_path'] ?? '' ) !== ( $sanitized_input['nppp_http_purge_queue_status_path'] ?? '' ) ) {
         delete_option( 'nppp_traffic_samples' );
         delete_transient( 'nppp_traffic_raw' );
+        if ( function_exists( 'nppp_state_delete' ) ) {
+            nppp_state_delete( 'traffic_hint' ); // a failure seen on the old path says nothing about the new one
+        }
     }
 
     return $sanitized_input;

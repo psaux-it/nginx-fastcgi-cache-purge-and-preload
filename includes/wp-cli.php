@@ -1466,6 +1466,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             && ( $prev_value !== $sanitized || $legacy_path !== '' ) ) {
             delete_option( 'nppp_traffic_samples' );
             delete_transient( 'nppp_traffic_raw' );
+            if ( function_exists( 'nppp_state_delete' ) ) {
+                nppp_state_delete( 'traffic_hint' );
+            }
         }
 
         /* translators: 1: Settings key name 2: New value */

@@ -108,6 +108,7 @@ function nppp_clear_plugin_cache($silent = false) {
     // Option-backed state (includes/state.php): the reset helpers also drop the pre-2.1.9 transients.
     nppp_http_purge_state_reset();
     nppp_state_delete( 'http_purge_mode' );
+    nppp_state_delete( 'traffic_hint' );
     nppp_gen_mode_flag_delete();
 
     // Re-arm the Vary: Accept-Encoding probe and its notice row so the

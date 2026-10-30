@@ -87,7 +87,10 @@ function wp_remote_request( $url, $args = [] ) {
     if ( ! empty( $GLOBALS['NGX']['delay'] ) ) {
         sleep( (int) $GLOBALS['NGX']['delay'] ); // slow status endpoint: the clock moves on during the request.
     }
-    return [ 'status' => $GLOBALS['NGX']['status'], 'body' => $GLOBALS['NGX']['body'], 'headers' => [ 'cache-purge-code' => 'status' ] ];
+    if ( ! empty( $GLOBALS['NGX']['wp_error'] ) ) {
+        return new WP_Error( 'http_request_failed', (string) $GLOBALS['NGX']['wp_error'] ); // transport failure
+    }
+    return [ 'status' => $GLOBALS['NGX']['status'], 'body' => $GLOBALS['NGX']['body'], 'headers' => [ 'cache-purge-code' => $GLOBALS['NGX']['code'] ?? 'status' ] ];
 }
 function wp_remote_retrieve_header( $r, $n ) { return $r['headers'][ strtolower( $n ) ] ?? ''; }
 function wp_remote_retrieve_body( $r ) { return $r['body']; }
@@ -631,6 +634,141 @@ for ( $k = 0; $k < 600 && $ok; $k++ ) {
     if ( $ok && $ser !== [] && end( $ser )['to'] !== $ts ) { $ok = false; $why = "trial $k axis does not end at now (ends " . ( $ts - end( $ser )['to'] ) . 's early)'; }
 }
 t( 'invariants: ordered, non-overlapping, ratios sane, preload rows ratio-free, axis ends at now', $ok, $why );
+
+// ---------------------------------------------------------------------------------------------
+say( "I. Settings advisory when the Cache Status Path cannot be read\n" );
+// ---------------------------------------------------------------------------------------------
+$good = json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => 900, 'miss' => 100 ] ] ] );
+function adv_reset( string $path = 'npp_status' ): void {
+    $GLOBALS['OPT']['nginx_cache_settings'] = [ 'nppp_http_purge_enabled' => 'yes', 'nppp_http_purge_queue_status_path' => $path ];
+    unset( $GLOBALS['OPT']['nppp_http_purge_queue_status_path'] );
+    $GLOBALS['OPT']['nppp_traffic_samples'] = [];
+    delete_transient( 'nppp_traffic_raw' );
+    nppp_state_delete( 'traffic_hint' );
+    $GLOBALS['NGX'] = [ 'status' => 200, 'body' => '', 'code' => 'status', 'delay' => 0 ];
+}
+function adv_text(): ?string { $h = nppp_http_purge_traffic_status_hint(); return $h === null ? null : $h['text']; }
+
+// 1. reason classification, one request each, nothing else changes
+$cases = [
+    'HTTP 404'                          => [ [ 'status' => 404, 'body' => '' ],                                   'not_found' ],
+    'HTTP 403'                          => [ [ 'status' => 403, 'body' => '' ],                                   'denied' ],
+    'HTTP 401'                          => [ [ 'status' => 401, 'body' => '' ],                                   'denied' ],
+    'HTTP 200, other content'           => [ [ 'status' => 200, 'body' => '<html>x</html>', 'code' => '' ],       'not_status' ],
+    'HTTP 302'                          => [ [ 'status' => 302, 'body' => '' ],                                   'bad_reply' ],
+    'HTTP 502'                          => [ [ 'status' => 502, 'body' => '' ],                                   'server_error' ],
+    'transport: connection refused'     => [ [ 'wp_error' => 'cURL error 7: Failed to connect: Connection refused' ], 'unreachable' ],
+    'transport: slow answer'            => [ [ 'wp_error' => 'cURL error 28: Operation timed out after 2001 ms' ], 'timeout' ],
+    'status doc without counters'       => [ [ 'status' => 200, 'body' => json_encode( [ 'code' => 'status', 'cache' => [ 'pending' => [ 'total' => 0 ] ] ] ) ], 'no_counters' ],
+    'status code header, body not JSON' => [ [ 'status' => 200, 'body' => 'garbage' ],                            'bad_reply' ],
+    'negative counter'                  => [ [ 'status' => 200, 'body' => json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => -1, 'miss' => 3 ] ] ] ) ], 'bad_reply' ],
+    'string counter'                    => [ [ 'status' => 200, 'body' => json_encode( [ 'code' => 'status', 'cache' => [ 'responses' => [ 'hit' => '5', 'miss' => 3 ] ] ] ) ], 'bad_reply' ],
+];
+foreach ( $cases as $label => [ $ngx, $expect ] ) {
+    adv_reset();
+    $GLOBALS['NGX'] = $ngx + $GLOBALS['NGX'];
+    $why = 'unset';
+    $r   = nppp_http_purge_traffic_fetch( 'https://example.test/npp_status', $why );
+    t( "why: $label => $expect", $r === null && $why === $expect, "got " . var_export( $why, true ) );
+}
+adv_reset();
+$GLOBALS['NGX']['body'] = $good;
+$why = 'unset';
+t( 'why: success => empty string, counters returned', is_array( nppp_http_purge_traffic_fetch( 'https://example.test/npp_status', $why ) ) && $why === '' );
+t( 'fetch() with the old single argument still works', is_array( nppp_http_purge_traffic_fetch( 'https://example.test/npp_status' ) ) );
+
+// 2. a configuration fault raises the advisory (and only then); the card stays hidden
+foreach ( [ 404 => 'HTTP 404', 403 => 'access was denied', 200 => 'something other than' ] as $status => $needle ) {
+    adv_reset();
+    $GLOBALS['NGX'] = [ 'status' => $status, 'body' => '<html></html>', 'code' => '' ];
+    t( "advisory: none before the first read ($status)", nppp_http_purge_traffic_status_hint() === null );
+    t( "advisory: stats null on $status", nppp_http_purge_traffic_stats( true ) === null );
+    $h = nppp_http_purge_traffic_status_hint();
+    t( "advisory: raised on $status and names the reason", $h !== null && $h['level'] === 'info' && strpos( $h['text'], $needle ) !== false, (string) adv_text() );
+    t( "advisory: mentions the card, not a queue", $h !== null && strpos( $h['text'], 'Traffic hit ratio' ) !== false && strpos( $h['text'], 'Purge All is not affected' ) !== false );
+}
+
+// 3. passing trouble never raises it, and never erases an existing one
+foreach ( [ [ 'status' => 503, 'body' => '' ], [ 'wp_error' => 'cURL error 28: Operation timed out after 2001 ms' ] ] as $ngx ) {
+    adv_reset();
+    $GLOBALS['NGX'] = $ngx + $GLOBALS['NGX'];
+    nppp_http_purge_traffic_stats( true );
+    t( 'passing trouble (5xx / slow): no advisory', nppp_http_purge_traffic_status_hint() === null && nppp_state_get( 'traffic_hint' ) === null );
+}
+adv_reset();
+$GLOBALS['NGX'] = [ 'status' => 404, 'body' => '', 'code' => '' ];
+nppp_http_purge_traffic_stats( true );
+$GLOBALS['NGX'] = [ 'status' => 503, 'body' => '', 'code' => 'status' ];
+nppp_http_purge_traffic_stats( true );
+t( 'a 5xx after a 404 leaves the 404 advisory in place', strpos( (string) adv_text(), 'HTTP 404' ) !== false );
+
+// 4. the first good read clears it; the clear is a no-op write when nothing is stored
+adv_reset();
+$GLOBALS['NGX'] = [ 'status' => 403, 'body' => '', 'code' => '' ];
+nppp_http_purge_traffic_stats( true );
+t( 'setup: advisory present', adv_text() !== null );
+$GLOBALS['NGX'] = [ 'status' => 200, 'body' => $good, 'code' => 'status' ];
+t( 'recovery: stats returned', nppp_http_purge_traffic_stats( true ) !== null );
+t( 'recovery: advisory gone, state row removed', adv_text() === null && nppp_state_get( 'traffic_hint' ) === null && ! isset( $GLOBALS['OPT']['nppp_st_traffic_hint'] ) );
+$before = $GLOBALS['OPT'];
+nppp_http_purge_traffic_stats( true );
+t( 'steady state: a good read writes no advisory row', ! isset( $GLOBALS['OPT']['nppp_st_traffic_hint'] ) );
+
+// 5. bound to the path, to HTTP Purge, and to a day
+adv_reset( 'npp_status' );
+$GLOBALS['NGX'] = [ 'status' => 404, 'body' => '', 'code' => '' ];
+nppp_http_purge_traffic_stats( true );
+t( 'bound: shown for the failing path', adv_text() !== null );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'other_path';
+t( 'bound: hidden after the path changed', adv_text() === null );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'npp_status';
+t( 'bound: back on the same path it is the same advisory', adv_text() !== null );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = '';
+t( 'bound: hidden while the field is empty (the empty-field note covers that case)', adv_text() === null );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_queue_status_path'] = 'npp_status';
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'no';
+t( 'bound: hidden while HTTP Purge is off', adv_text() === null );
+$GLOBALS['OPT']['nginx_cache_settings']['nppp_http_purge_enabled'] = 'yes';
+$row = $GLOBALS['OPT']['nppp_st_traffic_hint'];
+$row['v']['at'] = time() - DAY_IN_SECONDS - 5;
+unset( $row['exp'] );
+$GLOBALS['OPT']['nppp_st_traffic_hint'] = $row;
+t( 'bound: an advisory older than a day is ignored even if the row survives', adv_text() === null );
+$GLOBALS['OPT']['nppp_st_traffic_hint'] = [ 'v' => [ 'why' => 'bogus', 'u' => substr( md5( 'https://example.test/npp_status' ), 0, 8 ), 'at' => time() ], 'exp' => 0 ];
+t( 'bound: an unknown reason code is ignored', adv_text() === null );
+$GLOBALS['OPT']['nppp_st_traffic_hint'] = [ 'v' => 'junk', 'exp' => 0 ];
+t( 'bound: a malformed row is ignored, no warning', adv_text() === null );
+
+// 6. no write storm: the same failure within 6 hours does not rewrite the row
+adv_reset();
+$GLOBALS['NGX'] = [ 'status' => 404, 'body' => '', 'code' => '' ];
+nppp_http_purge_traffic_stats( true );
+$row = $GLOBALS['OPT']['nppp_st_traffic_hint'];
+$row['v']['at'] = $stamp = time() - 3600;
+$GLOBALS['OPT']['nppp_st_traffic_hint'] = $row;
+nppp_http_purge_traffic_stats( true );
+t( 'throttle: same failure < 6 h => row untouched', $GLOBALS['OPT']['nppp_st_traffic_hint']['v']['at'] === $stamp );
+$row['v']['at'] = $stamp = time() - 7 * 3600;
+$GLOBALS['OPT']['nppp_st_traffic_hint'] = $row;
+nppp_http_purge_traffic_stats( true );
+t( 'throttle: same failure > 6 h => refreshed', $GLOBALS['OPT']['nppp_st_traffic_hint']['v']['at'] > $stamp );
+$GLOBALS['NGX'] = [ 'status' => 403, 'body' => '', 'code' => '' ];
+nppp_http_purge_traffic_stats( true );
+t( 'throttle: a different reason is stored at once', strpos( (string) adv_text(), 'access was denied' ) !== false );
+
+// 7. the failure cache still protects the page: no request while the 60 s "fail" marker lives
+adv_reset();
+$GLOBALS['NGX'] = [ 'status' => 404, 'body' => '', 'code' => '' ];
+nppp_http_purge_traffic_stats( true );
+$GLOBALS['REQUESTS'] = 0;
+nppp_http_purge_traffic_stats();
+nppp_http_purge_traffic_stats();
+t( 'failure cache: advisory does not add requests', $GLOBALS['REQUESTS'] === 0 );
+
+// 8. no samples are stored for a failing endpoint
+t( 'failure: no sample stored', $GLOBALS['OPT']['nppp_traffic_samples'] === [] );
+
+adv_reset();
 
 // ---------------------------------------------------------------------------------------------
 echo "\n$PASS passed, $FAIL failed\n";
