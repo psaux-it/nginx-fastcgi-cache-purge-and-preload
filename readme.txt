@@ -325,7 +325,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 
 == Changelog ==
 
-= 2.1.9 (2026-10-30) =
+= 2.1.9 (2026-11-01) =
 
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
 * Fixed: Deactivation no longer deletes the Fail2Ban worker's lock files, and clears worker state only once the worker is confirmed stopped, preventing a second worker after reactivation.
@@ -345,7 +345,9 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Fixed: Purge now successfully removes all spellings of percent-encoded or raw UTF-8 cache keys (lower-case hex, upper-case hex, and raw bytes) instead of leaving silent stale files or triggering false "ERROR REGEX" warnings.
 * Security: HTTP Purge now skips single-page URLs whose path contains dot-segments ("..", "%2e%2e"), which could reach other locations of the same origin such as Purge All.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All. Existing sites with Preload Related Pages ON and Auto Preload OFF will start preloading related pages on auto-purge.
+* Changed: The dashboard widget's Settings area is now a collapsible panel with a compact tile grid and an on/off summary, replacing the long status table.
 * Perf: Optimized ripgrep prefiltering and canonical key generation (`canon_key`) in FP3/FP4 scans to prevent multi-spelling regex slowdowns on percent-encoded slugs.
+* Perf: The Advanced tab now opens 2.3x–2.7x faster on large caches (DataTables is initialised while the table is hidden, then revealed once). No change in markup, behavior or design.
 * Tested: Tested with Nginx (1.31.6), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0) and aaPanel (8.0.6).
 
 = 2.1.8 (2026-09-25) =
