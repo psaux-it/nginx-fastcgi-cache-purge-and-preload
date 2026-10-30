@@ -24,7 +24,9 @@ $(document).ready(function() {
 
     // UI tabs container and links
     const $nppTabs = $('#nppp-nginx-tabs');
-    const $nppTabsLinks = $nppTabs.find('a');
+    // Only the real tab headers; the Settings sub-menu links also live inside
+    // #nppp-nginx-tabs and must never be treated as tabs.
+    const $nppTabsLinks = $nppTabs.find('.tab-header-container > ul > li > a');
 
     // Function to show the preloader overlay
     function showPreloader() {
@@ -233,7 +235,7 @@ $(document).ready(function() {
     }
 
     // Deep linking jQuery UI tabs
-    function activateTabFromHash() {
+    function activateTabFromHash(isInitialLoad) {
         const hash = window.location.hash;
 
         if (hash) {
@@ -260,6 +262,39 @@ $(document).ready(function() {
 
                 // Reset the flag after handling hash activation
                 isTabChangeFromHash = false;
+            } else {
+                // Hash is not a tab id (e.g. a #preload-options section anchor from an
+                // old bookmark or URL). On first load fall back to the Settings tab
+                // instead of rendering an empty page; on later hash changes only react
+                // to anchors that really live inside the Settings tab.
+                const sectionId = hash.replace('#', '');
+                const sectionEl = sectionId ? document.getElementById(sectionId) : null;
+                const inSettings = !!(sectionEl && $(sectionEl).closest('#settings').length);
+
+                if (isInitialLoad || inSettings) {
+                    isTabChangeFromHash = true;
+                    if ($nppTabs.tabs('option', 'active') !== 0) {
+                        $nppTabs.tabs('option', 'active', 0);
+                    }
+                    isTabChangeFromHash = false;
+                    npppActivateTab('settings');
+
+                    // Keep the nppp_tab GET param valid for PHP (pre-checks) on hard reload
+                    const _npppFallbackUrl = new URL(window.location.href);
+                    if (_npppFallbackUrl.searchParams.get('nppp_tab') !== 'settings') {
+                        _npppFallbackUrl.searchParams.set('nppp_tab', 'settings');
+                        window.history.replaceState(null, null, _npppFallbackUrl.toString());
+                    }
+
+                    if (inSettings) {
+                        setTimeout(function () {
+                            window.scrollTo(0, $(sectionEl).offset().top - npppSubmenuScrollOffset());
+                        }, 50);
+                    }
+                }
+
+                // Never leave the flag stuck on, or the next real tab click would be skipped
+                isTabChangeFromHash = false;
             }
         } else {
             // Set the default tab to 'Settings'
@@ -268,7 +303,7 @@ $(document).ready(function() {
     }
 
     // Call on page load to handle deep linking (activate tab based on URL hash)
-    activateTabFromHash();
+    activateTabFromHash(true);
 
     // Scroll FAB + anchor offset (scoped)
     (function () {
@@ -347,6 +382,9 @@ $(document).ready(function() {
 
             // Anchor jumps INSIDE our container should respect the admin bar
             $container.on('click', 'a[href^="#"]', function (e) {
+                // Settings sub-menu links have their own handler (sticky-aware offset)
+                if ($(this).closest('.nppp-submenu').length) return;
+
                 var href = $(this).attr('href');
                 if (!href || href === '#') return;
 
@@ -382,7 +420,7 @@ $(document).ready(function() {
 
     // Listen for hash changes (URL changes) and re-activate the correct tab
     $(window).on('hashchange', function() {
-        activateTabFromHash();
+        activateTabFromHash(false);
     });
 
     // Toasts
@@ -673,7 +711,7 @@ $(document).ready(function() {
 
                 if (data.snapshot_exists) {
                     // Interrupted but a previous good snapshot exists
-                    snapStatus = `${icon('dashicons-yes', '#16a34a')}<span style="color:#16a34a;">${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
+                    snapStatus = `${icon('dashicons-yes', '#15803d')}<span style="color:#15803d;">${__('Available', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
                 } else if (isInterrupted) {
                     // Interrupted AND no snapshot at all
                     snapStatus = `${icon('dashicons-no', '#d63638')}<span style="color:#d63638;">${__('None — run Preload All to build one.', 'fastcgi-cache-purge-and-preload-nginx')}</span>`;
@@ -704,7 +742,7 @@ $(document).ready(function() {
                 const loadPct   = ( data.load_1 / data.cpu_count ) * 100;
                 const loadColor = loadPct > 80 ? '#d63638'
                                 : loadPct > 50 ? '#b45309'
-                                : '#16a34a';
+                                : '#15803d';
                 rows += `<tr>
                     <td class="check">${__( 'Server Load (1m / 5m)', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
                     <td class="status">
@@ -721,7 +759,7 @@ $(document).ready(function() {
                 const memPct     = Math.round( ( memUsedMb / data.mem_total_mb ) * 100 );
                 const memColor   = memPct > 85 ? '#d63638'
                                  : memPct > 65 ? '#b45309'
-                                 : '#16a34a';
+                                 : '#15803d';
                 rows += `<tr>
                     <td class="check">${__( 'System RAM', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
                     <td class="status">
@@ -735,7 +773,7 @@ $(document).ready(function() {
             // Swap — only show if swap is configured; red immediately if any swap used during preload
             if ( data.swap_total_mb > 0 ) {
                 const swapPct   = Math.round( ( data.swap_used_mb / data.swap_total_mb ) * 100 );
-                const swapColor = data.swap_used_mb > 0 ? '#d63638' : '#16a34a';
+                const swapColor = data.swap_used_mb > 0 ? '#d63638' : '#15803d';
                 rows += `<tr>
                     <td class="check">${__( 'Swap Usage', 'fastcgi-cache-purge-and-preload-nginx' )}</td>
                     <td class="status">
@@ -752,7 +790,7 @@ $(document).ready(function() {
                 const maxHit      = data.fpm_max_children || 0;
                 const fpmColor    = queueed > 0 ? '#d63638'
                                   : maxHit  > 0 ? '#b45309'
-                                  : '#16a34a';
+                                  : '#15803d';
                 const queueBadge  = queueed > 0
                     ? `<span style="color:#d63638;font-weight:bold;margin-left:6px;">⚠ ${queueed} queued</span>`
                     : '';
@@ -5103,6 +5141,18 @@ $(document).ready(function() {
         });
     }
 
+    // Space to keep above a section when jumping from the sub-menu.
+    // On desktop the sub-menu is sticky, so reserve admin bar + sub-menu height.
+    function npppSubmenuScrollOffset() {
+        if (window.innerWidth < 783) {
+            return 60;
+        }
+        var adminBarH = $('#wpadminbar').outerHeight() || 32;
+        var $sub      = $('.nppp-submenu');
+        var subH      = $sub.length ? $sub.outerHeight() : 0;
+        return adminBarH + subH + 12;
+    }
+
     // Handle click events on sub-menu links
     $('.nppp-submenu a').on('click', function(e){
         e.preventDefault();
@@ -5113,7 +5163,7 @@ $(document).ready(function() {
         if ($(target).length) {
             // Animate scrolling to the target section
             $('html, body').animate({
-                scrollTop: $(target).offset().top - 30
+                scrollTop: $(target).offset().top - npppSubmenuScrollOffset()
             }, 500);
         }
     });

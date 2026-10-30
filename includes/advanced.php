@@ -932,16 +932,18 @@ function nppp_premium_html($nginx_cache_path) {
                     <td>
                         <button type="button"
                                 class="nppp-purge-btn"
+                                aria-label="<?php /* translators: %s: cached URL */ echo esc_attr( sprintf( __( 'Purge %s', 'fastcgi-cache-purge-and-preload-nginx' ), $row['url'] ) ); ?>"
                                 <?php echo $is_hit ? '' : 'disabled aria-disabled="true" title="' . esc_attr__('Not cached yet', 'fastcgi-cache-purge-and-preload-nginx') . '"'; ?>
                                 data-url="<?php echo esc_attr( $row['url_encoded'] ); ?>">
-                            <span class="dashicons dashicons-trash" style="font-size:16px;margin:0;padding:0;"></span>
+                            <span class="dashicons dashicons-trash" style="font-size:16px;margin:0;padding:0;" aria-hidden="true"></span>
                             <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                         </button>
 
                         <button type="button"
                                 class="nppp-preload-btn"
+                                aria-label="<?php /* translators: %s: cached URL */ echo esc_attr( sprintf( __( 'Preload %s', 'fastcgi-cache-purge-and-preload-nginx' ), $row['url'] ) ); ?>"
                                 data-url="<?php echo esc_attr( $row['url_encoded'] ); ?>">
-                            <span class="dashicons dashicons-update" style="font-size:16px;margin:0;padding:0;"></span>
+                            <span class="dashicons dashicons-update" style="font-size:16px;margin:0;padding:0;" aria-hidden="true"></span>
                             <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                         </button>
                     </td>
