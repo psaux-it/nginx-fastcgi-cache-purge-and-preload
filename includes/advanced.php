@@ -179,7 +179,7 @@ function nppp_key_generation_info( string $key_text ): ?array {
  * Reads the generation state of every ngx_cache_purge v4 `cache_purge_namespace` from the
  * `cache_purge_queue_status` location ("namespaces": name, epoch, baseline, serial, rules).
  *
- * Read-only and tolerant: HTTP Purge off, no Purge Queue Status Path, an older module without
+ * Read-only and tolerant: HTTP Purge off, no Cache Status Path, an older module without
  * the list, an unreachable endpoint or a malformed reply all return null, and the callers keep
  * their disk-only logic. A malformed or duplicated entry is left out, which callers treat as an
  * unknown namespace (a namespace the module cut from a long list is absent the same way).
@@ -387,16 +387,16 @@ function nppp_gen_scan_unverified_notice(): string {
     }
 
     if ( ! function_exists( 'nppp_http_purge_enabled' ) || ! nppp_http_purge_enabled() ) {
-        return __( 'ngx_cache_purge generation mode files were found in the cache, but HTTP Purge is disabled, so NPP cannot tell which of them Nginx has already invalidated. The list may include files that are no longer served and not yet deleted. Enable HTTP Purge and set the Purge Queue Status Path to hide them.', 'fastcgi-cache-purge-and-preload-nginx' );
+        return __( 'ngx_cache_purge generation mode files were found in the cache, but HTTP Purge is disabled, so NPP cannot tell which of them Nginx has already invalidated. The list may include files that are no longer served and not yet deleted. Enable HTTP Purge and set the Cache Status Path to hide them.', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
     $url = function_exists( 'nppp_http_purge_queue_status_url' ) ? nppp_http_purge_queue_status_url() : '';
     if ( $url === '' ) {
         // Same wording as the Settings page advisory (nppp_http_purge_queue_status_hint), so translations are shared.
-        return __( 'ngx_cache_purge generation mode is active but no Purge Queue Status Path is set. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Set the path of your cache_purge_queue_status location to hide them.', 'fastcgi-cache-purge-and-preload-nginx' );
+        return __( 'ngx_cache_purge generation mode is active but no Cache Status Path is set. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Set the path of your cache_purge_queue_status location to hide them.', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
-    return __( 'ngx_cache_purge generation mode is active, but the configured Purge Queue Status Path did not return the state of this namespace (unreachable, denied, an older module, or the namespace is missing from the list). Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Check the location and path in Settings.', 'fastcgi-cache-purge-and-preload-nginx' );
+    return __( 'ngx_cache_purge generation mode is active, but the configured Cache Status Path did not return the state of this namespace (unreachable, denied, an older module, or the namespace is missing from the list). Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Check the location and path in Settings.', 'fastcgi-cache-purge-and-preload-nginx' );
 }
 
 /**

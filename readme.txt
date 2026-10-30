@@ -327,6 +327,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 
 = 2.1.9 (2026-11-01) =
 
+* NEW: Dashboard "Traffic hit ratio" card — the real HIT/MISS ratio of visitor traffic as counted by Nginx itself (ngx_cache_purge v4 status endpoint), with a 24-hour trend in which periods when Preload All was running are left out. Enable it by setting the new "Cache Status Path" in Settings > HTTP Purge. The same endpoint also serves the background queue check and the generation-mode filter of Status/Advanced; each of the three is optional on its own, and a blank path (required on ngx_cache_purge v2/v3) turns all of them off.
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
 * Fixed: Deactivation no longer deletes the Fail2Ban worker's lock files, and clears worker state only once the worker is confirmed stopped, preventing a second worker after reactivation.
 * Fixed: Uninstall no longer touches a running Fail2Ban worker's files, sweeps all NPP transients and cron hook instances, and no longer creates the uploads directory.

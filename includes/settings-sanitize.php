@@ -604,8 +604,11 @@ function nppp_nginx_cache_settings_sanitize($input) {
         );
     }
 
-    // Purge Queue Status path (optional): location of ngx_cache_purge v4
-    // "cache_purge_queue_status". Empty is valid and means "no status endpoint".
+    // Cache Status Path (optional): location of ngx_cache_purge v4
+    // "cache_purge_queue_status". One endpoint, three independent consumers: the Dashboard
+    // traffic hit ratio, the background queue completion check and the generation-mode
+    // filter of Status/Advanced. Empty is valid and means "no status endpoint" (all three
+    // off). The option key keeps its historical "queue_status" name (stored values, WP-CLI).
     // Same charset as the reader in purge-http.php (slash allowed for nested
     // locations). An invalid value is cleared, never reset to a non-empty default.
     if ( isset( $input['nppp_http_purge_queue_status_path'] ) && is_string( $input['nppp_http_purge_queue_status_path'] ) ) {
@@ -617,7 +620,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
                 'nppp-http-purge-queue-status-path',
-                __( 'ERROR OPTION: HTTP Purge Queue Status Path must contain only letters, numbers, hyphens, underscores, or slashes. It has been cleared.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'ERROR OPTION: HTTP Purge Cache Status Path must contain only letters, numbers, hyphens, underscores, or slashes. It has been cleared.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 'error'
             );
         }

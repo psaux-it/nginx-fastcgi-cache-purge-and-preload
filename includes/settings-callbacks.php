@@ -854,7 +854,7 @@ function nppp_http_purge_all_path_callback(): void {
     echo "<input type='text' id='nppp_http_purge_all_path' name='nginx_cache_settings[nppp_http_purge_all_path]' value='" . esc_attr( $options['nppp_http_purge_all_path'] ?? 'npp_purge_all' ) . "' class='regular-text' placeholder='npp_purge_all' />";
 }
 
-// Callback function for HTTP Purge Queue Status Path
+// Callback function for HTTP Purge Cache Status Path
 function nppp_http_purge_queue_status_path_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
     $value   = ( is_array( $options ) && isset( $options['nppp_http_purge_queue_status_path'] ) ) ? (string) $options['nppp_http_purge_queue_status_path'] : '';

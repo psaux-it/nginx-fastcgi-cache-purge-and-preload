@@ -1234,7 +1234,7 @@ is_( nppp_http_purge_gate_command( 'wget X', '/tmp/l.log' ), $plain, 'flow: idle
 is_( gm_marker(), null, 'flow: the marker is dropped once the queue is idle' );
 gm_new_request();
 
-/* ------------------------------------------- queue status advisory (Settings > Purge Queue Status Path) */
+/* ------------------------------------------- queue status advisory (Settings > Cache Status Path) */
 function hint_state() { return nppp_http_purge_state()['hint']; }
 function hint_code() { return hint_state()['code'] ?? null; }
 

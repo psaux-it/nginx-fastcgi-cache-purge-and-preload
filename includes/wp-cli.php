@@ -1413,7 +1413,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             // Mirror settings-sanitize.php: letters, digits, hyphens, underscores, slashes.
             $sanitized = trim( sanitize_text_field( $value ), " \t\n\r/" );
             if ( $sanitized === '' || ! preg_match( '/^[a-zA-Z0-9_\-\/]+$/', $sanitized ) ) {
-                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Queue Status Path must contain only letters, digits, hyphens, underscores, and slashes (e.g. "purge_status").', 'fastcgi-cache-purge-and-preload-nginx' ) );
+                WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Cache Status Path must contain only letters, digits, hyphens, underscores, and slashes (e.g. "purge_status").', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
         } elseif ( $key === 'nppp_http_purge_suffix' ) {
             // Mirror settings-sanitize.php: alphanumeric + hyphens/underscores only, non-empty.
@@ -1565,7 +1565,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_http_purge_suffix'              => __( 'HTTP Purge URL Suffix', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_rg_purge_enabled'               => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_custom_url'          => __( 'HTTP Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'nppp_http_purge_queue_status_path'   => __( 'HTTP Purge Queue Status Path', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_http_purge_queue_status_path'   => __( 'HTTP Purge Cache Status Path', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),

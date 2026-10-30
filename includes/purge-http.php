@@ -157,9 +157,14 @@ function nppp_http_purge_all_url(): string {
  * URL of the ngx_cache_purge v4 "cache_purge_queue_status" location ('' = none).
  *
  * Path source: nginx_cache_settings[nppp_http_purge_queue_status_path] (Settings > HTTP
- * Purge > Purge Queue Status Path). The legacy standalone option of the same name is
- * still honoured while the setting is empty.
- * With it the plugin can PROVE that a 202 background purge has finished.
+ * Purge > Cache Status Path; the key keeps its historical "queue_status" name). The legacy
+ * standalone option of the same name is still honoured while the setting is empty.
+ *
+ * One endpoint, three independent consumers (each works without the others):
+ *  - Dashboard "Traffic hit ratio" card (nppp_http_purge_traffic_stats());
+ *  - background queue: the plugin can PROVE that a 202 background purge has finished;
+ *  - generation mode: Status/Advanced hide files Nginx has already invalidated.
+ * An empty path switches all three off.
  */
 function nppp_http_purge_queue_status_url(): string {
     $s   = get_option( 'nginx_cache_settings', [] );
@@ -939,7 +944,7 @@ function nppp_http_purge_state(): array {
         }
     }
 
-    // Advisory about the queue status endpoint (Settings > Purge Queue Status Path): what NPP
+    // Advisory about the queue status endpoint (Settings > Cache Status Path): what NPP
     // saw at the last Purge All. Remembered for a day, re-raised by the next Purge All.
     $hint = $raw['hint'] ?? null;
     if ( is_array( $hint )
@@ -1131,7 +1136,7 @@ function nppp_http_purge_hint_clear(): void {
 }
 
 /**
- * Advisory for the Settings page, shown under the Purge Queue Status Path field.
+ * Advisory for the Settings page, shown under the Cache Status Path field.
  *
  * Nginx's configuration cannot be read from PHP, but the Purge All answer reveals it: 202 means
  * the background queue is on, "invalidated" means generation mode. When the queue cannot be
@@ -1167,21 +1172,21 @@ function nppp_http_purge_queue_status_hint(): ?array {
 
     switch ( $hint['code'] ) {
         case 'queue_blind':
-            return [ 'level' => 'warning', 'text' => __( 'The last Purge All was accepted by Nginx as a background job (202), but no Purge Queue Status Path is set, so NPP cannot see when the queue has finished. On a large cache the filesystem purge and the preload may start while Nginx is still deleting, and Nginx can then delete the freshly preloaded pages. Fix: add a cache_purge_queue_status location in Nginx (see Help > HTTP Purge) and enter its path here.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
+            return [ 'level' => 'warning', 'text' => __( 'The last Purge All was accepted by Nginx as a background job (202), but no Cache Status Path is set, so NPP cannot see when the queue has finished. On a large cache the filesystem purge and the preload may start while Nginx is still deleting, and Nginx can then delete the freshly preloaded pages. Fix: add a cache_purge_queue_status location in Nginx (see Help > HTTP Purge) and enter its path here.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
         case 'queue_dead':
             return [ 'level' => 'warning', 'text' => sprintf(
                 /* translators: %s: why the status endpoint failed */
-                __( 'The last Purge All was accepted by Nginx as a background job (202), but the configured Purge Queue Status Path did not answer like a queue status endpoint: %s. NPP cannot see the queue, so the filesystem purge and the preload may start while Nginx is still deleting and the freshly preloaded pages can be deleted. Fix the location or the path; the next Purge All re-checks it.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'The last Purge All was accepted by Nginx as a background job (202), but the configured Cache Status Path did not answer like a queue status endpoint: %s. NPP cannot see the queue, so the filesystem purge and the preload may start while Nginx is still deleting and the freshly preloaded pages can be deleted. Fix the location or the path; the next Purge All re-checks it.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $reason
             ) ];
         case 'gen_dead':
             return [ 'level' => 'info', 'text' => sprintf(
                 /* translators: %s: why the status endpoint failed */
-                __( 'ngx_cache_purge generation mode is active, but the configured Purge Queue Status Path did not answer like a queue status endpoint: %s. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'ngx_cache_purge generation mode is active, but the configured Cache Status Path did not answer like a queue status endpoint: %s. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $reason
             ) ];
         default: // gen_blind
-            return [ 'level' => 'info', 'text' => __( 'ngx_cache_purge generation mode is active but no Purge Queue Status Path is set. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Set the path of your cache_purge_queue_status location to hide them.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
+            return [ 'level' => 'info', 'text' => __( 'ngx_cache_purge generation mode is active but no Cache Status Path is set. Purge All is not affected, but Status and Advanced may list files that Nginx has already invalidated and not yet deleted. Set the path of your cache_purge_queue_status location to hide them.', 'fastcgi-cache-purge-and-preload-nginx' ) ];
     }
 }
 
@@ -3067,7 +3072,7 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
             }
 
             // The queue is on. Tell the administrator when NPP cannot observe it, because then the
-            // filesystem purge + preload can race Nginx's walk (Settings > Purge Queue Status Path).
+            // filesystem purge + preload can race Nginx's walk (Settings > Cache Status Path).
             if ( $status_url === '' ) {
                 nppp_http_purge_hint_set( 'queue_blind' );
             } elseif ( $baseline === null ) {
