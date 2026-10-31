@@ -878,5 +878,106 @@ if ( $sc === 'badsel' ) {
     chk( $r === false && locks() === [], 'key over 511 bytes: 400 invalid_selector -> false, NO lock', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
     chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true, 'the next (short) URL is still purged over HTTP' );
 }
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * Inline setup: "fastcgi_cache_purge PURGE from ..." sits in the cached PHP location and there is NO dedicated
+ * single purge location. Raw module behaviour (checked with curl): a PURGE sent to <origin>/<single path>/<page> builds
+ * the key of the PREFIXED url, so it purges the junk entry that the GET probe created there (answer: "purged") and the
+ * real page stays cached. Only a PURGE sent to the page's own URL builds the page's key.
+ * Scenarios: inline inline_wp inline_try inline_map (success), inline_rm (method-keyed cache: never a false success),
+ *            inline_denied (403), inline_switch (inline -> dedicated location later), noloc (no purge location at all).
+ * ------------------------------------------------------------------------------------------------------------- */
+const NPP_ORIGIN = 'http://127.0.0.1:8081';
+function g( $path ) { shell_exec( "curl -s -o /dev/null -H 'Host: example.com' 'http://127.0.0.1:8081$path'" ); }
+function pstate() { return nppp_http_purge_state(); }
+function learned_page() { return ! empty( pstate()['page']['single'] ); }
+$LEGACY_MODULE = in_array( $argv[3] ?? 'v40', [ 'v30', 'v25' ], true );   // v2.5 / v3.0.x: no purge_all handling asserted
+
+if ( in_array( $sc, [ 'inline', 'inline_wp', 'inline_try', 'inline_map' ], true ) ) {
+    warm( 'p', 6 ); g( '/p/3/?color=blue' );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === true, "$sc: single purge -> true", var_export( $r, true ) . ' ' . notes() );
+    chk( xcache( '/p/1/' ) === 'MISS', "$sc: the REAL page is purged (not a junk entry under the purge prefix)" );
+    chk( xcache( '/p/2/' ) === 'HIT', "$sc: a neighbour page is untouched" );
+    chk( array_slice( $T['reqs'], 0, 2 ) === [ 'GET ' . NPP_ORIGIN . '/npp_purge_single/p/1/', 'PURGE ' . NPP_ORIGIN . '/p/1/' ],
+        "$sc: GET to the prefixed endpoint proves nothing -> PURGE goes to the page's own URL", implode( ' | ', $T['reqs'] ) );
+    chk( ( pstate()['methods'] ?? [] ) === [ 'single' => 'PURGE' ] && learned_page(), "$sc: PURGE + page-URL target remembered", json_encode( pstate() ) );
+
+    $n = nreqs(); $r = nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( $r === true && xcache( '/p/2/' ) === 'MISS', "$sc: second purge -> true, page purged", var_export( $r, true ) );
+    chk( nreqs() === $n + 1 && $T['reqs'][ $n ] === 'PURGE ' . NPP_ORIGIN . '/p/2/', "$sc: learned target is used straight away: one PURGE on the page URL, no GET, no junk entry", implode( ' | ', array_slice( $T['reqs'], $n ) ) );
+
+    $r = nppp_http_purge_try_first( 'http://example.com/p/3/?color=blue' );
+    chk( $r === true && xcache( '/p/3/?color=blue' ) === 'MISS', "$sc: the query string survives (own URL carries it)", var_export( $r, true ) );
+
+    $r = nppp_http_purge_try_first( 'http://example.com/never/' );
+    chk( $r === false, "$sc: a miss answered to a PURGE request is not trusted -> false (the filesystem layers decide)", var_export( $r, true ) );
+    chk( locks() === [], "$sc: no lock was armed", implode( ',', locks() ) );
+    chk( $T['notices'] === [], "$sc: nothing was reported (everything worked)", notes() );
+
+    if ( ! $LEGACY_MODULE ) {
+        $r = nppp_http_purge_all();
+        chk( $r === true && cnt() === 0, "$sc: purge_all (GET -> 405 Allow: PURGE -> PURGE) -> true, cache empty", var_export( $r, true ) . ' files=' . cnt() . ' ' . notes() );
+    }
+}
+
+/* Method-keyed cache + inline PURGE: a PURGE request builds ...PURGE... and can never match the GET-keyed page. The
+ * plugin must NOT claim success; the filesystem layers purge. (Fix on the nginx side: scenario inline_map.) */
+if ( $sc === 'inline_rm' ) {
+    warm( 'p', 4 );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === false, 'inline_rm: never claims success for a key that carries $request_method', var_export( $r, true ) );
+    chk( xcache( '/p/1/' ) === 'HIT', 'inline_rm: the page is still cached (so the filesystem purge MUST follow)' );
+    chk( locks() === [] && $T['notices'] === [], 'inline_rm: no lock, no noise', implode( ',', locks() ) . ' ' . notes() );
+    chk( array_slice( $T['reqs'], 0, 2 ) === [ 'GET ' . NPP_ORIGIN . '/npp_purge_single/p/1/', 'PURGE ' . NPP_ORIGIN . '/p/1/' ], 'inline_rm: GET then PURGE on the page URL', implode( ' | ', $T['reqs'] ) );
+    $n = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( nreqs() === $n + 1 && $T['reqs'][ $n ] === 'PURGE ' . NPP_ORIGIN . '/p/2/', 'inline_rm: later purges cost one request', implode( ' | ', array_slice( $T['reqs'], $n ) ) );
+    chk( nppp_http_purge_try_first( 'http://example.com/never/' ) === false, 'inline_rm: miss -> false' );
+    if ( ! $LEGACY_MODULE ) {
+        $r = nppp_http_purge_all();
+        chk( $r === true && cnt() === 0, 'inline_rm: purge_all does not depend on the key -> true, cache empty', var_export( $r, true ) . ' files=' . cnt() );
+    }
+}
+
+/* The inline location only admits 127.0.0.1-style clients; ours is not in the list. The refusal must reach the admin. */
+if ( $sc === 'inline_denied' ) {
+    warm( 'p', 3 );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === false && locks() === [ 'single' ], 'inline_denied: 403 -> false, locks single only', var_export( $r, true ) . ' ' . implode( ',', locks() ) );
+    chk( xcache( '/p/1/' ) === 'HIT', 'inline_denied: nothing was purged' );
+    chk( strpos( notes(), 'Access denied' ) !== false, 'inline_denied: the "not in the from whitelist" hint is shown', notes() );
+    $n = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( nreqs() === $n, 'inline_denied: the locked endpoint is not hit again' );
+}
+
+/* Inline first, dedicated location afterwards: the learned page-URL PURGE now hits plain PHP. The exchange must notice
+ * ("foreign"), go back to GET on the dedicated endpoint, succeed and forget the old target. */
+if ( $sc === 'inline_switch' ) {
+    warm( 'p', 3 );
+    chk( nppp_http_purge_try_first( 'http://example.com/p/1/' ) === true && learned_page(), 'inline_switch: phase 1 (inline) learned the page-URL target', json_encode( pstate() ) );
+    $ng = getenv( 'NG' ) ?: '';
+    shell_exec( ( $ng !== '' ? 'NG=' . escapeshellarg( $ng ) . ' ' : '' ) . escapeshellarg( __DIR__ . '/nginx.sh' ) . ' sync >/dev/null 2>&1' );
+    warm( 'p', 3 );
+    $n = nreqs(); $r = nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( $r === true && xcache( '/p/2/' ) === 'MISS', 'inline_switch: phase 2 (dedicated location) purges the real page -> true', var_export( $r, true ) . ' ' . notes() );
+    chk( locks() === [], 'inline_switch: no lock was armed by the stale target', implode( ',', locks() ) );
+    chk( ( pstate()['methods'] ?? [] ) === [] && ! learned_page(), 'inline_switch: the stale PURGE + page target is forgotten', json_encode( pstate() ) );
+    $n2 = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/3/' );
+    chk( nreqs() === $n2 + 1 && $T['reqs'][ $n2 ] === 'GET ' . NPP_ORIGIN . '/npp_purge_single/p/3/', 'inline_switch: back to one GET on the dedicated endpoint', implode( ' | ', array_slice( $T['reqs'], $n2 ) ) );
+}
+
+/* No purge location of any kind: the probe PURGE reaches plain PHP and gets an ordinary page. That says nothing about the
+ * endpoint: stay silent, arm nothing, learn nothing, do not probe again for 6 hours. */
+if ( $sc === 'noloc' ) {
+    warm( 'p', 3 );
+    $r = nppp_http_purge_try_first( 'http://example.com/p/1/' );
+    chk( $r === false, 'noloc: false (filesystem layers purge)', var_export( $r, true ) );
+    chk( locks() === [] && $T['notices'] === [], 'noloc: no lock, no notice', implode( ',', locks() ) . ' ' . notes() );
+    chk( ( pstate()['methods'] ?? [] ) === [] && ! learned_page(), 'noloc: nothing learned from an ordinary page', json_encode( pstate() ) );
+    chk( xcache( '/p/1/' ) === 'HIT', 'noloc: page untouched' );
+    $n = nreqs(); nppp_http_purge_try_first( 'http://example.com/p/2/' );
+    chk( nreqs() === $n + 1 && substr( $T['reqs'][ $n ], 0, 4 ) === 'GET ', 'noloc: a recent probe is not repeated', implode( ' | ', array_slice( $T['reqs'], $n ) ) );
+}
+
 echo $F ? "== $sc: $F FAILED\n" : "== $sc: all passed\n";
 exit( $F ? 1 : 0 );

@@ -1426,6 +1426,198 @@ nppp_http_purge_remember_method( 'all', 'PURGE' );
 ok( ! isset( $GLOBALS['T']['transients'][ NPPP_HTTP_PURGE_BROKEN_KEY ] ) && isset( $GLOBALS['T']['options'][ EP_OPT ] ), 'state: first write moves it to the option, transient dropped' );
 is_( locks_keys(), [ 'single' ], 'state: the migrated lock is kept' );
 
+/* ------------------------------------------------- inline PURGE: the page's own URL is the target */
+/* "fastcgi_cache_purge PURGE" inside the cached location builds the key from the URI it receives. A PURGE sent to the
+ * prefixed endpoint path purges the junk entry the GET probe created there and answers "purged" while the page stays
+ * cached. The probe / foreign-page PURGE therefore goes to the page's own URL; the target is remembered. */
+function rurl( $i ) { return $GLOBALS['T']['requests'][ $i ]['url'] ?? null; }
+function rmeth( $i ) { return $GLOBALS['T']['requests'][ $i ]['args']['method'] ?? null; }
+function page_flag() { return ! empty( nppp_http_purge_state()['page']['single'] ); }
+$EP = 'https://example.com/npp_purge_single/blog/post/';
+
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'inline: GET 404 then PURGE purged -> true' );
+is_( [ rmeth( 0 ), rurl( 0 ) ], [ 'GET', $EP ], 'inline: the GET probe goes to the endpoint path' );
+is_( [ rmeth( 1 ), rurl( 1 ) ], [ 'PURGE', $U ], 'inline: the PURGE goes to the PAGE URL' );
+is_( nppp_http_purge_state()['methods'], [ 'single' => 'PURGE' ], 'inline: PURGE remembered' );
+ok( page_flag(), 'inline: page-URL target remembered' );
+Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( 'https://example.com/other/' ), true, 'inline learned: next purge -> true' );
+is_( [ nreq(), rmeth( 2 ), rurl( 2 ) ], [ 3, 'PURGE', 'https://example.com/other/' ], 'inline learned: ONE PURGE on the page URL, no GET (no junk entry)' );
+
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U . '?x=1&y=2' );
+is_( rurl( 1 ), $U . '?x=1&y=2', 'inline: the query string is part of the page URL' );
+
+t_reset();
+Q( R( 200, '', $SITE ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'inline: foreign 200 then PURGE purged -> true' );
+is_( [ rmeth( 1 ), rurl( 1 ) ], [ 'PURGE', $U ], 'inline: foreign page -> PURGE goes to the PAGE URL' );
+ok( page_flag(), 'inline: foreign -> page target remembered' );
+
+t_reset();
+Q( R( 302 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( [ rmeth( 1 ), rurl( 1 ) ], [ 'PURGE', $U ], 'inline: redirect on the GET probe -> PURGE goes to the PAGE URL' );
+
+/* regression guard: a module that answered with its OWN 405 is a dedicated PURGE location: the endpoint path stays */
+t_reset();
+Q( R( 405, 'method_not_allowed', '', [ 'allow' => 'PURGE' ] ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'dedicated PURGE location: 405 then PURGE -> true' );
+is_( [ rmeth( 1 ), rurl( 1 ) ], [ 'PURGE', $EP ], 'dedicated PURGE location: PURGE stays on the ENDPOINT path' );
+ok( ! page_flag(), 'dedicated PURGE location: no page target learned' );
+t_reset();
+Q( R( 405, '', '', [ 'allow' => 'GET, PURGE' ] ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( rurl( 1 ), $EP, 'plain 405 Allow: PURGE keeps the endpoint path too' );
+
+/* regression guard: GET works -> nothing about the page URL */
+t_reset();
+Q( R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( [ nreq(), rmeth( 0 ), rurl( 0 ) ], [ 1, 'GET', $EP ], 'dedicated GET location: one GET on the endpoint path' );
+ok( ! page_flag(), 'dedicated GET location: no page target' );
+
+/* the page answered like an ordinary page: it says nothing about the endpoint, report the endpoint's own answer */
+foreach ( [
+    'ordinary 200 page'      => [ R( 200, '', $SITE ), false ],
+    '301 (canonical redirect)' => [ R( 301 ), false ],
+    '502 from PHP'           => [ R( 502 ), false ],
+    '500 from PHP'           => [ R( 500 ), false ],
+    '405 from a WAF'         => [ R( 405 ), false ],
+    '404 (page is gone)'     => [ R( 404 ), false ],
+] as $label => [ $own_answer, $want ] ) {
+    t_reset();
+    Q( R( 404 ), $own_answer );
+    is_( nppp_http_purge_try_first( $U ), $want, "inline: page URL answers $label -> false" );
+    is_( locks_keys(), [], "inline: page URL answers $label -> no lock (the page is not the endpoint)" );
+    is_( $GLOBALS['T']['notices'], [], "inline: page URL answers $label -> silent" );
+    is_( nppp_http_purge_state()['methods'], [], "inline: page URL answers $label -> nothing learned" );
+    ok( ! page_flag(), "inline: page URL answers $label -> no page target" );
+}
+t_reset();
+Q( R( 404 ), R( 200, '', $SITE ) );
+nppp_http_purge_try_first( $U );
+Q( R( 404 ) );
+nppp_http_purge_try_first( 'https://example.com/p2/' );
+is_( [ nreq(), rmeth( 2 ) ], [ 3, 'GET' ], 'inline: after a useless probe the next purge is ONE GET (probe quiet for 6 h)' );
+
+/* the module's own answers on the page URL are kept */
+t_reset();
+Q( R( 404 ), R( 403, 'access_denied' ) );
+is_( nppp_http_purge_try_first( $U ), false, 'inline: module 403 access_denied on the page URL -> false' );
+is_( locks_keys(), [ 'single' ], 'inline: module 403 locks single (the from-list needs the server IP)' );
+ok( notice_has( 'Access denied' ), 'inline: the whitelist hint is shown' );
+t_reset();
+Q( R( 404 ), R( 403 ) );
+nppp_http_purge_try_first( $U );
+is_( locks_keys(), [ 'single' ], 'inline: bare 403 on the page URL still reports "denied"' );
+t_reset();
+Q( R( 404 ), R( 200, 'no_match' ) );
+is_( nppp_http_purge_try_first( $U ), false, 'inline: v4 no_match on a PURGE request is not trusted -> false' );
+is_( locks_keys(), [], 'inline: no_match: no lock' );
+is_( nppp_http_purge_state()['methods'], [ 'single' => 'PURGE' ], 'inline: no_match proves the module is there: PURGE remembered' );
+ok( page_flag(), 'inline: no_match: page target remembered' );
+t_reset();
+Q( R( 404 ), R( 412 ) );
+is_( nppp_http_purge_try_first( $U ), false, 'inline: v3 412 on a PURGE request is not trusted -> false' );
+ok( page_flag(), 'inline: v3 412: page target remembered' );
+t_reset();
+Q( R( 404 ), E( 'cURL error 28: Operation timed out after 8000 milliseconds' ) );
+is_( nppp_http_purge_try_first( $U ), false, 'inline: timeout on the page URL -> false' );
+is_( locks_keys(), [], 'inline: timeout does not lock (nginx is alive)' );
+
+/* a learned page target that stops working: back to GET on the endpoint, forget the target */
+t_reset(); ep_seed( [ 'methods' => [ 'single' => 'PURGE' ], 'page' => [ 'single' => 1 ] ], 3600 );
+Q( R( 200, '', $SITE ), R( 200, 'purged' ) );
+is_( nppp_http_purge_try_first( $U ), true, 'learned page target hits plain PHP -> falls back to GET on the endpoint -> true' );
+is_( [ rmeth( 0 ), rurl( 0 ), rmeth( 1 ), rurl( 1 ) ], [ 'PURGE', $U, 'GET', $EP ], 'learned page target: PURGE page URL, then GET endpoint' );
+is_( nppp_http_purge_state()['methods'], [], 'learned page target: method forgotten after GET works' );
+ok( ! page_flag(), 'learned page target: target forgotten' );
+is_( locks_keys(), [], 'learned page target: no lock' );
+t_reset(); ep_seed( [ 'methods' => [ 'single' => 'PURGE' ], 'page' => [ 'single' => 1 ] ], 3600 );
+Q( R( 200, '', $SITE ), R( 200, '', $SITE ) );
+is_( nppp_http_purge_try_first( $U ), false, 'learned page target + nothing works anywhere -> false' );
+is_( locks_keys(), [ 'single' ], 'learned page target + nothing works: foreign locks single (as before the change)' );
+
+/* the endpoint filter wins: whoever rewrote the URL knows where their location is */
+t_reset();
+t_filter( 'nppp_http_purge_url', fn( $u, $o ) => 'https://example.com/custom-purge/blog/post/' );
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( rurl( 1 ), 'https://example.com/custom-purge/blog/post/', 'nppp_http_purge_url filter: PURGE stays on the filtered URL' );
+ok( ! page_flag(), 'nppp_http_purge_url filter: no page target' );
+t_reset();
+t_filter( 'nppp_http_purge_url', fn( $u, $o ) => $u );   // identity: not a rewrite
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( rurl( 1 ), $U, 'nppp_http_purge_url filter returning the default keeps the inline behaviour' );
+
+/* the plugin's own endpoints are never a page target */
+foreach ( [
+    'purge all path'    => 'https://example.com/npp_purge_all',
+    'purge all subpath' => 'https://example.com/npp_purge_all/x/',
+    'status path'       => 'https://example.com/purge_status',
+    'single prefix'     => 'https://example.com/npp_purge_single/x/',
+] as $label => $reserved ) {
+    t_reset( [ 'nppp_http_purge_queue_status_path' => 'purge_status' ] );
+    Q( R( 404 ), R( 200, 'purged' ) );
+    nppp_http_purge_try_first( $reserved );
+    $path = parse_url( $reserved, PHP_URL_PATH );
+    is_( rurl( 1 ), 'https://example.com/npp_purge_single' . $path, "reserved path ($label): PURGE stays on the endpoint path" );
+    ok( ! page_flag(), "reserved path ($label): no page target" );
+}
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( 'https://example.com/npp_purge_allies/' );
+is_( rurl( 1 ), 'https://example.com/npp_purge_allies/', 'a page that merely STARTS like a reserved path is an ordinary page' );
+
+/* Custom Base URL: the page URL lives on that origin, Host stays the site's */
+t_reset( [ 'nppp_http_purge_custom_url' => 'http://127.0.0.1:8081' ] );
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U . '?a=b' );
+is_( [ rurl( 0 ), rurl( 1 ) ], [ 'http://127.0.0.1:8081/npp_purge_single/blog/post/?a=b', 'http://127.0.0.1:8081/blog/post/?a=b' ], 'custom base URL: endpoint and page URL share the origin' );
+is_( $GLOBALS['T']['requests'][1]['args']['headers']['Host'], 'example.com', 'custom base URL: Host header is still the site host' );
+
+/* the retry-method filter can switch the inline path off */
+t_reset();
+t_filter( 'nppp_http_purge_retry_methods', fn() => [] );
+Q( R( 404 ) );
+is_( nppp_http_purge_try_first( $U ), false, 'retry methods filter emptied: 404 -> false' );
+is_( nreq(), 1, 'retry methods filter emptied: no PURGE is ever sent' );
+t_reset(); ep_seed( [ 'methods' => [ 'single' => 'PURGE' ], 'page' => [ 'single' => 1 ] ], 3600 );
+t_filter( 'nppp_http_purge_retry_methods', fn() => [] );
+Q( R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( [ rmeth( 0 ), rurl( 0 ) ], [ 'GET', $EP ], 'retry methods filter emptied: a learned page target is ignored, GET on the endpoint' );
+
+/* Purge All has no page URL: its PURGE stays on the endpoint */
+t_reset();
+Q( R( 405, 'method_not_allowed', '', [ 'allow' => 'PURGE' ] ), R( 200, 'purged' ) );
+is_( nppp_http_purge_all(), true, 'purge all: 405 then PURGE -> true' );
+is_( [ rurl( 0 ), rurl( 1 ), rmeth( 1 ) ], [ 'https://example.com/npp_purge_all', 'https://example.com/npp_purge_all', 'PURGE' ], 'purge all: both requests on the Purge All endpoint' );
+ok( ! page_flag() && ! isset( nppp_http_purge_state()['page']['all'] ), 'purge all: no page target ever' );
+
+/* state hygiene */
+t_reset(); ep_seed( [ 'page' => [ 'single' => 1 ] ], 3600 );
+ok( ! isset( nppp_http_purge_state()['page'] ), 'state: a page flag without a learned method is dropped' );
+t_reset(); ep_seed( [ 'methods' => [ 'all' => 'PURGE' ], 'page' => [ 'all' => 1 ] ], 3600 );
+ok( ! isset( nppp_http_purge_state()['page'] ), 'state: only the single scope can carry a page target' );
+t_reset(); nppp_http_purge_remember_method( 'single', 'PURGE' );
+ok( ! isset( nppp_http_purge_state()['page'] ), 'remember_method(scope, method) keeps its old meaning: no page target' );
+nppp_http_purge_remember_method( 'single', 'PURGE', true );
+ok( page_flag(), 'remember_method(..., true) stores the page target' );
+nppp_http_purge_remember_method( 'single', 'PURGE', false );
+ok( ! page_flag() && nppp_http_purge_state()['methods'] === [ 'single' => 'PURGE' ], 'remember_method(..., false) clears the target, keeps the method' );
+nppp_http_purge_remember_method( 'single', 'PURGE', true ); nppp_http_purge_remember_method( 'single', 'GET', true );
+ok( ! page_flag() && nppp_http_purge_state()['methods'] === [], 'GET forgets method and target (a page target needs a non-GET method)' );
+t_reset(); nppp_http_purge_remember_method( 'single', 'PURGE', true ); nppp_http_purge_arm( 'single', 'x', 600 );
+ok( page_flag(), 'state: a lock written later keeps the page target' );
+$GLOBALS['T']['transients'] = [];
+ok( page_flag(), 'state: the page target survives an object-cache flush (it lives in the option)' );
+
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
 exit( $FAIL ? 1 : 0 );

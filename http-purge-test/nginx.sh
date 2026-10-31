@@ -10,6 +10,15 @@
 #   wrongep     single purge location bound to cache_purge_queue_status (200 status)
 #   keymismatch v4 namespace mode, purge_all location whose key does not contain $cache_purge_key (500 key_mismatch)
 #   vary        cache_purge_vary_aware on; vary_off = same site, directive off (Vary variants kept)
+#   inline*     the INLINE setup: "fastcgi_cache_purge PURGE from 127.0.0.1;" in the cached PHP location, no dedicated
+#               single purge location (Purge All keeps its own "... PURGE purge_all" location). Variants:
+#     inline         cache key WITHOUT $request_method, every path answers 200 (site/)
+#     inline_wp      same, WordPress-like upstream: the purge prefix answers 404, and nginx caches that 404 (site-wp/)
+#     inline_try     inline purge in a named location reached through try_files (the classic WordPress layout)
+#     inline_denied  inline purge whose "from" list excludes the client (403)
+#     inline_rm      cache key WITH $request_method: a PURGE request can never build the key of the GET-cached page
+#     inline_map     key built from a map that turns PURGE into GET: inline purge works with a method-keyed cache
+#   noloc       no purge location at all (WordPress-like 404 upstream)
 HERE=$(cd "$(dirname "$0")" && pwd)
 NGROOT=${NGROOT:-$HERE/ng}; V4=$NGROOT/nginx-run   # v4 build; v3.0 = ${V4}303, v2.5 = ${V4}256
 NG=${NG:-$V4}
@@ -55,6 +64,26 @@ case $MODE in
   keymismatch) PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; $BIND fastcgi_cache $ALLZONE; fastcgi_cache_key \"x\$cache_purge_key\"; fastcgi_cache_purge GET purge_all from all; }";;
 esac
 [ "$STATUS" = yes ] && ST='location = /purge_status { allow 127.0.0.1; deny all; cache_purge_queue_status /tmp/npp-cache; }'
+# --- inline / noloc family: no dedicated single purge location -------------------------------------------------------
+SITEDIR=site; FCV="fastcgi_cache_valid 200 30d;"; INLPURGE=""; INLINE_FROM="127.0.0.1"; INLINE_KEY='$scheme$host$request_uri'
+case $MODE in
+  inline|inline_wp|inline_try|inline_denied|inline_rm|inline_map)
+    [ "$MODE" = inline_rm ]     && INLINE_KEY='$scheme$request_method$host$request_uri'
+    [ "$MODE" = inline_map ]    && { INLINE_KEY='$scheme$npp_key_method$host$request_uri'; EXTRA="$EXTRA map \$request_method \$npp_key_method { PURGE GET; default \$request_method; }"; }
+    [ "$MODE" = inline_denied ] && INLINE_FROM="10.255.255.1"
+    [ "$MODE" = inline_wp ]     && { SITEDIR=site-wp; FCV="fastcgi_cache_valid 200 30d; fastcgi_cache_valid 404 1m;"; }
+    KEYLINE="fastcgi_cache_key \"$INLINE_KEY\";"
+    INLPURGE="fastcgi_cache_purge PURGE from $INLINE_FROM;"
+    SINGLEBLOCK=""
+    PALLBLOCK="location = /npp_purge_all { allow 127.0.0.1; deny all; fastcgi_cache NPP; $KEYLINE fastcgi_cache_purge PURGE purge_all from all; }"
+    ;;
+  noloc) SITEDIR=site-wp; SINGLEBLOCK=""; PALLBLOCK="";;
+esac
+# a v2.5 build has neither cache_purge_response_type nor purge_all
+case "$NG" in *256) RTLINE=""; PALLBLOCK="";; esac
+PHPBODY="$BIND fastcgi_pass unix:/tmp/fpm.sock; include fastcgi_params; fastcgi_param SCRIPT_FILENAME $HERE/$SITEDIR/index.php; $KEYLINE fastcgi_cache NPP; $FCV $INLPURGE add_header X-Cache \$upstream_cache_status;"
+MAINLOC="location / { $PHPBODY }"
+[ "$MODE" = inline_try ] && MAINLOC="location / { try_files \$uri @php; } location @php { $PHPBODY }"
 THR=""; [ "$NG" = "$V4" ] && THR="thread_pool default threads=2;"
 [ "$MODE" = single202 ] && BG="cache_purge_background_queue on; cache_purge_throttle_ms 50ms;"
 mkdir -p $NG/conf/state $NG/logs
@@ -78,16 +107,7 @@ http {
     listen 127.0.0.1:8081;
     server_name example.com;
     root $HERE/site;
-    location / {
-      $BIND
-      fastcgi_pass unix:/tmp/fpm.sock;
-      include fastcgi_params;
-      fastcgi_param SCRIPT_FILENAME $HERE/site/index.php;
-      $KEYLINE
-      fastcgi_cache NPP;
-      fastcgi_cache_valid 200 30d;
-      add_header X-Cache \$upstream_cache_status;
-    }
+    $MAINLOC
     $SINGLEBLOCK
     $PALLBLOCK
     $ST
