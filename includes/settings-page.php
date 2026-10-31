@@ -447,9 +447,15 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. Also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
-                                <p>
-                                    <?php nppp_varnish_header_callback(); ?>
-                                </p>
+                            </td>
+                        </tr>
+                        <tr valign="top" id="nppp-varnish-header-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-network"></span>
+                                <?php echo esc_html__( 'Varnish / Vinyl Cache Control Header', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_varnish_header_callback(); ?>
                                 <p class="description">
                                     <?php echo esc_html__( 'Optional control header sent with every PURGE, as Name: value (e.g. X-Control-Key: secret) for a VCL that requires a key. Stored in plain text in the plugin settings, like the API key. Never written to the log.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>

@@ -5196,7 +5196,9 @@ $(document).ready(function() {
         '#nppp_http_purge_suffix',
         '#nppp_http_purge_custom_url',
         '#nppp_http_purge_all_path',
-        '#nppp_http_purge_queue_status_path'
+        '#nppp_http_purge_queue_status_path',
+        '#nppp_varnish_endpoints',
+        '#nppp_varnish_header'
     ];
 
     // Initialize originalValues with current field values

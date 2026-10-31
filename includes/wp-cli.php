@@ -635,6 +635,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *     wp npp settings set nginx_cache_path /var/cache/nginx/fastcgi
      *     wp npp settings set nppp_http_purge_queue_status_path npp_purge_status
      *     wp npp settings set nppp_http_purge_queue_status_path ""
+     *     wp npp settings set nppp_varnish_endpoints "http://127.0.0.1:6081"
+     *     wp npp settings set nppp_varnish_header "X-Control-Key: your-secret"
+     *     wp npp settings set nppp_varnish_endpoints ""
      *
      * @when after_wp_load
      */
@@ -1209,11 +1212,18 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $key   = (string) ( $args[1] ?? '' );
         $value = (string) ( $args[2] ?? '' );
 
-        // The Cache Status Path is the one optional setting: an explicit empty value ("") clears it,
-        // like emptying the field on the Settings page. A missing value stays a usage error.
-        $clears_status_path = ( $key === 'nppp_http_purge_queue_status_path' && array_key_exists( 2, $args ) );
+        // Optional settings: an explicit empty value ("") clears them, like emptying the field on the
+        // Settings page. A missing value stays a usage error. The same keys may be absent from the stored
+        // array on installs upgraded from an older version (defaults are only merged on activation).
+        static $optional_keys = [
+            'nppp_http_purge_queue_status_path',
+            'nppp_varnish_endpoints',
+            'nppp_varnish_header',
+        ];
+        $is_optional_key = in_array( $key, $optional_keys, true );
+        $clears_optional = ( $is_optional_key && array_key_exists( 2, $args ) );
 
-        if ( $key === '' || ( $value === '' && ! $clears_status_path ) ) {
+        if ( $key === '' || ( $value === '' && ! $clears_optional ) ) {
             WP_CLI::error( __( 'Usage: wp npp settings set <key> <value>', 'fastcgi-cache-purge-and-preload-nginx' ) );
             return;
         }
@@ -1226,8 +1236,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         }
 
         $settings = get_option( 'nginx_cache_settings', [] );
-        // The queue status key is allowed before it exists: defaults are only merged on activation.
-        if ( ! array_key_exists( $key, $settings ) && $key !== 'nppp_http_purge_queue_status_path' ) {
+        // Optional keys are allowed before they exist: defaults are only merged on activation.
+        if ( ! array_key_exists( $key, $settings ) && ! $is_optional_key ) {
             WP_CLI::error( sprintf(
                 /* translators: %s: The unknown settings key name */
                 __( 'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1421,6 +1431,38 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( $sanitized !== '' && ! preg_match( '/^[a-zA-Z0-9_\-\/]+$/', $sanitized ) ) {
                 WP_CLI::error( __( 'ERROR OPTION: HTTP Purge Cache Status Path must contain only letters, digits, hyphens, underscores, and slashes (e.g. "purge_status").', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
+        } elseif ( $key === 'nppp_varnish_endpoints' ) {
+            // Mirror settings-sanitize.php: validate with the shared parser (never sanitize_text_field(),
+            // it would strip the line breaks of a multi-endpoint list). Empty clears the list = sync OFF.
+            if ( ! function_exists( 'nppp_varnish_parse_endpoints' ) ) {
+                WP_CLI::error( __( 'Varnish / Vinyl Cache support is not loaded.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            $vc_errors = [];
+            $vc_list   = nppp_varnish_parse_endpoints( $value, $vc_errors );
+            if ( ! empty( $vc_errors ) ) {
+                WP_CLI::error( sprintf(
+                    /* translators: %s: reason */
+                    __( 'ERROR OPTION: Varnish / Vinyl Cache endpoints are invalid (%s).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    function_exists( 'nppp_varnish_parse_error_label' ) ? nppp_varnish_parse_error_label( (string) reset( $vc_errors ) ) : 'invalid value'
+                ) );
+            }
+            $sanitized = implode( "\n", $vc_list );
+        } elseif ( $key === 'nppp_varnish_header' ) {
+            // Mirror settings-sanitize.php: no sanitize_text_field() (it would strip %XX from a secret);
+            // the shared parser rejects CR/LF/control characters and reserved header names itself.
+            if ( ! function_exists( 'nppp_varnish_parse_header' ) ) {
+                WP_CLI::error( __( 'Varnish / Vinyl Cache support is not loaded.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+            }
+            $vc_hdr_error = '';
+            $vc_hdr       = nppp_varnish_parse_header( $value, $vc_hdr_error );
+            if ( $vc_hdr_error !== '' ) {
+                WP_CLI::error( sprintf(
+                    /* translators: %s: reason */
+                    __( 'ERROR OPTION: Varnish / Vinyl Cache control header is invalid (%s).', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    function_exists( 'nppp_varnish_parse_error_label' ) ? nppp_varnish_parse_error_label( $vc_hdr_error ) : 'invalid value'
+                ) );
+            }
+            $sanitized = empty( $vc_hdr ) ? '' : $vc_hdr['name'] . ': ' . $vc_hdr['value'];
         } elseif ( $key === 'nppp_http_purge_suffix' ) {
             // Mirror settings-sanitize.php: alphanumeric + hyphens/underscores only, non-empty.
             $sanitized = trim( sanitize_text_field( $value ), '/' );
@@ -1471,8 +1513,13 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             }
         }
 
+        // The control header value is a secret: show only the header name.
+        $shown_value = ( $key === 'nppp_varnish_header' && (string) $sanitized !== '' )
+            ? strstr( (string) $sanitized, ':', true ) . ': ***'
+            : (string) $sanitized;
+
         /* translators: 1: Settings key name 2: New value */
-        WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, (string) $sanitized ) );
+        WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, $shown_value ) );
         if ( $path_was_reset ) {
             WP_CLI::warning( __( 'Cache path was outside the allowed directories and has been reset to /dev/shm/change-me-now.', 'fastcgi-cache-purge-and-preload-nginx' ) );
         }
@@ -1591,6 +1638,8 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_rg_purge_enabled'               => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_custom_url'          => __( 'HTTP Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_queue_status_path'   => __( 'HTTP Purge Cache Status Path', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_varnish_endpoints'              => __( 'Varnish / Vinyl Cache Sync Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_varnish_header'                 => __( 'Varnish / Vinyl Cache Control Header', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),
