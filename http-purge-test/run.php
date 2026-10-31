@@ -1618,6 +1618,73 @@ ok( page_flag(), 'state: a lock written later keeps the page target' );
 $GLOBALS['T']['transients'] = [];
 ok( page_flag(), 'state: the page target survives an object-cache flush (it lives in the option)' );
 
+/* ------------------------------------------------- dashboard widget: inline PURGE vs dedicated location */
+function mode_row( $scope ) { $r = nppp_state_get( 'http_purge_mode' ); return is_array( $r ) ? ( $r[ $scope ] ?? null ) : null; }
+
+t_reset();
+is_( nppp_http_purge_observed_setup(), '', 'setup: nothing observed yet -> unknown' );
+
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( nppp_http_purge_observed_setup(), 'inline', 'setup: inline PURGE on the page URL -> inline' );
+is_( mode_row( 'single' )['mode'] ?? null, 'sync', 'setup: inline purge still records its mode' );
+is_( nppp_http_purge_observed_mode()['mode'] ?? null, 'sync', 'setup: observed mode is unchanged by the page flag' );
+
+t_reset();
+Q( R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( nppp_http_purge_observed_setup(), 'location', 'setup: dedicated GET location -> location' );
+
+t_reset();
+Q( R( 405, 'method_not_allowed', '', [ 'allow' => 'PURGE' ] ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( nppp_http_purge_observed_setup(), 'location', 'setup: dedicated PURGE location (own 405) -> location, not inline' );
+
+/* Purge All has its own location in every setup: it never says anything about the single purge */
+t_reset();
+Q( R( 405, 'method_not_allowed', '', [ 'allow' => 'PURGE' ] ), R( 200, 'purged' ) );
+nppp_http_purge_all();
+is_( nppp_http_purge_observed_setup(), '', 'setup: Purge All alone proves nothing about the single purge' );
+is_( mode_row( 'all' )['page'] ?? null, false, 'setup: the Purge All row never carries a page target' );
+
+/* a row written before the setup was recorded reads as unknown, and the next purge completes it */
+t_reset();
+nppp_state_set( 'http_purge_mode', [ 'single' => [ 'mode' => 'sync', 'at' => time() ] ], 30 * DAY_IN_SECONDS );
+is_( nppp_http_purge_observed_setup(), '', 'setup: legacy row without a page key -> unknown' );
+Q( R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( nppp_http_purge_observed_setup(), 'location', 'setup: the next purge completes a legacy row (inside the 6 h window)' );
+
+/* inline first, dedicated location later: the setup flips at once even though the mode did not change */
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( nppp_http_purge_observed_setup(), 'inline', 'setup switch: phase 1 inline' );
+Q( R( 200, '', $SITE ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+is_( nppp_http_purge_observed_setup(), 'location', 'setup switch: phase 2 dedicated location replaces inline within 6 h' );
+
+/* the hot path stays write-free while nothing changes */
+t_reset();
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( $U );
+$aged = time() - 100;   // a rewrite would move 'at' to now
+nppp_state_set( 'http_purge_mode', [ 'single' => [ 'mode' => 'sync', 'at' => $aged, 'page' => true ] ], 30 * DAY_IN_SECONDS );
+Q( R( 200, 'purged' ) );
+nppp_http_purge_try_first( 'https://example.com/other/' );
+is_( mode_row( 'single' )['at'], $aged, 'setup: unchanged mode + setup inside 6 h -> no rewrite' );
+t_reset();   // fresh endpoint state, so the 404 is probed again
+nppp_state_set( 'http_purge_mode', [ 'single' => [ 'mode' => 'sync', 'at' => $aged, 'page' => false ] ], 30 * DAY_IN_SECONDS );
+Q( R( 404 ), R( 200, 'purged' ) );
+nppp_http_purge_try_first( 'https://example.com/third/' );
+ok( mode_row( 'single' )['at'] > $aged && mode_row( 'single' )['page'] === true, 'setup: same mode but a different setup IS rewritten' );
+
+/* labels */
+is_( nppp_http_purge_setup_label( 'inline' ), 'Inline PURGE', 'label: inline' );
+is_( nppp_http_purge_setup_label( 'location' ), 'Dedicated location', 'label: location' );
+is_( nppp_http_purge_setup_label( '' ), '', 'label: unknown -> empty' );
+
 /* ------------------------------------------------------------------ summary */
 echo "\n$PASS passed, $FAIL failed\n";
 exit( $FAIL ? 1 : 0 );

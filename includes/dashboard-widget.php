@@ -522,6 +522,20 @@ function nppp_dashboard_widget() {
                     esc_html__('Mode: %s', 'fastcgi-cache-purge-and-preload-nginx'),
                     '<strong class="nppp-setting-val">' . esc_html($nppp_http_mode_label) . '</strong>'
                 ) . '</span>';
+
+                // How the single URL purge reaches Nginx: inline "xxx_cache_purge PURGE" or a dedicated location
+                $nppp_http_setup = function_exists('nppp_http_purge_observed_setup') ? nppp_http_purge_observed_setup() : '';
+                if ($nppp_http_setup !== '') {
+                    $note .= '<span class="nppp-setting-note">' . sprintf(
+                        /* translators: %s: how the single URL purge reaches Nginx (Inline PURGE, Dedicated location) */
+                        esc_html__('Setup: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                        '<strong class="nppp-setting-val">' . esc_html(nppp_http_purge_setup_label($nppp_http_setup)) . '</strong>'
+                    ) . '</span>';
+
+                    $tip .= ($tip !== '' ? "\n" : '') . ($nppp_http_setup === 'inline'
+                        ? __('Single URL purge: inline "cache_purge PURGE" in the cached location, sent to the page URL. Purge All uses its own location.', 'fastcgi-cache-purge-and-preload-nginx')
+                        : __('Single URL purge: dedicated purge location.', 'fastcgi-cache-purge-and-preload-nginx'));
+                }
             }
 
             // Auto Preload: completion time of the last preload

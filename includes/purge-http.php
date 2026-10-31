@@ -1449,23 +1449,31 @@ function nppp_http_purge_mode_from_outcome( string $outcome ): string {
  * Remembers the mode the last successful HTTP purge of $scope ('single' | 'all') ran in, for the
  * dashboard widget. Own option-backed row (nppp_st_http_purge_mode, swept on uninstall) so it is
  * independent of the 24 h endpoint state. Writes only on change, plus one refresh per 6 hours.
+ *
+ * $page = the request went to the page's own URL (inline "xxx_cache_purge PURGE" setup, see
+ * nppp_http_purge_exchange()). Only the single purge can do that; Purge All always has its own location.
+ * Rows written before this key existed have no 'page' key: their setup reads as unknown until the next write.
  */
-function nppp_http_purge_remember_mode( string $scope, string $outcome ): void {
+function nppp_http_purge_remember_mode( string $scope, string $outcome, bool $page = false ): void {
     $mode = nppp_http_purge_mode_from_outcome( $outcome );
     if ( $mode === '' || ! in_array( $scope, [ 'single', 'all' ], true ) ) {
         return;
     }
 
+    $page = $page && $scope === 'single';
     $rows = nppp_state_get( 'http_purge_mode' );
     $rows = is_array( $rows ) ? $rows : [];
     $now  = time();
     $cur  = isset( $rows[ $scope ] ) && is_array( $rows[ $scope ] ) ? $rows[ $scope ] : [];
 
-    if ( ( $cur['mode'] ?? '' ) === $mode && abs( $now - (int) ( $cur['at'] ?? 0 ) ) < 6 * HOUR_IN_SECONDS ) {
+    if ( ( $cur['mode'] ?? '' ) === $mode
+        && array_key_exists( 'page', $cur ) && (bool) $cur['page'] === $page
+        && abs( $now - (int) ( $cur['at'] ?? 0 ) ) < 6 * HOUR_IN_SECONDS
+    ) {
         return;
     }
 
-    $rows[ $scope ] = [ 'mode' => $mode, 'at' => $now ];
+    $rows[ $scope ] = [ 'mode' => $mode, 'at' => $now, 'page' => $page ];
     nppp_state_set( 'http_purge_mode', $rows, 30 * DAY_IN_SECONDS );
 }
 
@@ -1503,6 +1511,38 @@ function nppp_http_purge_observed_mode(): ?array {
     }
 
     return $best ?? $fallback;
+}
+
+/**
+ * How the last successful single URL purge reached the module, for the dashboard widget:
+ *   'inline'   "xxx_cache_purge PURGE" inside the cached location, the request went to the page's own URL
+ *   'location' a dedicated purge location, the request went to the purge endpoint path
+ *   ''         nothing observed yet (or a row from before the setup was recorded)
+ * Purge All always has its own location, so only the single purge row can tell.
+ */
+function nppp_http_purge_observed_setup(): string {
+    $rows = nppp_state_get( 'http_purge_mode' );
+    $row  = is_array( $rows ) && isset( $rows['single'] ) && is_array( $rows['single'] ) ? $rows['single'] : [];
+
+    if ( (int) ( $row['at'] ?? 0 ) <= 0 || ! array_key_exists( 'page', $row ) ) {
+        return '';
+    }
+
+    return $row['page'] ? 'inline' : 'location';
+}
+
+/**
+ * Translated label of a setup from nppp_http_purge_observed_setup() ('' for an unknown one).
+ */
+function nppp_http_purge_setup_label( string $setup ): string {
+    switch ( $setup ) {
+        case 'inline':
+            return __( 'Inline PURGE', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'location':
+            return __( 'Dedicated location', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    return '';
 }
 
 /**
@@ -2043,7 +2083,7 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
         // outcome, "accepted" (202) included, comes from one that is not, so it ends generation
         // mode for this scope at once (ngx_cache_purge answers 202 only without a namespace).
         nppp_http_purge_remember_generation( $scope, $outcome === 'invalidated' );
-        nppp_http_purge_remember_mode( $scope, $outcome );
+        nppp_http_purge_remember_mode( $scope, $outcome, $own );
     } else {
         nppp_http_purge_report_failure( $scope, $url, $timeout, $result );
     }
