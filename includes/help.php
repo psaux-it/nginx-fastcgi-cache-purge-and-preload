@@ -624,7 +624,7 @@ fastcgi_cache_key $cache_purge_key;</pre>
                         </ol>
                         <p>The order matters: the preload requests your public URLs, which pass through Varnish. Varnish must be clean before that, otherwise the crawl is answered by the stale Varnish copy and the Nginx cache is never warmed.</p>
 
-                        <h4><strong>Request contract</strong> (same as the Proxy Cache Purge plugin, so existing VCLs usually work)</h4>
+                        <h4><strong>Request contract</strong> (your VCL must handle both methods; <code>regex</code> must be a ban, not a purge)</h4>
                         <table class="responsive-table">
                             <thead>
                                 <tr><th>Purge</th><th>Request</th></tr>
@@ -654,7 +654,7 @@ fastcgi_cache_key $cache_purge_key;</pre>
                             <li><strong>Cache Status Path.</strong> If Nginx uses a background purge queue (<code>cache_purge_background_queue</code>), set the Cache Status Path. Without it NPP cannot wait for the queue, and Varnish can be purged while Nginx is still deleting.</li>
                         </ol>
 
-                        <h4><strong>Example VCL</strong> (untested reference, <code>vcl 4.1</code>, Varnish 6.6+ / Vinyl Cache 9.x)</h4>
+                        <h4><strong>Example VCL</strong> (<code>vcl 4.1</code>; compile-check with <code>varnishd -C -f</code> and runtime-test the regex ban before use)</h4>
                         <pre>vcl 4.1;
 import std;
 
