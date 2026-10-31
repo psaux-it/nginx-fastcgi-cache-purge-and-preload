@@ -559,7 +559,10 @@ function nppp_dashboard_widget() {
                 ) . '</span>';
             }
 
-            $nppp_tiles_html .= '<div class="nppp-setting nppp-st-' . esc_attr($state) . '"'
+            // The HTTP Purge tile carries Mode and Setup notes: give it the full row so they never wrap mid-phrase
+            $nppp_wide = ($key === 'http_purge' && $note !== '');
+
+            $nppp_tiles_html .= '<div class="nppp-setting nppp-st-' . esc_attr($state) . ($nppp_wide ? ' nppp-setting-wide' : '') . '"'
                 . ($tip !== '' ? ' title="' . esc_attr($tip) . '"' : '') . '>'
                 . '<span class="dashicons ' . esc_attr($status_info['icon']) . ' nppp-setting-icon" aria-hidden="true"></span>'
                 . '<span class="nppp-setting-text">'
