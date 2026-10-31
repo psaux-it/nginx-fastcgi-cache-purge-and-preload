@@ -436,8 +436,8 @@ if ( ! function_exists( 'nppp_varnish_endpoint_id' ) ) {
 if ( ! function_exists( 'nppp_varnish_state_map' ) ) {
     /**
      * Reads a "id => unix deadline" map from the option-backed state store and drops expired rows.
-     * (nppp_state_* survives wp_cache_flush(), which NPP's own Redis sync runs on every Purge
-     * All; a transient would be erased by it.)
+     * (nppp_state_* survives wp_cache_flush(), which NPP's own Redis sync can run on a Purge All
+     * that is followed by a preload and on Preload All; a transient would be erased by it.)
      */
     function nppp_varnish_state_map( string $key ): array {
         $map = function_exists( 'nppp_state_get' ) ? nppp_state_get( $key ) : null;
@@ -608,12 +608,22 @@ if ( ! function_exists( 'nppp_varnish_send' ) ) {
         $headers = array(
             'Host'           => nppp_varnish_host_header(),
             'X-Purge-Method' => $purge_method,
-            // Vinyl Cache 9.x expects an explicit length on a body-less PURGE.
+            // Explicit zero length keeps the body-less PURGE unambiguous for every HTTP/1.1 hop.
             'Content-Length' => '0',
         );
         if ( ! empty( $extra['name'] ) && isset( $extra['value'] ) ) {
             $headers[ $extra['name'] ] = $extra['value'];
         }
+
+        /**
+         * Filters TLS certificate verification for https:// Varnish / Vinyl Cache endpoints.
+         * Default false: the endpoint is normally a loopback or private address without a public
+         * certificate. Return true to verify it, e.g. when the control header crosses a network.
+         *
+         * @param bool   $verify   Default false.
+         * @param string $endpoint scheme://host[:port]
+         */
+        $sslverify = (bool) apply_filters( 'nppp_varnish_sslverify', false, $endpoint );
 
         add_action( 'http_api_curl', 'nppp_varnish_curl_connect_timeout', 10, 3 );
         try {
@@ -621,7 +631,7 @@ if ( ! function_exists( 'nppp_varnish_send' ) ) {
                 'method'                  => 'PURGE',
                 'timeout'                 => $timeout,
                 'redirection'             => 0,
-                'sslverify'               => false,
+                'sslverify'               => $sslverify,
                 'blocking'                => true,
                 'limit_response_size'     => 4096,
                 'nppp_varnish_connect_ms' => 1000,
@@ -783,6 +793,7 @@ if ( ! function_exists( 'nppp_varnish_classify_url' ) ) {
 if ( ! function_exists( 'nppp_varnish_budget_seconds' ) ) {
     /**
      * Total time budget of ONE hook call. A hanging Varnish must not stall the editor's save.
+     * The last request can run past it by up to its 1 s minimum timeout (about 6 s worst case).
      */
     function nppp_varnish_budget_seconds(): float {
         return 5.0;

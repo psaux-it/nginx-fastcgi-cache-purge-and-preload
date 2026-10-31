@@ -650,11 +650,11 @@ fastcgi_cache_key $cache_purge_key;</pre>
                             <li><strong>URL normalization.</strong> Handle <code>PURGE</code> before any normalization such as <code>std.querysort</code> or tracking-parameter removal, or apply the same normalization to the purge URL; otherwise the hash differs and the purge is a silent no-op.</li>
                             <li><strong>Host header.</strong> The <code>Host</code> NPP sends must equal the Host Varnish sees from Nginx (<code>proxy_set_header Host $host</code> versus <code>$http_host</code>). If they differ, use the <code>nppp_varnish_host_header</code> filter.</li>
                             <li><strong>Cache key variants.</strong> If your VCL splits the hash by device or <code>X-Forwarded-Proto</code> (<code>hash_data</code>), one <code>PURGE</code> may not remove every variant; the host-wide ban does.</li>
-                            <li><strong>Purge Custom Base URL.</strong> Set <strong>HTTP Purge → Purge Custom Base URL</strong> to your backend Nginx (for example <code>http://127.0.0.1:8080</code>). Otherwise NPP's own HTTP Purge requests go through Varnish, are not recognised as Nginx answers, and NPP falls back to the filesystem (safe, but the fast path is lost).</li>
+                            <li><strong>Purge Custom Base URL.</strong> If you use <strong>HTTP Purge</strong>, set <strong>HTTP Purge → Purge Custom Base URL</strong> to your backend Nginx (for example <code>http://127.0.0.1:8080</code>). Otherwise NPP's own HTTP Purge requests go to the public URL, i.e. through Varnish, and are not answered by the Nginx purge location: NPP falls back to the filesystem (safe, but the fast path is lost) and may pause HTTP Purge for a few minutes after an unexpected response.</li>
                             <li><strong>Cache Status Path.</strong> If Nginx uses a background purge queue (<code>cache_purge_background_queue</code>), set the Cache Status Path. Without it NPP cannot wait for the queue, and Varnish can be purged while Nginx is still deleting.</li>
                         </ol>
 
-                        <h4><strong>Example VCL</strong> (<code>vcl 4.1</code>; compile-check with <code>varnishd -C -f</code> and runtime-test the regex ban before use)</h4>
+                        <h4><strong>Example VCL</strong> (<code>vcl 4.1</code>; compile-check it and runtime-test the regex ban before use)</h4>
                         <pre>vcl 4.1;
 import std;
 
@@ -701,26 +701,26 @@ sub vcl_deliver {
                                     <td>ON / OFF switch, saved immediately like the other switches. The endpoints and the control header below appear while it is ON and stay stored when you switch it OFF. The sync runs only while the switch is ON and at least one address is set.</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Endpoints</strong></td>
+                                    <td><strong>Varnish / Vinyl Cache Endpoints</strong></td>
                                     <td>(empty)</td>
                                     <td>One address per line (up to 5), scheme and host only, for example <code>http://127.0.0.1:6081</code>. A missing scheme becomes <code>http://</code>. Loopback and private addresses are allowed. Every address receives every purge; one unreachable address does not stop the others.</td>
                                 </tr>
                                 <tr>
-                                    <td><strong>Control header</strong></td>
+                                    <td><strong>Varnish / Vinyl Cache Control Header</strong></td>
                                     <td>(empty)</td>
                                     <td>Optional <code>Name: value</code> sent with every PURGE, for a VCL that requires a key. Stored in plain text in the plugin settings (like the API key) and never written to the log.</td>
                                 </tr>
                             </tbody>
                         </table>
-                        <p>Developers can also use the filters <code>nppp_varnish_endpoints</code>, <code>nppp_sync_varnish_enabled</code>, <code>nppp_varnish_host_header</code> and <code>nppp_varnish_max_urls</code>.</p>
+                        <p>Developers can also use the filters <code>nppp_varnish_endpoints</code>, <code>nppp_sync_varnish_enabled</code>, <code>nppp_varnish_host_header</code>, <code>nppp_varnish_max_urls</code> and <code>nppp_varnish_sslverify</code>. <code>https://</code> endpoints are contacted without certificate verification by default (the address is normally loopback or private and has no public certificate, and the control header is sent to it); return <code>true</code> from <code>nppp_varnish_sslverify</code> to verify it.</p>
 
                         <h4><strong>Failure behaviour</strong></h4>
-                        <p>Varnish is a side channel: whatever happens there, the purge result NPP shows for Nginx does not change; problems are only written to the log (<code>WARNING VARNISH</code>). Requests use a 3 second timeout (1 second to connect) and one event spends at most about 5 seconds in total. An address that cannot be reached is skipped for 5 minutes (one warning). HTTP 401, 403, 405 or 501 means an ACL, control key or missing PURGE handler problem (warning at most every 5 minutes). HTTP 404 is treated as "not in cache". Addresses and the control header value are never logged; the log only says "endpoint #1", "#2", ...</p>
+                        <p>Varnish is a side channel: whatever happens there, the purge result NPP shows for Nginx does not change; problems are only written to the log (<code>WARNING VARNISH</code>). Requests use a 3 second timeout (1 second to connect) and one event spends about 5 seconds in total (up to about 6 seconds in the worst case, because the last request keeps a minimum timeout of 1 second). An address that cannot be reached is skipped for 5 minutes (one warning). HTTP 401, 403, 405 or 501 means an ACL, control key or missing PURGE handler problem (warning at most every 5 minutes). HTTP 404 is treated as "not in cache". Addresses and the control header value are never logged; the log only says "endpoint #1", "#2", ...</p>
 
                         <h4><strong>Known limits</strong></h4>
                         <ul>
-                            <li>If a Purge All is still running in Nginx's background queue, auto-preload and the Preload All crawl can start before Varnish is purged; the crawl then meets the stale Varnish copy (no stale page is served, but Nginx is not warmed). Set the Cache Status Path and keep Auto Preload in mind.</li>
-                            <li>The Dashboard "Traffic hit ratio" card counts only requests that reach Nginx; with Varnish in front it shows only Varnish misses and looks lower than the real hit ratio.</li>
+                            <li>If Nginx is still deleting in its background queue (a Purge All, or a Preload All started right after one), Varnish can be purged before Nginx is clean. A request in that window can refill Varnish from a stale Nginx copy, so a stale page can be served until the follow-up purge (sent for a Purge All once the queue is idle) or the object's TTL replaces it. Set the Cache Status Path so NPP can wait for the queue.</li>
+                            <li>The Dashboard "Traffic hit ratio" card counts only requests that reach Nginx; Varnish hits are not included, so it shows the Nginx-side ratio, not the ratio your visitors get.</li>
                             <li>Multisite: the setting is per site.</li>
                         </ul>
                     </div>

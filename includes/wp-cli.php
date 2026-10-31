@@ -1660,7 +1660,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_http_purge_custom_url'          => __( 'HTTP Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_queue_status_path'   => __( 'HTTP Purge Cache Status Path', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_varnish_sync_enabled'           => __( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'nppp_varnish_endpoints'              => __( 'Varnish / Vinyl Cache Sync Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_varnish_endpoints'              => __( 'Varnish / Vinyl Cache Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_varnish_header'                 => __( 'Varnish / Vinyl Cache Control Header', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),

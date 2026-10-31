@@ -443,16 +443,13 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Synchronize the Varnish / Vinyl Cache purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                                </p>
-                                <p class="description">
-                                    <?php echo esc_html__( 'Independent of "Auto Purge". When ON, the Varnish / Vinyl Cache is purged whenever the Nginx cache is purged (whether for single URLs or the entire cache), before any preload starts.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent of "Auto Purge". The sync runs on single-URL purges, Purge All and Preload All.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address below, before any preload starts, so both layers stay aligned. A Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. Also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. If you use HTTP Purge, also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
