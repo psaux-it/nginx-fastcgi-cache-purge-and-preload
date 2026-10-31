@@ -1009,7 +1009,10 @@ function nppp_http_purge_extend_time_limit( int $seconds ): void {
 /**
  * Reads the endpoint state, dropping expired locks.
  *
- * @return array{locks: array<string,array{reason:string,until:int}>, methods: array<string,string>}
+ * 'page' (present only while set) lists the scopes whose learned non-GET method is sent to the PAGE'S OWN URL
+ * instead of the purge endpoint path (inline "xxx_cache_purge PURGE" setup, see nppp_http_purge_exchange()).
+ *
+ * @return array{locks: array<string,array{reason:string,until:int}>, methods: array<string,string>, page?: array<string,int>}
  */
 function nppp_http_purge_state(): array {
     $state = [ 'locks' => [], 'methods' => [], 'ns' => [], 'probe' => [], 'issue' => [], 'hint' => [] ];
@@ -1039,6 +1042,13 @@ function nppp_http_purge_state(): array {
     foreach ( (array) ( $raw['methods'] ?? [] ) as $scope => $method ) {
         if ( is_string( $method ) && preg_match( '/^[A-Z]{3,10}$/', $method ) ) {
             $state['methods'][ (string) $scope ] = $method;
+        }
+    }
+
+    // Only the single purge has a page URL, and only next to a learned non-GET method.
+    foreach ( (array) ( $raw['page'] ?? [] ) as $scope => $flag ) {
+        if ( $flag && (string) $scope === 'single' && isset( $state['methods'][ (string) $scope ] ) ) {
+            $state['page'][ (string) $scope ] = 1;
         }
     }
 
@@ -1347,13 +1357,23 @@ function nppp_http_purge_method_for( string $scope ): string {
 }
 
 /**
- * Remembers the working method for $scope, or forgets it again for GET.
+ * True when the learned method of $scope is sent to the page's own URL (inline PURGE setup)
+ * instead of the purge endpoint path.
  */
-function nppp_http_purge_remember_method( string $scope, string $method ): void {
+function nppp_http_purge_page_target( string $scope ): bool {
+    return ! empty( nppp_http_purge_state()['page'][ $scope ] );
+}
+
+/**
+ * Remembers the working method for $scope, or forgets it again for GET. $page = the request went
+ * to the page's own URL (inline PURGE setup): that target is remembered with the method.
+ */
+function nppp_http_purge_remember_method( string $scope, string $method, bool $page = false ): void {
     $state   = nppp_http_purge_state();
     $current = $state['methods'][ $scope ] ?? 'GET';
+    $page    = $page && $method !== 'GET';
 
-    if ( $current === $method ) {
+    if ( $current === $method && ! empty( $state['page'][ $scope ] ) === $page ) {
         return; // nothing changed, no write on the hot path
     }
 
@@ -1361,6 +1381,11 @@ function nppp_http_purge_remember_method( string $scope, string $method ): void 
         unset( $state['methods'][ $scope ] );
     } else {
         $state['methods'][ $scope ] = $method;
+    }
+    if ( $page ) {
+        $state['page'][ $scope ] = 1;
+    } else {
+        unset( $state['page'][ $scope ] );
     }
     nppp_http_purge_state_save( $state );
 }
@@ -1896,16 +1921,29 @@ function nppp_http_purge_is_wildcard_url( string $url ): bool {
  * request is repeated once with that method and the working method is
  * remembered. Failures arm the matching lock and write one log line.
  *
- * @return array{outcome:string,status:int,code:string,message:string,allow:string,method:string}
+ * Inline setup. With "fastcgi_cache_purge PURGE" inside the cached location there is no purge endpoint: the
+ * module builds the cache key from the URI of the request it receives, so a PURGE sent to
+ * <origin>/<single path>/<page> purges the key of THAT path (the junk entry the GET probe created there) and
+ * answers "purged" while the page itself stays cached. $page_url is the page's own URL on the purge origin;
+ * a non-GET request goes there, and only when the answer to the endpoint path showed that the path falls
+ * through to the site (404 / redirect / foreign page). A module that answered with its own 405 keeps getting the
+ * endpoint path (dedicated location configured for PURGE). The target is remembered with the method.
+ *
+ * @param string $page_url The page's own URL on the purge origin ('' = never use it).
+ * @return array{outcome:string,status:int,code:string,message:string,allow:string,method:string,page:bool}
  */
-function nppp_http_purge_exchange( string $scope, string $url, int $timeout, string $expect = '' ): array {
+function nppp_http_purge_exchange( string $scope, string $url, int $timeout, string $expect = '', string $page_url = '' ): array {
     $pool   = nppp_http_purge_method_pool();
     $method = nppp_http_purge_method_for( $scope );
     $tried  = [];
+    $first  = null;
+    $page   = $page_url !== '' && $method !== 'GET' && nppp_http_purge_page_target( $scope );
+    $own    = false;
 
     do {
         $tried[] = $method;
-        $res     = nppp_http_purge_fetch( $method, $url, $timeout );
+        $own     = $page && $method !== 'GET';
+        $res     = nppp_http_purge_fetch( $method, $own ? $page_url : $url, $timeout );
 
         if ( $res['error'] !== '' ) {
             $outcome = $res['error'];
@@ -1915,6 +1953,11 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
         $res['expect'] = $expect;
         $outcome = nppp_http_purge_classify( $scope, $res );
         $next    = '';
+        $page    = false;
+
+        if ( $first === null ) {
+            $first = [ 'outcome' => $outcome, 'res' => $res, 'method' => $method, 'own' => $own ];
+        }
 
         if ( $outcome === 'method' || $outcome === 'foreign' ) {
             $allowed    = $outcome === 'method'
@@ -1939,6 +1982,10 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
                     break;
                 }
             }
+
+            // A foreign page (the endpoint path fell through to the site) means nothing is bound to that path:
+            // an inline PURGE location, if any, lives on the page's own URL.
+            $page = $outcome === 'foreign' && $next !== '' && $next !== 'GET' && $page_url !== '';
         } elseif ( $method === 'GET' && count( $tried ) === 1
             && nppp_http_purge_probe_due( $scope, $outcome, (int) $res['status'] )
         ) {
@@ -1953,6 +2000,7 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
                     break;
                 }
             }
+            $page = $next !== '' && $page_url !== '';
         }
 
         if ( $next === '' || count( $tried ) >= 2 ) {
@@ -1961,6 +2009,19 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
         $method = $next;
     } while ( true );
 
+    // The page's own URL answered like any other page of the site (no module header or body): nothing there is
+    // bound to PURGE, so the answer says nothing about the endpoint. Report what the endpoint itself answered
+    // (the first attempt) instead of a failure the page caused (a redirect, a 5xx from PHP, a 405 from a WAF).
+    // The module's own answers (purged, miss, 403 denied) and transport errors are always kept.
+    if ( $own && $first !== null && $res['error'] === '' && $res['code'] === ''
+        && ! in_array( $outcome, [ 'purged', 'legacy_miss', 'denied' ], true )
+    ) {
+        $outcome = $first['outcome'];
+        $res     = $first['res'];
+        $method  = $first['method'];
+        $own     = $first['own'];
+    }
+
     $result = [
         'outcome' => $outcome,
         'status'  => (int) $res['status'],
@@ -1968,12 +2029,13 @@ function nppp_http_purge_exchange( string $scope, string $url, int $timeout, str
         'message' => (string) $res['message'],
         'allow'   => (string) $res['allow'],
         'method'  => $method,
+        'page'    => $own,
         'body'    => (string) $res['body'],
     ];
 
     if ( in_array( $outcome, [ 'purged', 'invalidated', 'no_match', 'legacy_miss', 'accepted' ], true ) ) {
         nppp_http_purge_issue_clear( $scope );
-        nppp_http_purge_remember_method( $scope, $method );
+        nppp_http_purge_remember_method( $scope, $method, $own );
         if ( $method === 'GET' ) {
             nppp_http_purge_probe_mark( $scope, DAY_IN_SECONDS ); // GET works: no probe needed for a while
         }
@@ -2878,6 +2940,29 @@ function nppp_http_purge_log_reason( string $message ): string {
 }
 
 /**
+ * The page's own URL on the purge origin (path + query as the page has them): where an inline
+ * "xxx_cache_purge PURGE" location takes its key from. '' when the path is one of the plugin's own endpoints
+ * (Purge All, Cache Status, Purge Single): a purge-method request must never be aimed at those.
+ */
+function nppp_http_purge_page_url( string $path, string $query ): string {
+    $lower    = strtolower( ltrim( $path, '/' ) );
+    $reserved = [
+        nppp_http_purge_all_path(),
+        trim( (string) wp_parse_url( nppp_http_purge_queue_status_url(), PHP_URL_PATH ), '/' ),
+        trim( (string) wp_parse_url( nppp_http_purge_base_url(), PHP_URL_PATH ), '/' ),
+    ];
+
+    foreach ( $reserved as $r ) {
+        $r = strtolower( $r );
+        if ( $r !== '' && ( $lower === $r || strpos( $lower, $r . '/' ) === 0 ) ) {
+            return '';
+        }
+    }
+
+    return nppp_http_purge_origin() . $path . $query;
+}
+
+/**
  * Attempts to purge SINGLE $url via HTTP using the ngx_cache_purge module.
  *
  * @param string $url The canonical page URL to purge.
@@ -2992,10 +3077,15 @@ function nppp_http_purge_try_first_core( string $url ) {
         return false;
     }
 
-    $purge_url = (string) apply_filters( 'nppp_http_purge_url', nppp_http_purge_base_url() . $path . $query, $url );
+    $default_url = nppp_http_purge_base_url() . $path . $query;
+    $purge_url   = (string) apply_filters( 'nppp_http_purge_url', $default_url, $url );
     if ( $purge_url === '' ) {
         return false;
     }
+
+    // Inline setup: a purge-method request goes to the page's own URL (see nppp_http_purge_exchange()).
+    // Not when the URL was changed by the filter: whoever rewrote it knows where their location is.
+    $page_url = $purge_url === $default_url ? nppp_http_purge_page_url( $path, $query ) : '';
 
     // Default 8 seconds
     $timeout = nppp_http_purge_timeout( 'single' );
@@ -3011,7 +3101,7 @@ function nppp_http_purge_try_first_core( string $url ) {
     // path, which separates a genuine module answer from a page that merely says "Key:".
     $expect = nppp_http_purge_key_ambiguity_reason( $url ) === '' ? $path : '';
 
-    $r = nppp_http_purge_exchange( 'single', $purge_url, $timeout, $expect );
+    $r = nppp_http_purge_exchange( 'single', $purge_url, $timeout, $expect, $page_url );
 
     switch ( $r['outcome'] ) {
         case 'purged':
