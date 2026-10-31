@@ -2067,6 +2067,30 @@ button.nppp-preload-btn[disabled] {
 #npppCacheDiskSize.disk-high   span:last-child { color: #c9302c; } /* >= 80 % used */
 #npppCacheDiskSize.disk-na     span:last-child { color: #72777c; }
 
+/* HTTP Purge row (System Checks) — state class is rendered by PHP, same palette as the bands above */
+#nppp-status-tab #npppHttpPurge {
+    font-size: 14px;
+}
+#npppHttpPurge.nppp-hp-ok   { color: #008000; }
+#npppHttpPurge.nppp-hp-warn,
+#npppHttpPurge.nppp-hp-wait { color: #b45f06; }
+#npppHttpPurge.nppp-hp-bad  { color: #c9302c; }
+#npppHttpPurge.nppp-hp-off  { color: #72777c; }
+#npppHttpPurge.nppp-hp-ok   .dashicons { color: #008000; }
+#npppHttpPurge.nppp-hp-warn .dashicons,
+#npppHttpPurge.nppp-hp-wait .dashicons { color: #e69500; }
+#npppHttpPurge.nppp-hp-bad  .dashicons { color: #ff0000; }
+#npppHttpPurge.nppp-hp-off  .dashicons { color: #72777c; }
+
+/* Detail line under the verdict: lines up with the text, not the icon */
+#npppHttpPurge .nppp-hp-meta {
+    display: block;
+    margin: 2px 0 0 24px;
+    font-size: 12px;
+    font-weight: normal;
+    color: #50575e;
+}
+
 /* Style for the settings tab group separator */
 .nppp-separator {
     border: none;

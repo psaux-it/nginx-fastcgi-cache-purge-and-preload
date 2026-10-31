@@ -1017,6 +1017,248 @@ function nppp_check_duplicate_nginx_cache_paths($file, $wp_filesystem) {
     return false;
 }
 
+// Short, translated reason of an armed HTTP Purge lock for the Status tab.
+// $reason is what nppp_http_purge_report_failure() stored: an outcome name,
+// or the HTTP status for an unexpected answer. Older plugin versions stored
+// other strings ("403", "wp_error", ...), which land in the generic label.
+function nppp_status_http_purge_reason_label( string $reason ): string {
+    switch ( $reason ) {
+        case 'unreachable':
+            return __( 'connection failed', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'denied':
+            return __( 'access denied (403)', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'method':
+            return __( 'method not allowed (405)', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'foreign':
+            return __( 'answer not from ngx_cache_purge', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'wrong_endpoint':
+            return __( 'wrong purge endpoint', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'config':
+            return __( 'Nginx configuration', 'fastcgi-cache-purge-and-preload-nginx' );
+        case 'internal':
+            return __( 'Nginx internal error', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    if ( ctype_digit( $reason ) ) {
+        return sprintf(
+            /* translators: %d: HTTP status code Nginx answered with */
+            __( 'unexpected response (%d)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            (int) $reason
+        );
+    }
+
+    return __( 'endpoint error', 'fastcgi-cache-purge-and-preload-nginx' );
+}
+
+/**
+ * Verdict of the HTTP Purge endpoint for the Status tab "HTTP Purge" row.
+ *
+ * Built only from what NPP already remembers (settings, endpoint state, observed
+ * mode): no HTTP request and no filesystem scan, so it costs a few option reads.
+ *
+ *   off   HTTP Purge is disabled in Settings.
+ *   wait  Enabled, but no HTTP purge answer was seen yet (or Clear Plugin Cache forgot it).
+ *   ok    Nginx answered: mode and setup are known.
+ *   warn  A lock is armed (NPP purges through the filesystem until it expires), or the
+ *         Cache Status Path advisory needs attention.
+ *   bad   A configuration fault the administrator has to fix in Nginx.
+ *
+ * The time of the observed mode is deliberately NOT shown as "last purge": it is only
+ * rewritten on a change or every 6 hours (nppp_http_purge_remember_mode()), so it can lag
+ * the real last purge by hours. It is kept in the tooltip, with that caveat.
+ *
+ * @return array{state:string,icon:string,text:string,meta:string,title:string}|null
+ *         null when the HTTP Purge module is not loaded (the row is then left out).
+ */
+function nppp_get_http_purge_status(): ?array {
+    if ( ! function_exists( 'nppp_http_purge_enabled' ) || ! function_exists( 'nppp_http_purge_state' ) ) {
+        return null;
+    }
+
+    $icons = [
+        'off'  => 'dashicons-minus',
+        'wait' => 'dashicons-clock',
+        'ok'   => 'dashicons-yes',
+        'warn' => 'dashicons-warning',
+        'bad'  => 'dashicons-no',
+    ];
+
+    if ( ! nppp_http_purge_enabled() ) {
+        return [
+            'state' => 'off',
+            'icon'  => $icons['off'],
+            'text'  => __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'meta'  => '',
+            'title' => __( 'HTTP Purge is turned off in Settings. NPP uses its URL index and the filesystem to purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        ];
+    }
+
+    $scope_label = [
+        'single' => __( 'Single URL', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'all'    => __( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' ),
+        '*'      => __( 'All endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
+    ];
+    $now   = time();
+    $state = nppp_http_purge_state();
+
+    // Configuration faults: remembered for a day, cleared by the next successful purge of that scope.
+    $issue_codes  = [];
+    $issue_scopes = [];
+    $tip          = [];
+    foreach ( [ 'single', 'all' ] as $scope ) {
+        if ( ! isset( $state['issue'][ $scope ] ) ) {
+            continue;
+        }
+        $code            = (string) $state['issue'][ $scope ]['code'];
+        $issue_codes[]   = $code === 'key_mismatch'
+            ? __( 'cache key mismatch', 'fastcgi-cache-purge-and-preload-nginx' )
+            : __( 'no usable cache zone', 'fastcgi-cache-purge-and-preload-nginx' );
+        $issue_scopes[]  = $scope_label[ $scope ];
+        $tip[]           = $scope_label[ $scope ] . ': ' . nppp_http_purge_config_fix( $scope, $code );
+    }
+
+    // Armed locks: '*' blocks both purges, so it comes first.
+    $lock_reasons = [];
+    $lock_scopes  = [];
+    $retry_at     = 0;
+    foreach ( [ '*', 'single', 'all' ] as $scope ) {
+        if ( ! isset( $state['locks'][ $scope ] ) ) {
+            continue;
+        }
+        $reason = nppp_status_http_purge_reason_label( (string) $state['locks'][ $scope ]['reason'] );
+        $until  = (int) $state['locks'][ $scope ]['until'];
+        $line   = $scope_label[ $scope ] . ': ' . $reason;
+
+        // A pre-2.1.9 lock has no end of its own (PHP_INT_MAX): never print a retry time for it.
+        if ( $until - $now < DAY_IN_SECONDS ) {
+            $retry_at = $retry_at > 0 ? min( $retry_at, $until ) : $until;
+            $line    .= ', ' . sprintf(
+                /* translators: %s: human readable time difference, e.g. "42 mins" */
+                __( 'retry in %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                human_time_diff( $now, max( $until, $now + 1 ) )
+            );
+        }
+
+        $lock_reasons[ $reason ] = true;
+        $lock_scopes[]           = $scope_label[ $scope ];
+        $tip[]                   = $line;
+    }
+
+    if ( $issue_codes ) {
+        $tip[] = __( 'Until fixed, NPP purges through the filesystem (slower).', 'fastcgi-cache-purge-and-preload-nginx' );
+
+        return [
+            'state' => 'bad',
+            'icon'  => $icons['bad'],
+            'text'  => sprintf(
+                /* translators: %s: what is wrong, e.g. "cache key mismatch" */
+                __( 'Needs fix: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                implode( ', ', array_unique( $issue_codes ) )
+            ),
+            'meta'  => sprintf(
+                /* translators: %s: affected purge types, e.g. "Single URL, Purge All" */
+                __( 'Affects: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                implode( ', ', $issue_scopes )
+            ),
+            'title' => implode( "\n", $tip ),
+        ];
+    }
+
+    if ( $lock_reasons ) {
+        $tip[] = __( 'NPP purges through the filesystem (slower) until HTTP Purge is retried. "Clear Plugin Cache" at the top of this tab retries it now.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+        $meta = [
+            sprintf(
+                /* translators: %s: affected purge types, e.g. "Single URL, Purge All" */
+                __( 'Affects: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                implode( ', ', $lock_scopes )
+            ),
+        ];
+        if ( $retry_at > 0 ) {
+            $meta[] = sprintf(
+                /* translators: %s: human readable time difference, e.g. "42 mins" */
+                __( 'retry in %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                human_time_diff( $now, max( $retry_at, $now + 1 ) )
+            );
+        }
+
+        return [
+            'state' => 'warn',
+            'icon'  => $icons['warn'],
+            'text'  => sprintf(
+                /* translators: %s: why HTTP Purge was paused, e.g. "access denied (403)" */
+                __( 'Fallback active: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                implode( ', ', array_keys( $lock_reasons ) )
+            ),
+            'meta'  => implode( ' · ', $meta ),
+            'title' => implode( "\n", $tip ),
+        ];
+    }
+
+    // Advisory about the Cache Status Path (Settings > HTTP Purge). Only a "warning" level changes the verdict.
+    $hint      = function_exists( 'nppp_http_purge_queue_status_hint' ) ? nppp_http_purge_queue_status_hint() : null;
+    $hint_warn = is_array( $hint ) && ( $hint['level'] ?? '' ) === 'warning';
+
+    // Nothing wrong is remembered: say what NPP last saw Nginx answer.
+    $mode = function_exists( 'nppp_http_purge_observed_mode' ) ? nppp_http_purge_observed_mode() : null;
+    if ( $mode === null ) {
+        $tip[] = __( 'The mode is detected from the next HTTP purge answer of Nginx.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+        return [
+            'state' => 'wait',
+            'icon'  => $icons['wait'],
+            'text'  => __( 'Not detected yet', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'meta'  => __( 'Detected on the next HTTP purge', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'title' => implode( "\n", $tip ),
+        ];
+    }
+
+    $meta = [
+        sprintf(
+            /* translators: %s: HTTP Purge mode (Sync, Async Background Queue, Invalidation) */
+            __( 'Mode: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            nppp_http_purge_mode_label( $mode['mode'] )
+        ),
+    ];
+
+    $tip[] = sprintf(
+        /* translators: 1: "Purge All" or "single URL purge", 2: human readable time difference, e.g. "3 mins" */
+        __( 'Observed on %1$s, %2$s ago', 'fastcgi-cache-purge-and-preload-nginx' ),
+        $mode['scope'] === 'all'
+            ? __( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' )
+            : __( 'single URL purge', 'fastcgi-cache-purge-and-preload-nginx' ),
+        human_time_diff( $mode['at'], $now )
+    );
+    $tip[] = __( 'This time is refreshed at most every 6 hours, so it is not the time of the last purge.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+    $setup = function_exists( 'nppp_http_purge_observed_setup' ) ? nppp_http_purge_observed_setup() : '';
+    if ( $setup !== '' ) {
+        $meta[] = sprintf(
+            /* translators: %s: how the single URL purge reaches Nginx (Inline PURGE, Dedicated location) */
+            __( 'Setup: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            nppp_http_purge_setup_label( $setup )
+        );
+        $tip[] = $setup === 'inline'
+            ? __( 'Single URL purge: inline "cache_purge PURGE" in the cached location, sent to the page URL. Purge All uses its own location.', 'fastcgi-cache-purge-and-preload-nginx' )
+            : __( 'Single URL purge: dedicated purge location.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    if ( $hint_warn ) {
+        $meta[] = __( 'Check the Cache Status Path in Settings', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+    if ( is_array( $hint ) && ! empty( $hint['text'] ) ) {
+        $tip[] = (string) $hint['text'];
+    }
+
+    return [
+        'state' => $hint_warn ? 'warn' : 'ok',
+        'icon'  => $hint_warn ? $icons['warn'] : $icons['ok'],
+        'text'  => __( 'Active', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'meta'  => implode( ' · ', $meta ),
+        'title' => implode( "\n", $tip ),
+    ];
+}
+
 // Generate HTML for status tab
 function nppp_my_status_html() {
     // Initialize wp_filesystem
@@ -1256,6 +1498,19 @@ function nppp_my_status_html() {
                                     <span><?php echo esc_html( nppp_probe_cache_key_regex() ); ?></span>
                                 </td>
                             </tr>
+                            <?php $nppp_http_purge = nppp_get_http_purge_status(); ?>
+                            <?php if ( is_array( $nppp_http_purge ) ) : ?>
+                            <tr>
+                                <td class="check"><?php esc_html_e('HTTP Purge (Optional)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
+                                <td class="status nppp-hp nppp-hp-<?php echo esc_attr( $nppp_http_purge['state'] ); ?>" id="npppHttpPurge" title="<?php echo esc_attr( $nppp_http_purge['title'] ); ?>">
+                                    <span class="dashicons <?php echo esc_attr( $nppp_http_purge['icon'] ); ?>"></span>
+                                    <span class="nppp-hp-text"><?php echo esc_html( $nppp_http_purge['text'] ); ?></span>
+                                    <?php if ( $nppp_http_purge['meta'] !== '' ) : ?>
+                                        <span class="nppp-hp-meta"><?php echo esc_html( $nppp_http_purge['meta'] ); ?></span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
                             <tr>
                                 <td class="check"><?php esc_html_e('Permission Isolation (Optional)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="nppppermIsolation">
