@@ -1067,7 +1067,9 @@ function nppp_status_http_purge_reason_label( string $reason ): string {
  * rewritten on a change or every 6 hours (nppp_http_purge_remember_mode()), so it can lag
  * the real last purge by hours. It is kept in the tooltip, with that caveat.
  *
- * @return array{state:string,icon:string,text:string,meta:string,title:string}|null
+ * 'meta' is a list of short detail lines; the row prints each one on its own line.
+ *
+ * @return array{state:string,icon:string,text:string,meta:string[],title:string}|null
  *         null when the HTTP Purge module is not loaded (the row is then left out).
  */
 function nppp_get_http_purge_status(): ?array {
@@ -1088,7 +1090,7 @@ function nppp_get_http_purge_status(): ?array {
             'state' => 'off',
             'icon'  => $icons['off'],
             'text'  => __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'meta'  => '',
+            'meta'  => [],
             'title' => __( 'HTTP Purge is turned off in Settings. NPP uses its URL index and the filesystem to purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
         ];
     }
@@ -1155,11 +1157,13 @@ function nppp_get_http_purge_status(): ?array {
                 __( 'Needs fix: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 implode( ', ', array_unique( $issue_codes ) )
             ),
-            'meta'  => sprintf(
-                /* translators: %s: affected purge types, e.g. "Single URL, Purge All" */
-                __( 'Affects: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-                implode( ', ', $issue_scopes )
-            ),
+            'meta'  => [
+                sprintf(
+                    /* translators: %s: affected purge types, e.g. "Single URL, Purge All" */
+                    __( 'Affects: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    implode( ', ', $issue_scopes )
+                ),
+            ],
             'title' => implode( "\n", $tip ),
         ];
     }
@@ -1177,7 +1181,7 @@ function nppp_get_http_purge_status(): ?array {
         if ( $retry_at > 0 ) {
             $meta[] = sprintf(
                 /* translators: %s: human readable time difference, e.g. "42 mins" */
-                __( 'retry in %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                __( 'Retry in %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 human_time_diff( $now, max( $retry_at, $now + 1 ) )
             );
         }
@@ -1190,7 +1194,7 @@ function nppp_get_http_purge_status(): ?array {
                 __( 'Fallback active: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 implode( ', ', array_keys( $lock_reasons ) )
             ),
-            'meta'  => implode( ' · ', $meta ),
+            'meta'  => $meta,
             'title' => implode( "\n", $tip ),
         ];
     }
@@ -1208,7 +1212,7 @@ function nppp_get_http_purge_status(): ?array {
             'state' => 'wait',
             'icon'  => $icons['wait'],
             'text'  => __( 'Not detected yet', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'meta'  => __( 'Detected on the next HTTP purge', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'meta'  => [ __( 'Detected on the next HTTP purge', 'fastcgi-cache-purge-and-preload-nginx' ) ],
             'title' => implode( "\n", $tip ),
         ];
     }
@@ -1254,7 +1258,7 @@ function nppp_get_http_purge_status(): ?array {
         'state' => $hint_warn ? 'warn' : 'ok',
         'icon'  => $hint_warn ? $icons['warn'] : $icons['ok'],
         'text'  => __( 'Active', 'fastcgi-cache-purge-and-preload-nginx' ),
-        'meta'  => implode( ' · ', $meta ),
+        'meta'  => $meta,
         'title' => implode( "\n", $tip ),
     ];
 }
@@ -1505,9 +1509,9 @@ function nppp_my_status_html() {
                                 <td class="status nppp-hp nppp-hp-<?php echo esc_attr( $nppp_http_purge['state'] ); ?>" id="npppHttpPurge" title="<?php echo esc_attr( $nppp_http_purge['title'] ); ?>">
                                     <span class="dashicons <?php echo esc_attr( $nppp_http_purge['icon'] ); ?>"></span>
                                     <span class="nppp-hp-text"><?php echo esc_html( $nppp_http_purge['text'] ); ?></span>
-                                    <?php if ( $nppp_http_purge['meta'] !== '' ) : ?>
-                                        <span class="nppp-hp-meta"><?php echo esc_html( $nppp_http_purge['meta'] ); ?></span>
-                                    <?php endif; ?>
+                                    <?php foreach ( $nppp_http_purge['meta'] as $nppp_http_purge_line ) : ?>
+                                        <span class="nppp-hp-meta"><?php echo esc_html( $nppp_http_purge_line ); ?></span>
+                                    <?php endforeach; ?>
                                 </td>
                             </tr>
                             <?php endif; ?>
