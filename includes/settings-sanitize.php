@@ -634,6 +634,65 @@ function nppp_nginx_cache_settings_sanitize($input) {
             ? $stored_settings['nppp_http_purge_queue_status_path'] : '';
     }
 
+    // Varnish / Vinyl Cache Sync: endpoint list (one address per line) and optional control header.
+    // An empty endpoint list means the feature is OFF. Same contract as the Cache Status Path above:
+    // a submitted value (including an empty one, so the field can be cleared) is validated and
+    // written; a field that was not submitted keeps what is stored. An invalid value is cleared
+    // and reported, which aborts the save in the form handler (nothing invalid is ever stored).
+    // The parsers live in compat-varnish.php (same bootstrap); without them the stored value is kept.
+    $nppp_vc_stored = get_option( 'nginx_cache_settings', [] );
+    $nppp_vc_stored = is_array( $nppp_vc_stored ) ? $nppp_vc_stored : [];
+
+    if ( isset( $input['nppp_varnish_endpoints'] ) && is_string( $input['nppp_varnish_endpoints'] ) && function_exists( 'nppp_varnish_parse_endpoints' ) ) {
+        $nppp_vc_errors = [];
+        $nppp_vc_list   = nppp_varnish_parse_endpoints( sanitize_textarea_field( $input['nppp_varnish_endpoints'] ), $nppp_vc_errors );
+        if ( empty( $nppp_vc_errors ) ) {
+            $sanitized_input['nppp_varnish_endpoints'] = implode( "\n", $nppp_vc_list );
+        } else {
+            $sanitized_input['nppp_varnish_endpoints'] = '';
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'nppp-varnish-endpoints',
+                sprintf(
+                    /* translators: %s: reason */
+                    __( 'ERROR OPTION: Varnish / Vinyl Cache endpoints are invalid (%s). Settings were not saved.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    function_exists( 'nppp_varnish_parse_error_label' ) ? nppp_varnish_parse_error_label( (string) reset( $nppp_vc_errors ) ) : 'invalid value'
+                ),
+                'error'
+            );
+        }
+    } else {
+        $sanitized_input['nppp_varnish_endpoints'] =
+            ( isset( $nppp_vc_stored['nppp_varnish_endpoints'] ) && is_string( $nppp_vc_stored['nppp_varnish_endpoints'] ) )
+            ? $nppp_vc_stored['nppp_varnish_endpoints'] : '';
+    }
+
+    if ( isset( $input['nppp_varnish_header'] ) && is_string( $input['nppp_varnish_header'] ) && function_exists( 'nppp_varnish_parse_header' ) ) {
+        // No sanitize_text_field() here: it would strip %XX sequences from a secret.
+        // nppp_varnish_parse_header() rejects every CR / LF / control character itself.
+        $nppp_vc_hdr_error = '';
+        $nppp_vc_hdr       = nppp_varnish_parse_header( $input['nppp_varnish_header'], $nppp_vc_hdr_error );
+        if ( $nppp_vc_hdr_error === '' ) {
+            $sanitized_input['nppp_varnish_header'] = empty( $nppp_vc_hdr ) ? '' : $nppp_vc_hdr['name'] . ': ' . $nppp_vc_hdr['value'];
+        } else {
+            $sanitized_input['nppp_varnish_header'] = '';
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'nppp-varnish-header',
+                sprintf(
+                    /* translators: %s: reason */
+                    __( 'ERROR OPTION: Varnish / Vinyl Cache control header is invalid (%s). Settings were not saved.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    function_exists( 'nppp_varnish_parse_error_label' ) ? nppp_varnish_parse_error_label( $nppp_vc_hdr_error ) : 'invalid value'
+                ),
+                'error'
+            );
+        }
+    } else {
+        $sanitized_input['nppp_varnish_header'] =
+            ( isset( $nppp_vc_stored['nppp_varnish_header'] ) && is_string( $nppp_vc_stored['nppp_varnish_header'] ) )
+            ? $nppp_vc_stored['nppp_varnish_header'] : '';
+    }
+
     // Sanitize bypass path restriction
     $sanitized_input['nginx_cache_bypass_path_restriction'] =
         ( isset( $input['nginx_cache_bypass_path_restriction'] ) && $input['nginx_cache_bypass_path_restriction'] === 'yes' )

@@ -865,6 +865,20 @@ function nppp_http_purge_queue_status_path_callback(): void {
     echo "<input type='text' id='nppp_http_purge_queue_status_path' name='nginx_cache_settings[nppp_http_purge_queue_status_path]' value='" . esc_attr( $value ) . "' class='regular-text' placeholder='npp_purge_status' />";
 }
 
+// Callback function for Varnish / Vinyl Cache Sync endpoints (one per line, empty = OFF)
+function nppp_varnish_endpoints_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $value   = ( is_array( $options ) && isset( $options['nppp_varnish_endpoints'] ) && is_string( $options['nppp_varnish_endpoints'] ) ) ? $options['nppp_varnish_endpoints'] : '';
+    echo "<textarea id='nppp_varnish_endpoints' name='nginx_cache_settings[nppp_varnish_endpoints]' rows='3' class='large-text code' placeholder='http://127.0.0.1:6081' spellcheck='false' autocomplete='off'>" . esc_textarea( $value ) . "</textarea>";
+}
+
+// Callback function for Varnish / Vinyl Cache Sync control header (optional)
+function nppp_varnish_header_callback(): void {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $value   = ( is_array( $options ) && isset( $options['nppp_varnish_header'] ) && is_string( $options['nppp_varnish_header'] ) ) ? $options['nppp_varnish_header'] : '';
+    echo "<input type='text' id='nppp_varnish_header' name='nginx_cache_settings[nppp_varnish_header]' value='" . esc_attr( $value ) . "' class='regular-text' placeholder='X-Control-Key: your-secret' autocomplete='off' spellcheck='false' />";
+}
+
 // Callback function for RG Purge
 function nppp_rg_purge_enabled_callback(): void {
     $options    = get_option( 'nginx_cache_settings', [] );

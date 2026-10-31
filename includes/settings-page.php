@@ -430,6 +430,31 @@ function nppp_nginx_cache_settings_page() {
                                 </p>
                             </td>
                         </tr>
+                        <!-- Varnish / Vinyl Cache Sync Section -->
+                        <tr valign="top" id="nppp-varnish-sync-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-networking"></span>
+                                <?php echo esc_html__( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_varnish_endpoints_callback(); ?>
+                                <p class="description">
+                                    <?php echo esc_html__( 'One address per line, e.g. http://127.0.0.1:6081. Leave empty to turn the sync OFF.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address above, before any preload starts, so both layers stay aligned. A Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. Also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p>
+                                    <?php nppp_varnish_header_callback(); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'Optional control header sent with every PURGE, as Name: value (e.g. X-Control-Key: secret) for a VCL that requires a key. Stored in plain text in the plugin settings, like the API key. Never written to the log.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                            </td>
+                        </tr>
                         <!-- Related post/page purge Options Section -->
                         <tr valign="top">
                             <th scope="row">

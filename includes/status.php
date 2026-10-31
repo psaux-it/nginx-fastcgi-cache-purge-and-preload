@@ -109,6 +109,9 @@ function nppp_clear_plugin_cache($silent = false) {
     nppp_http_purge_state_reset();
     nppp_state_delete( 'http_purge_mode' );
     nppp_state_delete( 'traffic_hint' );
+    // Varnish / Vinyl Cache Sync: forget parked endpoints and warning throttles so a fixed setup is retried at once.
+    nppp_state_delete( 'varnish_breaker' );
+    nppp_state_delete( 'varnish_warn' );
     nppp_gen_mode_flag_delete();
 
     // Re-arm the Vary: Accept-Encoding probe and its notice row so the

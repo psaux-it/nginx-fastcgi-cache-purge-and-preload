@@ -609,6 +609,118 @@ fastcgi_cache_key $cache_purge_key;</pre>
                     </div>
                 </div>
 
+                <h3 class="nppp-question">How do I keep Varnish / Vinyl Cache in sync with the Nginx cache?</h3>
+                <div class="nppp-answer">
+                    <div class="nppp-answer-content">
+                        <h3><strong>Varnish / Vinyl Cache Sync</strong></h3>
+                        <p>Use this when a Varnish / Vinyl Cache sits <strong>in front of</strong> the Nginx cache that NPP manages, for example <code>nginx:443 (TLS, no cache) → Varnish :6081 → nginx:8080 (fastcgi_cache) → PHP-FPM</code>. NPP purges Nginx as usual; then it sends HTTP <code>PURGE</code> requests to the addresses you list in <strong>Settings → NPP Settings → Varnish / Vinyl Cache Sync</strong>, so Varnish does not keep serving a stale copy. Vinyl Cache is the new name of Varnish Cache (9.0); the protocol and <code>vcl 4.1</code> are the same.</p>
+                        <p>Not supported: Varnish <em>behind</em> an Nginx cache, Varnish as the only cache (NPP needs the Nginx cache directory), tag / xkey purging and the <code>varnishadm</code> / <code>vinyladm</code> admin port (a high-privilege channel, deliberately not used).</p>
+
+                        <h4><strong>When NPP purges Varnish</strong></h4>
+                        <ol>
+                            <li><strong>Single purge</strong> (manual, auto purge, related pages): after Nginx is clean and <em>before</em> the preload starts. One <code>PURGE</code> per URL.</li>
+                            <li><strong>Purge All</strong>: after Nginx is really clean (when Nginx's background queue is still deleting, NPP waits for it first). One host-wide purge.</li>
+                            <li><strong>Preload All</strong> (button, admin bar, REST, schedule): right before the crawl starts. One host-wide purge.</li>
+                        </ol>
+                        <p>The order matters: the preload requests your public URLs, which pass through Varnish. Varnish must be clean before that, otherwise the crawl is answered by the stale Varnish copy and the Nginx cache is never warmed.</p>
+
+                        <h4><strong>Request contract</strong> (same as the Proxy Cache Purge plugin, so existing VCLs usually work)</h4>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr><th>Purge</th><th>Request</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Single URL</td>
+                                    <td><code>PURGE /path/?query</code>, <code>Host: your-site</code>, <code>X-Purge-Method: default</code></td>
+                                </tr>
+                                <tr>
+                                    <td>Everything</td>
+                                    <td><code>PURGE /.*</code>, <code>Host: your-site</code>, <code>X-Purge-Method: regex</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>The host-wide pattern is a fixed string; nothing from a URL or a user is ever put into a regex. Percent-encoded or non-ASCII paths (for example Turkish or Arabic permalinks), paths with dot segments or repeated slashes, and events with more than 50 URLs are purged host-wide instead of one by one: the WordPress HTTP API rewrites the hex case of the request path on the wire, so a single <code>PURGE</code> could silently miss the cached object.</p>
+
+                        <h4><strong>Server side checklist</strong></h4>
+                        <ol>
+                            <li><strong>PURGE handler.</strong> Put it in your VCL <code>vcl_recv</code> (Varnish 8+ and Vinyl answer unknown methods with 501). Accept it only from an ACL <em>and</em> require a control key (next point).</li>
+                            <li><strong>Control key.</strong> Nginx connects to Varnish from <code>127.0.0.1</code>, so a <code>PURGE</code> sent to Nginx from the internet can also look like <code>127.0.0.1</code> to Varnish and pass the ACL. Block it in Nginx (<code>if ($request_method = PURGE) { return 405; }</code> in the public server block) and/or require a secret header in the VCL, then set the same header in <strong>Control header</strong> (<code>X-Control-Key: your-secret</code>).</li>
+                            <li><strong>Regex branch.</strong> The VCL must handle <code>X-Purge-Method: regex</code> as a ban. A VCL that only does <code>return (purge)</code> answers <code>200</code> to Purge All and deletes nothing, and NPP cannot detect it.</li>
+                            <li><strong>URL normalization.</strong> Handle <code>PURGE</code> before any normalization such as <code>std.querysort</code> or tracking-parameter removal, or apply the same normalization to the purge URL; otherwise the hash differs and the purge is a silent no-op.</li>
+                            <li><strong>Host header.</strong> The <code>Host</code> NPP sends must equal the Host Varnish sees from Nginx (<code>proxy_set_header Host $host</code> versus <code>$http_host</code>). If they differ, use the <code>nppp_varnish_host_header</code> filter.</li>
+                            <li><strong>Cache key variants.</strong> If your VCL splits the hash by device or <code>X-Forwarded-Proto</code> (<code>hash_data</code>), one <code>PURGE</code> may not remove every variant; the host-wide ban does.</li>
+                            <li><strong>Purge Custom Base URL.</strong> Set <strong>HTTP Purge → Purge Custom Base URL</strong> to your backend Nginx (for example <code>http://127.0.0.1:8080</code>). Otherwise NPP's own HTTP Purge requests go through Varnish, are not recognised as Nginx answers, and NPP falls back to the filesystem (safe, but the fast path is lost).</li>
+                            <li><strong>Cache Status Path.</strong> If Nginx uses a background purge queue (<code>cache_purge_background_queue</code>), set the Cache Status Path. Without it NPP cannot wait for the queue, and Varnish can be purged while Nginx is still deleting.</li>
+                        </ol>
+
+                        <h4><strong>Example VCL</strong> (untested reference, <code>vcl 4.1</code>, Varnish 6.6+ / Vinyl Cache 9.x)</h4>
+                        <pre>vcl 4.1;
+import std;
+
+acl purge { "127.0.0.1"; "::1"; }
+
+sub vcl_recv {
+    if (req.method == "PURGE") {
+        if (client.ip !~ purge) { return (synth(405, "Not allowed")); }
+        # Recommended: control key (Settings: X-Control-Key: your-secret)
+        # if (req.http.X-Control-Key != "your-secret") { return (synth(403, "Forbidden")); }
+
+        if (req.http.X-Purge-Method == "regex") {
+            if (std.ban("obj.http.x-host == " + req.http.host +
+                        " &amp;&amp; obj.http.x-url ~ " + req.url)) {
+                return (synth(200, "Banned"));
+            }
+            return (synth(400, std.ban_error()));
+        }
+        return (purge);
+    }
+}
+
+sub vcl_backend_response {
+    # Lets the ban lurker work on obj.* (req.* bans are never lurked)
+    set beresp.http.x-url  = bereq.url;
+    set beresp.http.x-host = bereq.http.host;
+}
+
+sub vcl_deliver {
+    unset resp.http.x-url;
+    unset resp.http.x-host;
+}</pre>
+                        <p>Compile-check it with <code>vinyld -C -f file.vcl</code> (Vinyl Cache 9.x) or <code>varnishd -C -f file.vcl</code> (Varnish 8 and older). On Varnish 6.5 and older <code>std.ban()</code> does not exist; use the plain <code>ban(...)</code> statement.</p>
+
+                        <h4><strong>Settings</strong></h4>
+                        <table class="responsive-table">
+                            <thead>
+                                <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Varnish / Vinyl Cache Sync</strong></td>
+                                    <td>(empty = OFF)</td>
+                                    <td>One address per line (up to 5), scheme and host only, for example <code>http://127.0.0.1:6081</code>. A missing scheme becomes <code>http://</code>. Loopback and private addresses are allowed. Every address receives every purge; one unreachable address does not stop the others.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Control header</strong></td>
+                                    <td>(empty)</td>
+                                    <td>Optional <code>Name: value</code> sent with every PURGE, for a VCL that requires a key. Stored in plain text in the plugin settings (like the API key) and never written to the log.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>Developers can also use the filters <code>nppp_varnish_endpoints</code>, <code>nppp_sync_varnish_enabled</code>, <code>nppp_varnish_host_header</code> and <code>nppp_varnish_max_urls</code>.</p>
+
+                        <h4><strong>Failure behaviour</strong></h4>
+                        <p>Varnish is a side channel: whatever happens there, the purge result NPP shows for Nginx does not change; problems are only written to the log (<code>WARNING VARNISH</code>). Requests use a 3 second timeout (1 second to connect) and one event spends at most about 5 seconds in total. An address that cannot be reached is skipped for 5 minutes (one warning). HTTP 401, 403, 405 or 501 means an ACL, control key or missing PURGE handler problem (warning at most every 5 minutes). HTTP 404 is treated as "not in cache". Addresses and the control header value are never logged; the log only says "endpoint #1", "#2", ...</p>
+
+                        <h4><strong>Known limits</strong></h4>
+                        <ul>
+                            <li>If a Purge All is still running in Nginx's background queue, auto-preload and the Preload All crawl can start before Varnish is purged; the crawl then meets the stale Varnish copy (no stale page is served, but Nginx is not warmed). Set the Cache Status Path and keep Auto Preload in mind.</li>
+                            <li>The Dashboard "Traffic hit ratio" card counts only requests that reach Nginx; with Varnish in front it shows only Varnish misses and looks lower than the real hit ratio.</li>
+                            <li>Multisite: the setting is per site.</li>
+                        </ul>
+                    </div>
+                </div>
+
                 <h3 class="nppp-question">What is RG Purge and how does it accelerate single‑URL purges?</h3>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">

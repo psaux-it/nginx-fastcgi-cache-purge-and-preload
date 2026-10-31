@@ -350,7 +350,8 @@ function nppp_purge_flush_write_back( array &$ctx ): void {
 }
 
 /**
- * Post-purge side-effects: auto-preload and action hook.
+ * Post-purge side-effects: the nppp_purged_urls action hook first (outer caches such as
+ * Varnish / Vinyl Cache and CDNs must be clean before any crawl starts), then auto-preload.
  *
  * $chain_autopreload (Auto Preload) is the sole authoritative condition for
  * preloading the PRIMARY URL — the cache entry may have been a hit or a miss;
@@ -368,6 +369,20 @@ function nppp_purge_post_purge( array &$ctx ): void {
             $related_urls[] = $target['original'];
         }
     }
+
+    // Fire the nppp_purged_urls action hook BEFORE any preload is started.
+    // Preload requests the public URL, so every outer cache layer that listens here
+    // (Varnish / Vinyl Cache, Cloudflare, third-party CDN) must already be purged by the
+    // time the crawl starts; otherwise the crawl hits the stale outer copy and the origin
+    // cache is never warmed. This mirrors Purge All, where nppp_purged_all already fires
+    // before the auto-preload. Arguments are unchanged.
+    do_action(
+        'nppp_purged_urls',
+        array_column( $ctx['targets'], 'original' ),
+        $ctx['primary_url'],
+        (int) url_to_postid( $ctx['primary_url'] ),
+        (bool) $ctx['nppp_auto_purge']
+    );
 
     // Auto-preload
     if ( $ctx['chain_autopreload'] ) {
@@ -409,15 +424,6 @@ function nppp_purge_post_purge( array &$ctx ): void {
             nppp_preload_urls_fire_and_forget( $related_urls );
         }
     }
-
-    // Fire the nppp_purged_urls action hook
-    do_action(
-        'nppp_purged_urls',
-        array_column( $ctx['targets'], 'original' ),
-        $ctx['primary_url'],
-        (int) url_to_postid( $ctx['primary_url'] ),
-        (bool) $ctx['nppp_auto_purge']
-    );
 }
 
 /**
