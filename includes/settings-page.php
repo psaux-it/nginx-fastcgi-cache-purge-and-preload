@@ -920,7 +920,7 @@ function nppp_nginx_cache_settings_page() {
                                     </div>
                                 </div>
                                 <p class="description"><?php echo esc_html__( 'Asks Nginx to purge first via the ngx_cache_purge module (Purge Single and Purge All), so NPP does not scan cache files itself. Module: https://github.com/nginx-modules/ngx_cache_purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'NPP sends a GET request to dedicated purge locations in Nginx (paths below), not to the inline PURGE method. Setup: Help > HTTP Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'NPP sends a GET request to dedicated purge locations in Nginx (paths below). Inline PURGE setups are detected automatically. Setup: Help > HTTP Purge.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'If Nginx cannot confirm a purge, NPP falls back to its own workflow (Index, RG/PHP Purge). Nothing is lost.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'After making changes, always Clear Plugin Cache in the Status tab for them to take effect.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
