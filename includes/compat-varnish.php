@@ -18,7 +18,7 @@
  *   nppp_purged_all          Purge All, after nginx (deferred while nginx's queue is busy)
  *   nppp_preload_all_started direct Preload All, right before the crawl starts
  *
- * Wire contract (Proxy Cache Purge compatible, plain HTTP, no admin/6082 port):
+ * Wire contract (NPP's own PURGE contract, plain HTTP, no admin/6082 port):
  *
  *   single URL : PURGE <endpoint><path[?query]>   Host: <site authority>   X-Purge-Method: default
  *   everything : PURGE <endpoint>/.*              Host: <site authority>   X-Purge-Method: regex
