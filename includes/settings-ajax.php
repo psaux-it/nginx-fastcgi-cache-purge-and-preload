@@ -36,8 +36,20 @@ function nppp_save_toggle_option( string $nonce_action, string $post_key, string
     if ( ! is_array( $opts ) ) {
         $opts = [];
     }
+    $prev_value          = (string) ( $opts[ $option_key ] ?? '' );
     $opts[ $option_key ] = $value;
     update_option( 'nginx_cache_settings', $opts );
+
+    // The settings sanitizer is not attached on AJAX requests, so mirror its Varnish / Vinyl Cache Sync
+    // reset here: a switched Varnish Sync is retried at once, not after the 5 minute parked-endpoint
+    // window or a throttled warning.
+    if ( $option_key === 'nppp_varnish_sync_enabled'
+        && $prev_value !== $value
+        && function_exists( 'nppp_state_delete' ) ) {
+        nppp_state_delete( 'varnish_breaker' );
+        nppp_state_delete( 'varnish_warn' );
+    }
+
     wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
 }
 

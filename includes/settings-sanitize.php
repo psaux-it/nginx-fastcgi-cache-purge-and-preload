@@ -832,6 +832,16 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Varnish / Vinyl Cache Sync: a changed switch, endpoint list or control header is retried at once,
+    // not after the 5 minute parked-endpoint window or a throttled warning.
+    if ( function_exists( 'nppp_state_delete' )
+        && ( ( $nppp_prev_settings['nppp_varnish_sync_enabled'] ?? 'no' ) !== ( $sanitized_input['nppp_varnish_sync_enabled'] ?? 'no' )
+            || ( $nppp_prev_settings['nppp_varnish_endpoints'] ?? '' ) !== ( $sanitized_input['nppp_varnish_endpoints'] ?? '' )
+            || ( $nppp_prev_settings['nppp_varnish_header'] ?? '' ) !== ( $sanitized_input['nppp_varnish_header'] ?? '' ) ) ) {
+        nppp_state_delete( 'varnish_breaker' );
+        nppp_state_delete( 'varnish_warn' );
+    }
+
     return $sanitized_input;
 }
 

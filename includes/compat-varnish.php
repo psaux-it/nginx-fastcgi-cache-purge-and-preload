@@ -1032,8 +1032,9 @@ if ( ! function_exists( 'nppp_varnish_purge_all' ) ) {
      * (direct Preload All, right before the crawl). Both mean "Nginx is clean, the next
      * request must not be answered from a stale outer copy".
      *
-     * Runs at most once per request: an auto-preloading Purge All fires only nppp_purged_all,
-     * but the guard keeps a second trigger in the same request from sending a duplicate.
+     * An auto-preloading Purge All fires nppp_purged_all and then nppp_preload_all_started: the
+     * guard keeps that preload trigger from sending a duplicate after a purge in the same request.
+     * Every nppp_purged_all is sent, so a second genuine Purge All is not suppressed.
      *
      * @param mixed $unused nppp_purged_all passes $auto_preload; nppp_preload_all_started passes nothing.
      */
@@ -1041,11 +1042,14 @@ if ( ! function_exists( 'nppp_varnish_purge_all' ) ) {
         static $done = false;
 
         try {
-            if ( $done ) {
+            $context = ( current_action() === 'nppp_preload_all_started' ) ? 'preload_all' : 'purge_all';
+
+            // Only the preload trigger is deduplicated against an earlier purge in this request.
+            // A second genuine Purge All (several callers, long-lived WP-CLI/cron process) must still run.
+            if ( $context === 'preload_all' && $done ) {
                 return;
             }
 
-            $context = ( current_action() === 'nppp_preload_all_started' ) ? 'preload_all' : 'purge_all';
             if ( ! nppp_varnish_enabled( $context ) ) {
                 return;
             }

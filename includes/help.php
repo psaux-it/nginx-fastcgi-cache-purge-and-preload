@@ -663,8 +663,8 @@ acl purge { "127.0.0.1"; "::1"; }
 sub vcl_recv {
     if (req.method == "PURGE") {
         if (client.ip !~ purge) { return (synth(405, "Not allowed")); }
-        # Recommended: control key (Settings: X-Control-Key: your-secret)
-        # if (req.http.X-Control-Key != "your-secret") { return (synth(403, "Forbidden")); }
+        # REQUIRED: control key (Settings: X-Control-Key: your-secret). Replace the secret.
+        if (req.http.X-Control-Key != "change-me-long-random-secret") { return (synth(403, "Forbidden")); }
 
         if (req.http.X-Purge-Method == "regex") {
             if (std.ban("obj.http.x-host == " + req.http.host +

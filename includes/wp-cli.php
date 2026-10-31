@@ -1178,9 +1178,14 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 ) );
             }
             // Use the central getter for the regex key so decode logic stays in one place.
-            $val = ( $key === 'nginx_cache_key_custom_regex' )
-                ? nppp_get_cache_key_regex()
-                : (string) $settings[ $key ];
+            if ( $key === 'nginx_cache_key_custom_regex' ) {
+                $val = nppp_get_cache_key_regex();
+            } elseif ( $key === 'nppp_varnish_header' && (string) $settings[ $key ] !== '' ) {
+                // The control header value is a secret: show only the header name.
+                $val = strstr( (string) $settings[ $key ], ':', true ) . ': ***';
+            } else {
+                $val = (string) $settings[ $key ];
+            }
             WP_CLI::line( $val );
             return;
         }
@@ -1192,6 +1197,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             // Use the central getter for the regex key so decode logic stays in one place.
             if ( $k === 'nginx_cache_key_custom_regex' ) {
                 $v = nppp_get_cache_key_regex();
+            } elseif ( $k === 'nppp_varnish_header' && (string) $v !== '' ) {
+                // The control header value is a secret: show only the header name.
+                $v = strstr( (string) $v, ':', true ) . ': ***';
             }
             if ( $pretty ) {
                 $pretty_name = $labels[ $k ] ?? $k;
@@ -1515,6 +1523,15 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             if ( function_exists( 'nppp_state_delete' ) ) {
                 nppp_state_delete( 'traffic_hint' );
             }
+        }
+
+        // Mirror settings-sanitize.php: a changed Varnish / Vinyl Cache switch, endpoint list or control header
+        // is retried at once, not after the 5 minute parked-endpoint window or a throttled warning.
+        if ( in_array( $key, [ 'nppp_varnish_sync_enabled', 'nppp_varnish_endpoints', 'nppp_varnish_header' ], true )
+            && $prev_value !== (string) $sanitized
+            && function_exists( 'nppp_state_delete' ) ) {
+            nppp_state_delete( 'varnish_breaker' );
+            nppp_state_delete( 'varnish_warn' );
         }
 
         // The control header value is a secret: show only the header name.
