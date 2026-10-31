@@ -634,8 +634,14 @@ function nppp_nginx_cache_settings_sanitize($input) {
             ? $stored_settings['nppp_http_purge_queue_status_path'] : '';
     }
 
-    // Varnish / Vinyl Cache Sync: endpoint list (one address per line) and optional control header.
-    // An empty endpoint list means the feature is OFF. Same contract as the Cache Status Path above:
+    // Varnish / Vinyl Cache Sync
+    // Toggle. The endpoint list and the control header below keep their values while it is OFF.
+    $sanitized_input['nppp_varnish_sync_enabled'] =
+        ( isset( $input['nppp_varnish_sync_enabled'] ) && $input['nppp_varnish_sync_enabled'] === 'yes' )
+        ? 'yes' : 'no';
+
+    // Endpoint list (one address per line) and optional control header.
+    // The sync runs only when the toggle is ON and the list is not empty. Same contract as the Cache Status Path above:
     // a submitted value (including an empty one, so the field can be cleared) is validated and
     // written; a field that was not submitted keeps what is stored. An invalid value is cleared
     // and reported, which aborts the save in the form handler (nothing invalid is ever stored).

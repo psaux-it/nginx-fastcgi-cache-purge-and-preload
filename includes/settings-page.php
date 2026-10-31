@@ -431,21 +431,40 @@ function nppp_nginx_cache_settings_page() {
                             </td>
                         </tr>
                         <!-- Varnish / Vinyl Cache Sync Section -->
-                        <tr valign="top" id="nppp-varnish-sync-row">
+                        <tr valign="top" id="nppp-varnish-main-row">
                             <th scope="row">
                                 <span class="dashicons dashicons-networking"></span>
                                 <?php echo esc_html__( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
                             <td>
-                                <?php nppp_varnish_endpoints_callback(); ?>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-varnish">
+                                        <?php nppp_varnish_sync_enabled_callback(); ?>
+                                    </div>
+                                </div>
                                 <p class="description">
-                                    <?php echo esc_html__( 'One address per line, e.g. http://127.0.0.1:6081. Leave empty to turn the sync OFF.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Synchronize the Varnish / Vinyl Cache purges to keep both caches aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address above, before any preload starts, so both layers stay aligned. A Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent of "Auto Purge". When ON, the Varnish / Vinyl Cache is purged whenever the Nginx cache is purged (whether for single URLs or the entire cache), before any preload starts.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address below, before any preload starts, so both layers stay aligned. A Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. Also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr valign="top" id="nppp-varnish-endpoints-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-admin-links"></span>
+                                <?php echo esc_html__( 'Varnish / Vinyl Cache Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_varnish_endpoints_callback(); ?>
+                                <p class="description">
+                                    <?php echo esc_html__( 'One address per line (up to 5), e.g. http://127.0.0.1:6081. The sync runs only while the switch above is ON and at least one address is set.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>

@@ -613,7 +613,7 @@ fastcgi_cache_key $cache_purge_key;</pre>
                 <div class="nppp-answer">
                     <div class="nppp-answer-content">
                         <h3><strong>Varnish / Vinyl Cache Sync</strong></h3>
-                        <p>Use this when a Varnish / Vinyl Cache sits <strong>in front of</strong> the Nginx cache that NPP manages, for example <code>nginx:443 (TLS, no cache) → Varnish :6081 → nginx:8080 (fastcgi_cache) → PHP-FPM</code>. NPP purges Nginx as usual; then it sends HTTP <code>PURGE</code> requests to the addresses you list in <strong>Settings → NPP Settings → Varnish / Vinyl Cache Sync</strong>, so Varnish does not keep serving a stale copy. Vinyl Cache is the new name of Varnish Cache (9.0); the protocol and <code>vcl 4.1</code> are the same.</p>
+                        <p>Use this when a Varnish / Vinyl Cache sits <strong>in front of</strong> the Nginx cache that NPP manages, for example <code>nginx:443 (TLS, no cache) → Varnish :6081 → nginx:8080 (fastcgi_cache) → PHP-FPM</code>. NPP purges Nginx as usual; then it sends HTTP <code>PURGE</code> requests to the addresses you list in <strong>Settings → NPP Settings → Varnish / Vinyl Cache Sync</strong> (switch it ON first; the address list appears below the switch), so Varnish does not keep serving a stale copy. Vinyl Cache is the new name of Varnish Cache (9.0); the protocol and <code>vcl 4.1</code> are the same.</p>
                         <p>Not supported: Varnish <em>behind</em> an Nginx cache, Varnish as the only cache (NPP needs the Nginx cache directory), tag / xkey purging and the <code>varnishadm</code> / <code>vinyladm</code> admin port (a high-privilege channel, deliberately not used).</p>
 
                         <h4><strong>When NPP purges Varnish</strong></h4>
@@ -697,7 +697,12 @@ sub vcl_deliver {
                             <tbody>
                                 <tr>
                                     <td><strong>Varnish / Vinyl Cache Sync</strong></td>
-                                    <td>(empty = OFF)</td>
+                                    <td>OFF</td>
+                                    <td>ON / OFF switch, saved immediately like the other switches. The endpoints and the control header below appear while it is ON and stay stored when you switch it OFF. The sync runs only while the switch is ON and at least one address is set.</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Endpoints</strong></td>
+                                    <td>(empty)</td>
                                     <td>One address per line (up to 5), scheme and host only, for example <code>http://127.0.0.1:6081</code>. A missing scheme becomes <code>http://</code>. Loopback and private addresses are allowed. Every address receives every purge; one unreachable address does not stop the others.</td>
                                 </tr>
                                 <tr>

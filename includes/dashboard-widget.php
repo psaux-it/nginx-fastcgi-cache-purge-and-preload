@@ -198,6 +198,15 @@ function nppp_dashboard_widget() {
         $redis_status = __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
     }
 
+    // Varnish / Vinyl Cache Sync — Enabled only when the switch is ON and at least one address
+    // is set (the switch alone does nothing without an endpoint). No Unavailable state: it needs
+    // no extra plugin or binary.
+    $varnish_on = function_exists( 'nppp_varnish_sync_on' ) && nppp_varnish_sync_on()
+        && function_exists( 'nppp_varnish_endpoints' ) && ! empty( nppp_varnish_endpoints() );
+    $varnish_status = $varnish_on
+        ? __( 'Enabled', 'fastcgi-cache-purge-and-preload-nginx' )
+        : __( 'Disabled', 'fastcgi-cache-purge-and-preload-nginx' );
+
     // RG Purge
     $rg_cached = get_transient( 'nppp_rg_ok' );
     if ( $rg_cached === false ) {
@@ -304,6 +313,11 @@ function nppp_dashboard_widget() {
             'status'      => $redis_status,
             'icon'        => 'dashicons-database',
             'unavailable' => ! $redis_available,
+        ],
+        'varnish_sync' => [
+            'label'  => __( 'Varnish / Vinyl Cache', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'status' => $varnish_status,
+            'icon'   => 'dashicons-networking',
         ],
         'scheduled_cache' => [
             'label' => __('Scheduled Cache', 'fastcgi-cache-purge-and-preload-nginx'),

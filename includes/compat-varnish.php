@@ -279,14 +279,27 @@ if ( ! function_exists( 'nppp_varnish_parse_header' ) ) {
  * 2. Runtime configuration
  * ========================================================================= */
 
+if ( ! function_exists( 'nppp_varnish_sync_on' ) ) {
+    /**
+     * State of the Settings switch (Varnish / Vinyl Cache Sync ON / OFF).
+     * The endpoint list and the control header stay stored while it is OFF.
+     */
+    function nppp_varnish_sync_on(): bool {
+        return nppp_varnish_option( 'nppp_varnish_sync_enabled' ) === 'yes';
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_endpoints' ) ) {
     /**
      * Configured endpoints (normalized). An empty array means the feature is OFF.
+     *
+     * The addresses saved in Settings count only while the switch is ON; with the switch OFF the
+     * list handed to the filter is empty (the stored addresses are kept for the next time).
      */
     function nppp_varnish_endpoints(): array {
         $errors = array();
         $raw    = nppp_varnish_option( 'nppp_varnish_endpoints' );
-        $list   = $raw !== '' ? nppp_varnish_parse_endpoints( $raw, $errors ) : array();
+        $list   = ( nppp_varnish_sync_on() && $raw !== '' ) ? nppp_varnish_parse_endpoints( $raw, $errors ) : array();
 
         /**
          * Filters the Varnish / Vinyl Cache endpoints ("scheme://host[:port]").
@@ -328,7 +341,7 @@ if ( ! function_exists( 'nppp_varnish_extra_header' ) ) {
 
 if ( ! function_exists( 'nppp_varnish_enabled' ) ) {
     /**
-     * True when at least one endpoint is configured and no filter vetoes the sync.
+     * True when the switch is ON, at least one endpoint is configured and no filter vetoes the sync.
      *
      * @param string $context 'purge_urls' | 'purge_all' | 'preload_all'.
      */

@@ -515,6 +515,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 [ 'Field' => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),                                                       'Value' => $settings['nppp_rg_purge_enabled']               ?? 'no' ],
                 [ 'Field' => __( 'Cloudflare Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                          'Value' => $settings['nppp_cloudflare_apo_sync']            ?? 'no' ],
                 [ 'Field' => __( 'Redis Object Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nppp_redis_cache_sync']               ?? 'no' ],
+                [ 'Field' => __( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                     'Value' => $settings['nppp_varnish_sync_enabled']           ?? 'no' ],
                 [ 'Field' => __( 'Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),                                                          'Value' => $settings['nginx_cache_preload_enable_proxy']    ?? 'no' ],
                 [ 'Field' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
                 [ 'Field' => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_pctnorm_mode']            ?? 'off' ],
@@ -635,6 +636,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *     wp npp settings set nginx_cache_path /var/cache/nginx/fastcgi
      *     wp npp settings set nppp_http_purge_queue_status_path npp_purge_status
      *     wp npp settings set nppp_http_purge_queue_status_path ""
+     *     wp npp settings set nppp_varnish_sync_enabled yes
      *     wp npp settings set nppp_varnish_endpoints "http://127.0.0.1:6081"
      *     wp npp settings set nppp_varnish_header "X-Control-Key: your-secret"
      *     wp npp settings set nppp_varnish_endpoints ""
@@ -1217,6 +1219,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         // array on installs upgraded from an older version (defaults are only merged on activation).
         static $optional_keys = [
             'nppp_http_purge_queue_status_path',
+            'nppp_varnish_sync_enabled',
             'nppp_varnish_endpoints',
             'nppp_varnish_header',
         ];
@@ -1268,6 +1271,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_autopurge_posts',        'nppp_autopurge_terms',     'nppp_autopurge_plugins',
             'nppp_autopurge_themes',       'nppp_autopurge_3rdparty',  'nppp_http_purge_enabled',
             'nppp_rg_purge_enabled',       'nginx_cache_bypass_path_restriction',
+            'nppp_varnish_sync_enabled',
             'nppp_related_include_home',   'nppp_related_include_category',
             'nppp_related_apply_manual',   'nppp_related_preload_after_manual',
             'nginx_cache_preload_feeds',
@@ -1433,7 +1437,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             }
         } elseif ( $key === 'nppp_varnish_endpoints' ) {
             // Mirror settings-sanitize.php: validate with the shared parser (never sanitize_text_field(),
-            // it would strip the line breaks of a multi-endpoint list). Empty clears the list = sync OFF.
+            // it would strip the line breaks of a multi-endpoint list). Empty clears the list (the sync stays OFF until an address is set).
             if ( ! function_exists( 'nppp_varnish_parse_endpoints' ) ) {
                 WP_CLI::error( __( 'Varnish / Vinyl Cache support is not loaded.', 'fastcgi-cache-purge-and-preload-nginx' ) );
             }
@@ -1638,6 +1642,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_rg_purge_enabled'               => __( 'RG Purge', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_custom_url'          => __( 'HTTP Purge Custom Base URL', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_http_purge_queue_status_path'   => __( 'HTTP Purge Cache Status Path', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_varnish_sync_enabled'           => __( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_varnish_endpoints'              => __( 'Varnish / Vinyl Cache Sync Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_varnish_header'                 => __( 'Varnish / Vinyl Cache Control Header', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),

@@ -351,6 +351,11 @@ function nppp_update_http_purge_option(): void {
     nppp_save_toggle_option( 'nppp-update-http-purge-option', 'http_purge', 'nppp_http_purge_enabled' );
 }
 
+// AJAX handler Varnish / Vinyl Cache Sync
+function nppp_update_varnish_sync_option(): void {
+    nppp_save_toggle_option( 'nppp-update-varnish-sync-option', 'varnish_sync', 'nppp_varnish_sync_enabled' );
+}
+
 // AJAX handler RG Purge
 function nppp_update_rg_purge_option(): void {
     // Verify nonce

@@ -3524,6 +3524,48 @@ $(document).ready(function() {
         }, 'json');
     });
 
+    // Update Varnish / Vinyl Cache Sync toggle when state changes
+    $('#nppp_varnish_sync_enabled').change(function() {
+        var varnishElement = $(this);
+        var labelSpan      = varnishElement.next('.nppp-onoffswitch-label-varnish');
+        var labelOffset    = labelSpan.offset();
+        var notifLeft      = labelOffset.left + labelSpan.outerWidth() + 10;
+        var notifTop       = labelOffset.top;
+
+        var isChecked = $(this).prop('checked') ? 'yes' : 'no';
+        $.post(nppp_admin_data.ajaxurl, {
+            action:       'nppp_update_varnish_sync_option',
+            varnish_sync: isChecked,
+            _wpnonce:     nppp_admin_data.varnish_sync_nonce
+        }, function(response) {
+            if (response.success) {
+                var notification       = document.createElement('div');
+                notification.textContent = '\u2714';
+                notification.style.cssText = [
+                    'position:absolute',
+                    'left:'  + notifLeft + 'px',
+                    'top:'   + notifTop  + 'px',
+                    'background-color:#50C878',
+                    'color:#fff',
+                    'padding:8px 12px',
+                    'transition:opacity 0.3s ease-in-out',
+                    'opacity:1',
+                    'z-index:9999',
+                    'font-size:13px',
+                    'font-weight:700'
+                ].join(';');
+                document.body.appendChild(notification);
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                    setTimeout(function() { document.body.removeChild(notification); }, 300);
+                }, 1000);
+            } else {
+                $('#nppp_varnish_sync_enabled').prop('checked', !$('#nppp_varnish_sync_enabled').prop('checked'));
+                npppToast(__('Error updating option!', 'fastcgi-cache-purge-and-preload-nginx'), 'error');
+            }
+        }, 'json');
+    });
+
     // RG Purge toggle when state changes
     $('#nppp_rg_purge_enabled').change(function() {
         var rgPurgeElement = $(this);
@@ -4657,6 +4699,37 @@ $(document).ready(function() {
             $('.nppp-onoffswitch-switch-httppurge').css('background', '#ea1919');
             $('.nppp-on-httppurge').css('color', '#000000');
             $('.nppp-off-httppurge').css('color', '#ffffff');
+        }
+    });
+
+    // Toggle switch rules for Varnish / Vinyl Cache Sync
+    function npppVarnishSubOptions(isChecked) {
+        $('#nppp-varnish-endpoints-row, #nppp-varnish-header-row').toggle(isChecked);
+    }
+    var isVarnishChecked = $('#nppp_varnish_sync_enabled').prop('checked');
+    npppVarnishSubOptions(isVarnishChecked);
+
+    if (isVarnishChecked) {
+        $('.nppp-onoffswitch-switch-varnish').css('background', '#66b317');
+        $('.nppp-on-varnish').css('color', '#ffffff');
+        $('.nppp-off-varnish').css('color', '#000000');
+    } else {
+        $('.nppp-onoffswitch-switch-varnish').css('background', '#ea1919');
+        $('.nppp-on-varnish').css('color', '#000000');
+        $('.nppp-off-varnish').css('color', '#ffffff');
+    }
+
+    $('#nppp_varnish_sync_enabled').change(function() {
+        var isVarnishChecked = $(this).prop('checked');
+        npppVarnishSubOptions(isVarnishChecked);
+        if (isVarnishChecked) {
+            $('.nppp-onoffswitch-switch-varnish').css('background', '#66b317');
+            $('.nppp-on-varnish').css('color', '#ffffff');
+            $('.nppp-off-varnish').css('color', '#000000');
+        } else {
+            $('.nppp-onoffswitch-switch-varnish').css('background', '#ea1919');
+            $('.nppp-on-varnish').css('color', '#000000');
+            $('.nppp-off-varnish').css('color', '#ffffff');
         }
     });
 

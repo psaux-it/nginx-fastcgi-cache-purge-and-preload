@@ -237,6 +237,7 @@ add_action('permalink_structure_changed', 'nppp_on_permalink_structure_changed',
 add_action('wp_ajax_nppp_update_default_cache_key_regex_option', 'nppp_update_default_cache_key_regex_option');
 add_action('wp_ajax_nppp_update_default_mobile_user_agent_option', 'nppp_update_default_mobile_user_agent_option');
 add_action('wp_ajax_nppp_update_http_purge_option', 'nppp_update_http_purge_option');
+add_action('wp_ajax_nppp_update_varnish_sync_option', 'nppp_update_varnish_sync_option');
 add_action('wp_ajax_nppp_update_rg_purge_option', 'nppp_update_rg_purge_option');
 if ($nppp_auto_purge) {
     // Posts, Pages & Comments sub-trigger.

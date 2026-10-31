@@ -4751,6 +4751,93 @@ body.has-sticky-submit .nppp-scrollfab{
     cursor: not-allowed;
 }
 
+/* Varnish / Vinyl Cache Sync toggle */
+.nppp-onoffswitch-varnish {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+/* Hide the default checkbox */
+.nppp-onoffswitch-checkbox-varnish {
+    display: none;
+}
+
+/* Label / track */
+.nppp-onoffswitch-label-varnish {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+/* ON / OFF text labels */
+.nppp-onoffswitch-inner-varnish .nppp-on-varnish,
+.nppp-onoffswitch-inner-varnish .nppp-off-varnish {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-varnish .nppp-on-varnish {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-varnish .nppp-off-varnish {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Handle (the sliding knob) — RED when OFF, matches cloudflare, redis and http purge */
+.nppp-onoffswitch-switch-varnish {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Checked state — slide knob right, turn GREEN (feature is ON) */
+#nppp_varnish_sync_enabled:checked + .nppp-onoffswitch-label-varnish .nppp-onoffswitch-inner-varnish .nppp-on-varnish {
+    color: #23282d;
+}
+
+#nppp_varnish_sync_enabled:checked + .nppp-onoffswitch-label-varnish .nppp-onoffswitch-switch-varnish {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+/* Show OFF label */
+.nppp-onoffswitch-checkbox-varnish + .nppp-onoffswitch-label-varnish .nppp-off-varnish {
+    display: block;
+}
+
+/* Hide the real checkbox off-screen */
+#nppp_varnish_sync_enabled {
+    position: absolute;
+    left: -99em;
+}
+
+/* Disabled state — used if the toggle is programmatically disabled */
+.nppp-onoffswitch-checkbox-varnish[disabled] + .nppp-onoffswitch-label-varnish {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Override WordPress 7.0 colored notice backgrounds — keep NPP notices stylish */
 .notice-nppp.notice-error,
 .notice-nppp.notice-warning,
@@ -7002,7 +7089,8 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 #nppp-http-purge-suffix-row td > p.description,
 #nppp-http-purge-all-path-row td > p.description,
 #nppp-http-purge-queue-status-row td > p.description,
-#nppp-varnish-sync-row td > p.description,
+#nppp-varnish-main-row td > p.description,
+#nppp-varnish-endpoints-row td > p.description,
 #nppp-varnish-header-row td > p.description {
     max-width: 67em;
     box-sizing: border-box;
@@ -7021,7 +7109,7 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 #nppp-http-purge-suffix-row td > input.regular-text,
 #nppp-http-purge-all-path-row td > input.regular-text,
 #nppp-http-purge-queue-status-row td > input.regular-text,
-#nppp-varnish-sync-row td > textarea,
+#nppp-varnish-endpoints-row td > textarea,
 #nppp-varnish-header-row td > input.regular-text {
     margin-bottom: 8px;
 }

@@ -865,7 +865,30 @@ function nppp_http_purge_queue_status_path_callback(): void {
     echo "<input type='text' id='nppp_http_purge_queue_status_path' name='nginx_cache_settings[nppp_http_purge_queue_status_path]' value='" . esc_attr( $value ) . "' class='regular-text' placeholder='npp_purge_status' />";
 }
 
-// Callback function for Varnish / Vinyl Cache Sync endpoints (one per line, empty = OFF)
+// Callback function for Varnish / Vinyl Cache Sync (ON / OFF switch)
+function nppp_varnish_sync_enabled_callback(): void {
+    $options    = get_option( 'nginx_cache_settings', [] );
+    $is_checked = is_array( $options ) && isset( $options['nppp_varnish_sync_enabled'] ) && $options['nppp_varnish_sync_enabled'] === 'yes';
+    $checked    = $is_checked ? 'checked="checked"' : '';
+
+    ?>
+    <input type="checkbox"
+           name="nginx_cache_settings[nppp_varnish_sync_enabled]"
+           class="nppp-onoffswitch-checkbox-varnish"
+           value="yes"
+           id="nppp_varnish_sync_enabled"
+           <?php echo esc_attr( $checked ); ?>>
+    <label class="nppp-onoffswitch-label-varnish" for="nppp_varnish_sync_enabled">
+        <span class="nppp-onoffswitch-inner-varnish">
+            <span class="nppp-off-varnish"><?php esc_html_e( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <span class="nppp-on-varnish"><?php esc_html_e( 'ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-varnish"></span>
+    </label>
+    <?php
+}
+
+// Callback function for Varnish / Vinyl Cache Sync endpoints (one per line)
 function nppp_varnish_endpoints_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
     $value   = ( is_array( $options ) && isset( $options['nppp_varnish_endpoints'] ) && is_string( $options['nppp_varnish_endpoints'] ) ) ? $options['nppp_varnish_endpoints'] : '';
