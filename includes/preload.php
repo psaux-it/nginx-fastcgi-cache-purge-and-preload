@@ -725,9 +725,15 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
                 ? nppp_http_purge_gate_command($command, $log_path)
                 : $command . ' > ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
 
-            // Flush Redis cache right before the crawl starts.
+            // Flush Redis / purge the outer cache (Varnish) right before the crawl starts. With status 7
+            // nginx still serves the old pages: the hook is deferred until the queue is idle, and the
+            // crawl (gated above) waits for it, so the outer layer is cleared after nginx and before the crawl.
             if ( ! $preload_mobile ) {
-                do_action( 'nppp_preload_all_started' );
+                if ( function_exists( 'nppp_http_purge_fire_preload_all_started' ) ) {
+                    nppp_http_purge_fire_preload_all_started( $status );
+                } else {
+                    do_action( 'nppp_preload_all_started' );
+                }
             }
 
             // We are ready

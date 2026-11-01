@@ -2709,7 +2709,12 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
  * move. A Purge All that really finished fires the hook itself and cancels the pending chain.
  * Fail-open everywhere: if nothing can wake us the hook fires at once, as before.
  *
- * Option value: array{ token:string, auto_preload:bool, armed_at:int, waiter:bool }
+ * Option value: array{ token:string, auto_preload:bool, armed_at:int, waiter:bool, hooks?:string[] }
+ * hooks = what to fire once the queue is idle: nppp_purged_all (default, also for rows written
+ * before this key existed) and / or nppp_preload_all_started (a direct Preload All that hit the
+ * same busy queue; its listeners are NOT the same as nppp_purged_all's: Redis flushes on both,
+ * Cloudflare only on the first, so neither hook can stand in for the other).
+ *
  * The crawl behind the same queue (Auto Preload, Preload All) must start AFTER this follow-up ran:
  * Varnish / CDN are cleared first, the crawl warms nginx second (compat-varnish.php "Order rule").
  * The shell gate cannot read the option, so a hold file mirrors "follow-up pending" for it
@@ -2828,14 +2833,47 @@ function nppp_http_purge_fire_purged_all( $status, bool $auto_preload ): void {
 }
 
 /**
- * Fires a claimed follow-up, then releases the crawl hold. The single place that runs the listeners
- * for the cron callback and the waiter's wake handler (watchdog.php).
+ * Direct Preload All (button, Admin Bar, REST, WP-Cron): fire nppp_preload_all_started now, or defer
+ * it while nginx's queue is still deleting. Same reasoning as nppp_http_purge_fire_purged_all(): the
+ * hook is what compat-varnish.php maps to "ban everything" (Redis flushes on it too), and fired
+ * while nginx still serves the old pages it lets Varnish re-cache them, with nobody banning again
+ * once the queue is done.
+ *
+ * Unlike a finished Purge All this does NOT cancel a pending nppp_purged_all follow-up: its
+ * listeners (Cloudflare) are not covered by nppp_preload_all_started.
+ *
+ * @param mixed $status Result of nppp_purge_helper() (7 = queue still deleting).
+ */
+function nppp_http_purge_fire_preload_all_started( $status ): void {
+    if ( $status === 7
+        && apply_filters( 'nppp_defer_purged_all_while_queue_busy', true )
+        && nppp_http_purge_defer_purged_all( false, 'nppp_preload_all_started' )
+    ) {
+        return;
+    }
+
+    do_action( 'nppp_preload_all_started' );
+}
+
+/**
+ * Fires what a claimed follow-up was waiting to fire, then releases the crawl hold. The single place
+ * that runs the listeners for the cron callback and the waiter's wake handler (watchdog.php).
  *
  * @param array $state The claimed state (see nppp_http_purge_deferred_claim()).
  */
 function nppp_http_purge_deferred_fire( array $state ): void {
+    $hooks   = ( isset( $state['hooks'] ) && is_array( $state['hooks'] ) ) ? $state['hooks'] : array();
+    $preload = in_array( 'nppp_preload_all_started', $hooks, true );
+    // Rows without the key (written before it existed) and anything unreadable mean Purge All.
+    $purged  = in_array( 'nppp_purged_all', $hooks, true ) || ! $preload;
+
     try {
-        do_action( 'nppp_purged_all', ! empty( $state['auto_preload'] ) );
+        if ( $purged ) {
+            do_action( 'nppp_purged_all', ! empty( $state['auto_preload'] ) );
+        }
+        if ( $preload ) {
+            do_action( 'nppp_preload_all_started' );
+        }
     } finally {
         nppp_http_purge_hold_release();
     }
@@ -2844,9 +2882,15 @@ function nppp_http_purge_deferred_fire( array $state ): void {
 /**
  * Arms the follow-up: state row, waiter shell (when allowed) and the cron fail-safe.
  *
+ * @param bool   $auto_preload Runtime auto-preload flag (only meaningful for nppp_purged_all).
+ * @param string $hook         'nppp_purged_all' (default) or 'nppp_preload_all_started'.
  * @return bool false when nothing could be armed (the caller then fires the hook at once).
  */
-function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
+function nppp_http_purge_defer_purged_all( bool $auto_preload, string $hook = 'nppp_purged_all' ): bool {
+    if ( $hook !== 'nppp_purged_all' && $hook !== 'nppp_preload_all_started' ) {
+        return false;
+    }
+
     // gate_remember() wrote the marker before the helper returned 7. No status endpoint means
     // nothing to wait on.
     $marker = get_option( NPPP_HTTP_PURGE_PENDING_KEY, false );
@@ -2865,9 +2909,16 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
             ? nppp_http_purge_purged_all_waiter_command( $marker, (string) $state['token'] )
             : null;
 
-        $state['armed_at']     = $armed_at;
-        $state['auto_preload'] = $auto_preload;
-        $state['waiter']       = ! empty( $state['waiter'] ) || $cmd !== null;
+        // Hooks accumulate: a Preload All must not drop a pending Purge All's Cloudflare purge, nor
+        // the other way round. auto_preload is the Purge All flag, only a Purge All moves it.
+        $hooks = ( isset( $state['hooks'] ) && is_array( $state['hooks'] ) ) ? $state['hooks'] : array( 'nppp_purged_all' );
+
+        $state['armed_at'] = $armed_at;
+        $state['hooks']    = array_values( array_unique( array_merge( $hooks, array( $hook ) ) ) );
+        if ( $hook === 'nppp_purged_all' ) {
+            $state['auto_preload'] = $auto_preload;
+        }
+        $state['waiter'] = ! empty( $state['waiter'] ) || $cmd !== null;
 
         // update_option() returns false for an unchanged value: that is not a failure here.
         update_option( NPPP_PURGED_ALL_DEFERRED_KEY, $state, false );
@@ -2884,6 +2935,7 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
             'auto_preload' => $auto_preload,
             'armed_at'     => $armed_at,
             'waiter'       => $cmd !== null,
+            'hooks'        => array( $hook ),
         );
         if ( ! update_option( NPPP_PURGED_ALL_DEFERRED_KEY, $state, false ) ) {
             return false;
