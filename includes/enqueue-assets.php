@@ -407,58 +407,10 @@ function nppp_plugin_requirements_met(bool $bypass_cache = false) {
         return;
     }
 
-    $nppp_met = false;
-
-    // Set env
-    nppp_prepare_request_env(true);
-
-    // Check if the operating system is Linux
-    if (nppp_is_linux()) {
-        // Centralised Nginx detection (honours Assume mode)
-        if (!nppp_precheck_nginx_detected(true)) {
-            if (!$bypass_cache) {
-                set_transient($nppp_req_tk, '0', 60);
-            }
-            return false;
-        }
-
-        // Initialize a flag to track the success functions
-        $shell_functions_enabled = true;
-
-        // Check if shell_exec is enabled
-        if (function_exists('shell_exec')) {
-            // Attempt to execute a harmless command
-            $output = shell_exec('echo "Test"');
-
-            // Check if the command executed successfully
-            if (trim((string) $output) !== "Test") {
-                $shell_functions_enabled = false;
-            }
-        } else {
-            $shell_functions_enabled = false;
-        }
-
-        // Check if exec is enabled
-        if (function_exists('exec')) {
-            // Attempt to execute a harmless command with exec
-            $output = exec('echo "Test"');
-
-            // Check if the command executed successfully
-            if (trim((string) $output) !== "Test") {
-                $shell_functions_enabled = false;
-            }
-        } else {
-            $shell_functions_enabled = false;
-        }
-
-        // NPP ready to go
-        if ($shell_functions_enabled && function_exists('posix_kill')) {
-            // Lastly we check shell command required by NPP
-            if (nppp_shell_toolset_check(true, false)) {
-                $nppp_met = true;
-            }
-        }
-    }
+    // NPP is ready to go only when no plugin-wide requirement fails. The ordered
+    // checks live in nppp_requirements_first_failure() (pre-checks.php), the same
+    // chain nppp_pre_checks_critical() builds its notice text from.
+    $nppp_met = (nppp_requirements_first_failure() === null);
 
     if (!$bypass_cache) {
         set_transient($nppp_req_tk, $nppp_met ? '1' : '0', 60);
