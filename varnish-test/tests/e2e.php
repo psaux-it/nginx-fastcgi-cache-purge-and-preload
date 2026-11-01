@@ -338,7 +338,7 @@ if ( $S === 'multi' ) {
     $rr = refused_reason();
     chk( strpos( vt_notes(), "endpoint #2 is unreachable ($rr). Skipping it for 5 minutes" ) !== false, "endpoint #2 reported as unreachable ($rr)", vt_notes() );
     if ( $rr === 'transport error' ) {
-        known( strpos( vt_notes(), '(connection refused)' ) === false, 'with libcurl >= 8 ("Couldn\'t connect to server") a refused connection is logged as the generic "transport error", not "connection refused"' );
+        known( strpos( vt_notes(), '(connection refused)' ) === false, 'with libcurl >= 8 ("Couldn\'t connect to server" / "Could not connect to server") a refused connection is logged as the generic "transport error", not "connection refused"' );
     }
     chk( strpos( vt_notes(), 'URL purged on Varnish / Vinyl Cache endpoint #1.' ) !== false && strpos( vt_notes(), 'URL purged on Varnish / Vinyl Cache endpoint #3.' ) !== false, 'endpoints #1 and #3 logged their purge' );
     chk( leaks( [ '127.0.0.1', (string) $dead['port'], (string) $v1['port'], LAB_SECRET ] ) === [], 'no address / secret in the log' );
@@ -375,7 +375,10 @@ if ( $S === 'tls' ) {
     fire_urls( [ site( '/a/' ) ] );
     chk( count( purge_reqs() ) === 1 && strpos( purge_reqs()[0]['url'], 'https://' ) === 0, 'one PURGE went to the https:// endpoint' );
     chk( lab_is_cached( $v, '/a/' ), 'TLS handshake against a plain-HTTP listener fails: nothing purged' );
-    chk( strpos( vt_notes(), 'is unreachable (TLS failure)' ) !== false, 'reported as unreachable (TLS failure)', vt_notes() );
+    // Varnish never answers a ClientHello on a plain listener, so the plugin's 1 s connect timeout (it covers the TLS
+    // handshake) ends the attempt. The word libcurl uses for that depends on its version: <= 8.5 "SSL connection
+    // timeout" (-> 'TLS failure'), >= 8.14 "Connection timed out after N ms" (-> 'connection timed out'). Same behaviour.
+    chk( preg_match( '/endpoint #1 is unreachable \((TLS failure|connection timed out)\)\. Skipping it for 5 minutes/', vt_notes() ) === 1, 'reported as unreachable (TLS failure, or "connection timed out" on libcurl >= 8.14)', vt_notes() );
     chk( empty( purge_reqs()[0]['args']['sslverify'] ), 'certificate verification is off by default (loopback / private endpoints)' );
     chk( leaks( [ LAB_SECRET, '127.0.0.1' ] ) === [], 'no secret / address in the log' );
 

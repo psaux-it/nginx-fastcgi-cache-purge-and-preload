@@ -67,6 +67,15 @@ function need_example_vcl( string $S ): void {
     }
 }
 
+/** One of the listed VCL variants must be active; the other (deliberately broken) variants are covered by 'vclclass'. */
+function need_vcl( string $S, array $ok, string $why ): void {
+    $v = topo_variant();
+    if ( ! in_array( $v, $ok, true ) ) {
+        echo "SKIP topology/$S: needs a VCL that $why, the active one is '$v' (a broken variant is covered by 'vclclass')\n";
+        exit( 77 );
+    }
+}
+
 /* ============================================================================================================
  * happy
  * ========================================================================================================= */
@@ -99,6 +108,7 @@ if ( $S === 'wiring' ) {
 }
 
 if ( $S === 'single' ) {
+    need_vcl( $S, [ 'example', 'noregex' ], 'accepts an exact PURGE (aclnone / nopurge delete nothing by design)' );
     $pages = need_pages( 1, $S );
     $a = $pages[0]; $b = $pages[1] ?? null;
     chk( topo_warm( $a ), "warm $a in both layers" );
@@ -127,6 +137,7 @@ if ( $S === 'single' ) {
 }
 
 if ( $S === 'purgeall' ) {
+    need_example_vcl( $S );   // the host-wide purge is a regex ban: noregex / aclnone / nopurge delete nothing by design (see 'vclclass')
     $pages = need_pages( 1, $S );
     foreach ( $pages as $p ) { chk( topo_warm( $p ), "warm $p in both layers" ); }
 
@@ -284,12 +295,16 @@ if ( $S === 'dns' ) {
     chk( topo_count( '/WARNING VARNISH/', $ev2 ) === 0, 'second purge: breaker is open, no new warning', substr( $ev2, -600 ) );
     chk( topo_origin_state( $a ) === 'MISS', 'second purge: nginx purged as usual', fn() => layers( $a ) );
 
-    // A dead endpoint beside a live one: the live one is still purged.
-    topo_set( 'nppp_varnish_endpoints', "http://npp-topo-missing:80\n" . $TOPO['varnish'] );
-    [ $r3, $ev3 ] = broken_purge( $a );
-    chk( topo_count( '/WARNING VARNISH: .*endpoint #1 is unreachable/', $ev3 ) === 1, 'two endpoints: only the dead one (#1) is reported', substr( $ev3, -700 ) );
-    chk( topo_origin_state( $a ) === 'MISS', 'two endpoints: nginx purged', fn() => layers( $a ) );
-    chk( topo_edge_ids( $a ) === 1, 'two endpoints: the live Varnish was still purged', fn() => layers( $a ) );
+    // A dead endpoint beside a live one: the live one is still purged (needs a VCL that honours an exact PURGE).
+    if ( ! in_array( topo_variant(), [ 'example', 'noregex' ], true ) ) {
+        skip( "two endpoints, one dead (the active VCL '" . topo_variant() . "' refuses or ignores PURGE by design)" );
+    } else {
+        topo_set( 'nppp_varnish_endpoints', "http://npp-topo-missing:80\n" . $TOPO['varnish'] );
+        [ $r3, $ev3 ] = broken_purge( $a );
+        chk( topo_count( '/WARNING VARNISH: .*endpoint #1 is unreachable/', $ev3 ) === 1, 'two endpoints: only the dead one (#1) is reported', substr( $ev3, -700 ) );
+        chk( topo_origin_state( $a ) === 'MISS', 'two endpoints: nginx purged', fn() => layers( $a ) );
+        chk( topo_edge_ids( $a ) === 1, 'two endpoints: the live Varnish was still purged', fn() => layers( $a ) );
+    }
 }
 
 if ( $S === 'refused' ) {

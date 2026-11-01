@@ -581,8 +581,11 @@ if ( $S === 'logreason' ) {
                 'something nobody has seen' => 'transport error', '' => 'transport error' ] as $msg => $want ) {
         $got = nppp_varnish_log_reason( $msg ); chk( $got === $want, 'reason for ' . json_encode( $msg ), "got '$got' want '$want'" );
     }
-    $got = nppp_varnish_log_reason( "cURL error 7: Failed to connect to 127.0.0.1 port 1 after 0 ms: Couldn't connect to server" );
-    known( $got === 'transport error', 'libcurl >= 7.7x words a closed port "Couldn\'t connect to server" (no "refused"): it is logged as "transport error" (cosmetic; add "couldn\'t connect" to the refused rule)', "got '$got'" );
+    // libcurl without the errno text: 7.7x - 8.5 say "Couldn't connect to server", 8.14 says "Could not connect to server"
+    foreach ( [ "Couldn't connect to server", 'Could not connect to server' ] as $w ) {
+        $got = nppp_varnish_log_reason( "cURL error 7: Failed to connect to 127.0.0.1 port 1 after 0 ms: $w" );
+        known( $got === 'transport error', "libcurl words a closed port \"$w\" (no \"refused\"): it is logged as \"transport error\" (cosmetic; the message also covers other connect failures, so it is not mapped to \"refused\")", "got '$got'" );
+    }
     foreach ( [ 'cURL error 7: Failed to connect to h port 80: Connection refused', 'Could not resolve host: x.internal', 'cURL error 28: ...' ] as $msg ) {
         $r = nppp_varnish_log_reason( $msg ); chk( ! preg_match( '/h port|x\.internal|[0-9]+\.[0-9]+\.[0-9]+|port \d+/', $r ), 'the reason never carries host / port / IP text', $r );
     }
@@ -617,14 +620,15 @@ if ( $S === 'fallback' ) {   // compat-varnish.php WITHOUT purge-http.php: its o
 /* ================================================================================================================ */
 if ( $S === 'transport' ) {   // real sockets, no script
     global $VT;
-    // what does THIS libcurl say for a closed port? (>= 7.7x: "Couldn't connect to server", older: "... Connection refused")
+    // what does THIS libcurl say for a closed port? (older: "... Connection refused", 7.7x - 8.5: "Couldn't connect to server",
+    // >= 8.1x: "Could not connect to server" - the apostrophe form was reworded, so match both)
     $raw    = vt_real_request( 'http://127.0.0.1:1/', [ 'method' => 'PURGE', 'timeout' => 2 ] );
     $rawmsg = is_wp_error( $raw ) ? $raw->get_error_message() : '';
     $reason = stripos( $rawmsg, 'refused' ) !== false ? 'connection refused' : 'transport error';
     on( 'http://127.0.0.1:1' ); $t = microtime( true ); do_action( 'nppp_purged_urls', [ 'http://example.com/a/' ] ); $el = microtime( true ) - $t;
     chk( strpos( vt_notes(), "unreachable ($reason)" ) !== false && $el < 2.0, "real closed port: warning with reason '$reason', fast", sprintf( '%.2fs %s | libcurl said: %s', $el, vt_notes(), $rawmsg ) );
     if ( $reason === 'transport error' ) {
-        known( stripos( $rawmsg, "couldn't connect" ) !== false, 'this libcurl ' . curl_version()['version'] . ' does not say "refused" for a closed port, so the log shows "transport error" (cosmetic)', $rawmsg );
+        known( preg_match( "/could(?:n't| not) connect/i", $rawmsg ) === 1, 'this libcurl ' . curl_version()['version'] . ' does not say "refused" for a closed port, so the log shows "transport error" (cosmetic)', $rawmsg );
     }
     chk( nppp_varnish_breaker_open( 'http://127.0.0.1:1' ), 'real failure arms the breaker' );
     // blackhole: the 1 s connect timeout must cut a SYN that is never answered (3 s total would be the WordPress default)
