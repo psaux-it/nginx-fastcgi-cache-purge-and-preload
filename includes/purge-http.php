@@ -2559,9 +2559,16 @@ function nppp_http_purge_gate_pending(): ?array {
  * as it did before this gate existed. Nothing is written to the crawl log, because
  * the preload progress view parses it.
  *
+ * With $hold (the crawl gate, never the waiter) the snippet also blocks, after the queue is idle,
+ * while a deferred Purge All follow-up is still pending (see nppp_http_purge_hold_file()): the
+ * crawl must start AFTER the outer layers (Varnish ban, CDN purge) were cleared, or it is
+ * answered by a stale outer object and never reaches nginx. The wait ends when the follow-up
+ * released the hold, or at the deadline stored in the hold file (fail-open, never a stuck crawl).
+ *
  * @param array $pending ['status_url' => string, 'host' => string]
+ * @param bool  $hold    Also wait for the deferred follow-up (crawl gate only).
  */
-function nppp_http_purge_gate_snippet( array $pending ): string {
+function nppp_http_purge_gate_snippet( array $pending, bool $hold = false ): string {
     $max = nppp_http_purge_gate_max_wait();
 
     $poll = 'wget -q -O- --no-config --no-check-certificate -e use_proxy=no -T 3 -t 1'
@@ -2586,7 +2593,66 @@ while :; do
 done;
 SH;
 
-    return str_replace( [ '@MAX@', '@POLL@' ], [ (string) $max, $poll ], $tpl );
+    $out = str_replace( [ '@MAX@', '@POLL@' ], [ (string) $max, $poll ], $tpl );
+
+    $hold_file = $hold ? nppp_http_purge_hold_file() : '';
+    if ( $hold_file === '' ) {
+        return $out;
+    }
+
+    // Hold phase. The file holds one epoch (the follow-up's deadline). Missing file = nothing to wait
+    // for; unreadable / expired = fail open. Poll once a second, like the queue loop above.
+    $hold_tpl = <<<'SH'
+g_f=@HOLD@;
+while [ -f "$g_f" ]; do
+  g_d=$(tr -dc 0-9 < "$g_f" 2>/dev/null);
+  [ -n "$g_d" ] && [ "$(date +%s)" -lt "$g_d" ] || break;
+  sleep 1;
+done;
+SH;
+
+    return $out . str_replace( '@HOLD@', escapeshellarg( $hold_file ), $hold_tpl ) . "\n";
+}
+
+/**
+ * Hold file: "a deferred Purge All follow-up is still pending". It exists from the moment the
+ * follow-up is armed until its listeners (Varnish ban, CDN purge, Redis flush) have returned, and
+ * holds the follow-up's deadline as one epoch. The only reader is the crawl gate (the shell cannot
+ * see WP options); '' (no runtime dir helper) disables the hold phase = the previous behaviour.
+ */
+function nppp_http_purge_hold_file(): string {
+    return function_exists( 'nppp_get_runtime_file' ) ? (string) nppp_get_runtime_file( 'nppp-purged-all-hold' ) : '';
+}
+
+/** Writes the hold atomically (the shell must never read a half-written file). Best effort. */
+function nppp_http_purge_hold_set( int $deadline ): void {
+    $file = nppp_http_purge_hold_file();
+    if ( $file === '' ) {
+        return;
+    }
+
+    $tmp = $file . '.' . getmypid() . '.tmp';
+    // phpcs:disable WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents, WordPress.WP.AlternativeFunctions.rename_rename, WordPress.WP.AlternativeFunctions.unlink_unlink
+    if ( @file_put_contents( $tmp, (string) $deadline ) === false || ! @rename( $tmp, $file ) ) {
+        if ( is_file( $tmp ) ) {
+            @unlink( $tmp );
+        }
+    }
+    // phpcs:enable
+}
+
+/**
+ * Drops the hold, unless a newer follow-up was armed meanwhile (its hold must stay). Idempotent.
+ * Call it AFTER the listeners returned, never before.
+ */
+function nppp_http_purge_hold_release(): void {
+    $file = nppp_http_purge_hold_file();
+    // No hold (the normal case: every Purge All that was not deferred) costs one stat, no DB read.
+    if ( $file === '' || ! is_file( $file ) || nppp_http_purge_deferred_read() !== null ) {
+        return;
+    }
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+    @unlink( $file );
 }
 
 /**
@@ -2610,7 +2676,7 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
         return $crawl . $tail;
     }
 
-    return "( trap '' HUP; " . nppp_http_purge_gate_snippet( $pending ) . ' exec ' . $crawl . ' )' . $tail;
+    return "( trap '' HUP; " . nppp_http_purge_gate_snippet( $pending, true ) . ' exec ' . $crawl . ' )' . $tail;
 }
 
 /* ============================================================================
@@ -2644,6 +2710,10 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
  * Fail-open everywhere: if nothing can wake us the hook fires at once, as before.
  *
  * Option value: array{ token:string, auto_preload:bool, armed_at:int, waiter:bool }
+ * The crawl behind the same queue (Auto Preload, Preload All) must start AFTER this follow-up ran:
+ * Varnish / CDN are cleared first, the crawl warms nginx second (compat-varnish.php "Order rule").
+ * The shell gate cannot read the option, so a hold file mirrors "follow-up pending" for it
+ * (nppp_http_purge_hold_file()). Armed with the row, released after the listeners returned.
  * The cron hook name must stay in the EP2 whitelist and the action name in the EP8 gate of
  * the main plugin file (both run BEFORE the plugin bootstrap).
  */
@@ -2749,7 +2819,26 @@ function nppp_http_purge_fire_purged_all( $status, bool $auto_preload ): void {
     // Firing now covers whatever an earlier Purge All still had pending.
     nppp_http_purge_deferred_cancel();
 
-    do_action( 'nppp_purged_all', $auto_preload );
+    try {
+        do_action( 'nppp_purged_all', $auto_preload );
+    } finally {
+        // A crawl an earlier Purge All left waiting may go now: the listeners have returned.
+        nppp_http_purge_hold_release();
+    }
+}
+
+/**
+ * Fires a claimed follow-up, then releases the crawl hold. The single place that runs the listeners
+ * for the cron callback and the waiter's wake handler (watchdog.php).
+ *
+ * @param array $state The claimed state (see nppp_http_purge_deferred_claim()).
+ */
+function nppp_http_purge_deferred_fire( array $state ): void {
+    try {
+        do_action( 'nppp_purged_all', ! empty( $state['auto_preload'] ) );
+    } finally {
+        nppp_http_purge_hold_release();
+    }
 }
 
 /**
@@ -2801,6 +2890,10 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
         }
     }
 
+    // The crawl hold goes up with the row and BEFORE the waiter exists: the waiter's release (after
+    // its listeners returned) must always come after the hold it releases, never before it.
+    nppp_http_purge_hold_set( $armed_at + nppp_http_purge_gate_max_wait() + 60 );
+
     // The state row (and so the token) exists before the waiter can POST.
     if ( $cmd !== null ) {
         shell_exec( $cmd );
@@ -2815,6 +2908,7 @@ function nppp_http_purge_defer_purged_all( bool $auto_preload ): bool {
     if ( ! $state['waiter'] && $scheduled !== true ) {
         // Nothing can wake us: do not swallow the follow-up.
         delete_option( NPPP_PURGED_ALL_DEFERRED_KEY );
+        nppp_http_purge_hold_release();
         return false;
     }
 
@@ -2915,7 +3009,7 @@ function nppp_http_purge_run_deferred_purged_all(): void {
 
     nppp_http_purge_deferred_lift_limits();
 
-    do_action( 'nppp_purged_all', (bool) $claimed['auto_preload'] );
+    nppp_http_purge_deferred_fire( $claimed );
 }
 
 /* ============================================================================

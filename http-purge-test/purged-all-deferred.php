@@ -630,8 +630,11 @@ foreach ( glob( "$INC/*.php" ) as $f ) {
     }
 }
 sort( $sites );
-is_( count( $sites ), 4, 'H1 exactly four places fire nppp_purged_all (purge.php fallback, fire-or-defer, cron, wake handler)', '-- ' . json_encode( $sites ) );
-is_( array_map( fn( $s ) => explode( ':', $s )[0], $sites ), [ 'purge-http.php', 'purge-http.php', 'purge.php', 'watchdog.php' ], 'H1 ... in purge-http.php (x2), purge.php (function_exists fallback only), watchdog.php' );
+is_( count( $sites ), 3, 'H1 exactly three places fire nppp_purged_all (purge.php fallback, fire-or-defer, the shared deferred fire helper)', '-- ' . json_encode( $sites ) );
+is_( array_map( fn( $s ) => explode( ':', $s )[0], $sites ), [ 'purge-http.php', 'purge-http.php', 'purge.php' ], 'H1 ... in purge-http.php (x2), purge.php (function_exists fallback only)' );
+$wd_src = (string) file_get_contents( "$INC/watchdog.php" );
+ok( preg_match( '/nppp_http_purge_deferred_fire\(\s*\$state\s*\)/', $wd_src ) === 1, 'H1 the wake handler fires through nppp_http_purge_deferred_fire() (hook set + crawl hold release in one place)' );
+ok( preg_match( '/nppp_http_purge_deferred_fire\(\s*\$claimed\s*\)/', (string) file_get_contents( "$INC/purge-http.php" ) ) === 1, 'H1 the cron callback fires through nppp_http_purge_deferred_fire() as well' );
 ok( preg_match( '/else\s*\{\s*do_action\(\s*\'nppp_purged_all\'/', $src ) === 1, 'H1 the purge.php site is only the else-fallback when the decision function does not exist' );
 
 // H2. Pre-bootstrap gates: cron hook (EP2) and wake action (EP8) are known to the main plugin file.
