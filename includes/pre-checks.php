@@ -956,6 +956,70 @@ function nppp_open_basedir_compat_check(): array {
     return $result;
 }
 
+// Single source of truth for the plugin-wide (global) environment requirements.
+//
+// Walks the requirements in a fixed order and returns a code for the FIRST one
+// that is not met, or null when every one is met:
+//   'linux'        operating system is not Linux
+//   'nginx'        Nginx not detected (honours Assume mode)
+//   'shell_funcs'  shell_exec and/or exec is not available
+//   'shell_exec'   shell_exec exists but is silently blocked
+//   'exec'         exec exists but is silently blocked
+//   'posix'        POSIX extension (posix_kill) missing
+//   'core_cmds'    a required core shell command is missing
+//
+// Both consumers read this one result, so a requirement is added or changed in
+// exactly one place:
+//   - nppp_plugin_requirements_met()  boolean capability gate (hot path, cached)
+//   - nppp_pre_checks_critical()      user-facing notice text (live, uncached)
+//
+// Callers keep their own WP_Filesystem initialisation: a failure there is
+// reported differently by each of them and is not an environment requirement.
+// Preload-only requirements (wget, nohup) are deliberately NOT part of this
+// chain, they only lock the preload feature and are handled by
+// nppp_shell_toolset_check( false, true ) and nppp_pre_checks_critical().
+function nppp_requirements_first_failure(): ?string {
+    // Set env
+    nppp_prepare_request_env(true);
+
+    // Check if the operating system is Linux
+    if (!nppp_is_linux()) {
+        return 'linux';
+    }
+
+    // Centralised Nginx detection (honours Assume mode)
+    if (!nppp_precheck_nginx_detected(true)) {
+        return 'nginx';
+    }
+
+    // Check if both shell_exec and exec are enabled (both are required)
+    if (!function_exists('shell_exec') || !function_exists('exec')) {
+        return 'shell_funcs';
+    }
+
+    // Verify shell_exec is not silently blocked
+    if (trim((string) shell_exec('echo "Test"')) !== 'Test') {
+        return 'shell_exec';
+    }
+
+    // Verify exec is not silently blocked
+    if (trim((string) exec('echo "Test"')) !== 'Test') {
+        return 'exec';
+    }
+
+    // Check if POSIX extension functions are available
+    if (!function_exists('posix_kill')) {
+        return 'posix';
+    }
+
+    // Check shell command requirements for plugin functionality
+    if (!nppp_shell_toolset_check(true, false)) {
+        return 'core_cmds';
+    }
+
+    return null;
+}
+
 // Function to check if plugin critical requirements are met
 function nppp_pre_checks_critical() {
     $wp_filesystem = nppp_initialize_wp_filesystem();
@@ -968,51 +1032,37 @@ function nppp_pre_checks_critical() {
         return;
     }
 
-    // Set env
-    nppp_prepare_request_env(true);
+    // Plugin-wide requirements, the same chain nppp_plugin_requirements_met() gates on.
+    switch (nppp_requirements_first_failure()) {
+        case 'linux':
+            return __('GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Check if the operating system is Linux and the web server is nginx
-    if (!nppp_is_linux()) {
-        return __('GLOBAL ERROR OPT: Plugin is not functional on your environment. The plugin requires Linux operating system.', 'fastcgi-cache-purge-and-preload-nginx');
-    }
+        case 'nginx':
+            return __('GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server. If this detection is inaccurate, please refer to the Help tab for detailed instructions.', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Centralised Nginx detection (honours Assume mode)
-    if (!nppp_precheck_nginx_detected(true)) {
-        return __('GLOBAL ERROR SERVER: The plugin is not functional on your environment. It requires an Nginx web server. If this detection is inaccurate, please refer to the Help tab for detailed instructions.', 'fastcgi-cache-purge-and-preload-nginx');
-    }
+        case 'shell_funcs':
+            return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. Both "shell_exec" and "exec" functions are required but one or both are not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Check if both shell_exec and exec are enabled (both are required)
-    if (!function_exists('shell_exec') || !function_exists('exec')) {
-        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. Both "shell_exec" and "exec" functions are required but one or both are not enabled. Please enable them in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-    }
+        case 'shell_exec':
+            return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Verify shell_exec is not silently blocked
-    $output = shell_exec('echo "Test"');
-    if (trim($output) !== "Test") {
-        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "shell_exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-    }
+        case 'exec':
+            return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Verify exec is not silently blocked
-    $output = exec('echo "Test"');
-    if (trim($output) !== "Test") {
-        return __('GLOBAL ERROR PHP: Plugin is not functional on your environment. The "exec" function is required but not enabled. Please enable it in your server\'s PHP configuration.', 'fastcgi-cache-purge-and-preload-nginx');
-    }
+        case 'posix':
+            return __('GLOBAL ERROR POSIX: Plugin is not functional on your environment. The PHP POSIX extension is required but not enabled. Please install or enable POSIX on your server.', 'fastcgi-cache-purge-and-preload-nginx');
 
-    // Check if POSIX extension functions are available
-    if (!function_exists('posix_kill')) {
-        return __('GLOBAL ERROR POSIX: Plugin is not functional on your environment. The PHP POSIX extension is required but not enabled. Please install or enable POSIX on your server.', 'fastcgi-cache-purge-and-preload-nginx');
-    }
-
-    // Check shell command requirements for plugin functionality
-    if (!nppp_shell_toolset_check(true, false)) {
-        // Get the missing commands directly from the transient
-        $missing_commands = get_transient('nppp_missing_commands_' . md5('nppp'));
-        // If there are missing commands
-        if (!empty($missing_commands)) {
-            $missing_commands_str = implode(', ', $missing_commands);
-            /* translators: %s: list of missing core shell commands */
-            return sprintf(__('GLOBAL ERROR COMMAND: Plugin is not functional on your environment. The required core shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
-        }
+        case 'core_cmds':
+            // Get the missing commands directly from the transient
+            $missing_commands = get_transient('nppp_missing_commands_' . md5('nppp'));
+            // If there are missing commands
+            if (!empty($missing_commands)) {
+                $missing_commands_str = implode(', ', $missing_commands);
+                /* translators: %s: list of missing core shell commands */
+                return sprintf(__('GLOBAL ERROR COMMAND: Plugin is not functional on your environment. The required core shell command(s) not found: %s', 'fastcgi-cache-purge-and-preload-nginx'), $missing_commands_str);
+            }
+            // No missing-commands record: keep going, same as before.
+            break;
     }
 
     // Check action specific shell command requirements for Preload
