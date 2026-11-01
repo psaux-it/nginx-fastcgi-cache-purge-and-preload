@@ -28,9 +28,10 @@
  *   gen         control   generation mode (200 invalidated), Auto Preload on         -> same, no gate, no deferral
  *   async       control   202 + queue drains inside the wait budget                  -> status 0, same as sync
  *   deferred    exit 7    202 + queue stays busy, Auto Preload on, live waiter       -> no ban while busy, one ban after idle
- *   waiterdead  exit 7    same, waiter died silently, cron fail-safe (+60 s)         -> crawl must still warm the origin
+ *   waiterdead  exit 7    same, waiter died silently, cron fail-safe (+60 s)         -> crawl waits for the ban, then warms the origin
  *   preloadall  exit 7    DIRECT Preload All (button / cron / REST) behind a busy queue -> no ban while busy, ban after idle
  *   supersede   exit 7    re-arm, superseding Purge All, deadline, opt-out filter     -> at most one ban per Purge All, never lost
+ *   holdgate    exit 7    the crawl gate's hold phase itself (real sh)                 -> holds while a follow-up is pending, fails open
  *
  * A FAIL whose name starts with "BUG?" is a candidate defect in the plugin (not in the harness); the detail line says why.
  *
@@ -38,7 +39,7 @@
  */
 require __DIR__ . '/../lib/lab.php';
 
-$SECTIONS = [ 'sync', 'gen', 'async', 'deferred', 'waiterdead', 'preloadall', 'supersede' ];
+$SECTIONS = [ 'sync', 'gen', 'async', 'deferred', 'waiterdead', 'preloadall', 'supersede', 'holdgate' ];
 $S        = $argv[1] ?? 'all';
 
 /* ---- orchestrator: every section in a fresh process (the plugin keeps per-request statics) ---------------------- */
@@ -200,8 +201,14 @@ function tl( string $ev ): void { $GLOBALS['T2']['tl'][] = [ 'ev' => $ev, 'busy'
  */
 function fx( string $nginx_mode, bool $auto_preload, bool $wget = true, array $extra = [] ): void {
     global $V, $PAGES, $T2;
+    putenv( 'PATH=' . $GLOBALS['ORIG_PATH'] );   // varnishadm (lab_clear) must be found even after a scenario that ran without wget
     foreach ( [ "pkill -f '[n]pp-vt-queue-status' 2>/dev/null", "pkill -f '[n]ppp_purged_all_wake' 2>/dev/null" ] as $c ) { shell_exec( $c ); }
     lab_clear( $V );
+    // lab_clear() issues the same `ban obj.status >= 0` every time and varnishd folds a ban identical to the newest one into it, so a
+    // scenario that sent no ban of its own (the opt-out ones) would leave its objects behind for the next fx(). A distinct, always-true ban fixes that.
+    static $ban_n = 0; $ban_n++;
+    shell_exec( 'varnishadm -n ' . escapeshellarg( $V['wd'] ) . ' ban ' . escapeshellarg( 'obj.ttl > -' . $ban_n . 's' ) . ' 2>&1' );
+    lab_reset_backend();
     foreach ( $PAGES as $p ) { if ( ! lab_prime( $V, $p ) ) { fwrite( STDERR, "lab: cannot prime $p\n" ); exit( 2 ); } }   // the OLD objects, cached in Varnish before the purge
     lab_plugin_on( [ $V ] );
     vt_set( array_merge( [ 'nppp_http_purge_enabled' => 'yes', 'nppp_http_purge_custom_url' => 'http://nginx.test', 'nppp_http_purge_queue_status_path' => 'npp-vt-queue-status',
@@ -212,6 +219,7 @@ function fx( string $nginx_mode, bool $auto_preload, bool $wget = true, array $e
     @unlink( $GLOBALS['FILES']['log'] );
     ngx_idle(); ngx_script( $nginx_mode );
     nppp_http_purge_gate_state( 'clear' );
+    @unlink( nppp_http_purge_hold_file() );
     foreach ( [ 'nppp_purged_all', 'nppp_preload_all_started' ] as $h ) { add_action( $h, function () use ( $h ) { tl( 'hook:' . $h ); }, 1, 0 ); }
     putenv( 'NPPP_VT_STATUS=' . $GLOBALS['FILES']['status'] ); putenv( 'NPPP_VT_LOG=' . $GLOBALS['FILES']['log'] );
     putenv( 'NPPP_VT_CRAWL_PORT=' . $V['port'] ); putenv( 'NPPP_VT_CRAWL_PATHS=' . implode( ' ', $PAGES ) );
@@ -269,6 +277,7 @@ if ( $S === 'deferred' ) {
     $st = state();
     chk( $T2['fs_purge'] === 0, 'status 7: no filesystem purge (it would race the queue)', '' );
     chk( is_array( $st ) && ! empty( $st['waiter'] ) && $st['auto_preload'] === true, 'status 7: follow-up armed with a live waiter and auto_preload=true', json_encode( $st ) );
+    chk( is_file( nppp_http_purge_hold_file() ) && (int) trim( (string) file_get_contents( nppp_http_purge_hold_file() ) ) >= (int) $st['armed_at'] + 60, 'status 7: the crawl hold is up, its deadline is the follow-up deadline', '' );
     chk( count( hook_events( 'nppp_purged_all' ) ) === 0, 'status 7: nppp_purged_all NOT fired while nginx still deletes', json_encode( $T2['tl'] ) );
     chk( varnish_bans() === 0, 'status 7: NO ban sent to Varnish while nginx is still serving stale pages (it would be re-cached)', 'bans: ' . varnish_bans() );
     chk( count( hook_events( 'nppp_preload_all_started' ) ) === 0, 'status 7 + auto preload: nppp_preload_all_started is not fired either', json_encode( $T2['tl'] ) );
@@ -286,12 +295,15 @@ if ( $S === 'deferred' ) {
     chk( count( hook_events( 'nppp_purged_all' ) ) === 1 && ! hook_events( 'nppp_purged_all' )[0]['busy'], 'nppp_purged_all fired once, after nginx became clean', json_encode( $T2['tl'] ) );
     chk( varnish_bans() === 1, 'exactly one ban reached Varnish, after the queue was idle', 'bans: ' . varnish_bans() );
     chk( state() === null, 'one-shot state consumed', '' );
+    chk( ! is_file( nppp_http_purge_hold_file() ), 'the crawl hold is released once the listeners returned', '' );
     chk( wake( (string) ( $st['token'] ?? '' ) ) === 403, 'a second wake with the same token is refused (at most once)', '' );
     cron_run();
     chk( varnish_bans() === 1, 'the cron fail-safe after the waiter fired sends nothing (still one ban)', 'bans: ' . varnish_bans() );
     foreach ( $GLOBALS['PAGES'] as $p ) { chk( ! lab_is_cached_since_old( $p ), "final state: no pre-purge object of $p survives in Varnish", '' ); }
     $w = warmed_by_crawl();
-    say( "crawl vs. ban race (live waiter): the crawl warmed nginx for $w/" . count( $GLOBALS['PAGES'] ) . ' pages; both wait for the same idle moment, the order between them is not guaranteed' );
+    chk( $w === count( $GLOBALS['PAGES'] ), 'the crawl warmed nginx for every page (it is ordered behind the ban, not racing it)', "warmed $w/" . count( $GLOBALS['PAGES'] ) );
+    $h = hook_events( 'nppp_purged_all' )[0]['t'] ?? INF; $c = log_ts( 'CRAWL_START' ) ?? 0;
+    chk( $h < $c, 'Varnish was purged BEFORE the crawl started (order rule, live waiter)', sprintf( 'hook %.3f crawl %.3f', $h, $c ) );
     exit( vt_summary() );
 }
 /** After everything settled: is a pre-purge object still served? (the body counter hit=1 is the object primed before the purge) */
@@ -313,16 +325,17 @@ if ( $S === 'waiterdead' ) {
     chk( varnish_bans() === 0, 'no ban while the queue is busy', '' );
 
     ngx_idle();                                   // nginx is done at, say, T+20 s; the cron tick is only due at T+60 s
-    chk( crawl_done(), 'queue idle: the gated crawl starts and finishes (nothing orders it behind the pending Varnish ban)', '' );
-    $pending_at_crawl_end = state() !== null && varnish_bans() === 0;
-    chk( $pending_at_crawl_end, 'precondition: the crawl ran while the Varnish ban was still pending', json_encode( [ state(), varnish_bans() ] ) );
-    $w = warmed_by_crawl();
-    chk( $w === count( $GLOBALS['PAGES'] ), 'BUG? the crawl warmed nginx for every page although the Varnish ban was still pending',
-        "warmed $w/" . count( $GLOBALS['PAGES'] ) . ": the crawl was answered by the stale Varnish objects, nginx stays cold for those pages.\n"
-        . 'Cause: the crawl gate waits only for nginx\'s queue (nppp_http_purge_gate_snippet), not for the deferred nppp_purged_all that clears Varnish.' );
-
+    usleep( 4000000 );                            // > 2 idle samples: without the hold the gated crawl would be running by now
+    chk( log_ts( 'CRAWL_START' ) === null, 'queue idle but the Varnish ban is still pending: the gated crawl HOLDS (order rule)', 'CRAWL_START: ' . var_export( log_ts( 'CRAWL_START' ), true ) );
+    chk( state() !== null && varnish_bans() === 0, 'precondition: the ban is still pending while the crawl waits', json_encode( [ state(), varnish_bans() ] ) );
     cron_run();                                   // T+60 s: the fail-safe finally runs
-    chk( varnish_bans() === 1 && count( hook_events( 'nppp_purged_all' ) ) === 1, 'the cron fail-safe fires the hook once and Varnish is banned (control: the follow-up itself is not lost)', 'bans: ' . varnish_bans() );
+    chk( crawl_done(), 'after the ban the held crawl starts and finishes', '' );
+    $h = hook_events( 'nppp_purged_all' )[0]['t'] ?? INF; $c = log_ts( 'CRAWL_START' ) ?? 0;
+    chk( $h < $c, 'Varnish was purged BEFORE the crawl started (order rule, dead waiter)', sprintf( 'hook %.3f crawl %.3f', $h, $c ) );
+    $w = warmed_by_crawl();
+    chk( $w === count( $GLOBALS['PAGES'] ), 'the crawl warmed nginx for every page (it was not answered by a stale Varnish object)', "warmed $w/" . count( $GLOBALS['PAGES'] ) );
+    chk( ! is_file( nppp_http_purge_hold_file() ), 'the crawl hold is released', '' );
+    chk( varnish_bans() === 1 && count( hook_events( 'nppp_purged_all' ) ) === 1, 'the cron fail-safe fires the hook once and Varnish is banned exactly once (the follow-up is not lost)', 'bans: ' . varnish_bans() );
     chk( ! stale_served( '/' ), 'final state: Varnish serves no pre-purge object', '' );
     exit( vt_summary() );
 }
@@ -334,6 +347,7 @@ if ( $S === 'waiterdead' ) {
 if ( $S === 'preloadall' ) {
     fx( 'accepted', false, true );
     do_preload_all_direct();
+    $st = state();
     chk( $T2['fs_purge'] === 0, 'direct Preload All behind a busy queue: no filesystem purge (status 7 inside nppp_preload_locked)', 'fs purges: ' . $T2['fs_purge'] );
     chk( nppp_http_purge_gate_used(), 'the crawl was spawned behind the queue gate', '' );
     $varnish_hooks = array_values( array_filter( $T2['tl'], fn( $e ) => strpos( $e['ev'], 'hook:' ) === 0 ) );   // every hook that makes compat-varnish.php send a purge-all
@@ -344,17 +358,27 @@ if ( $S === 'preloadall' ) {
 
     // A visitor (or any client) asks Varnish for a page in the window: Varnish was just emptied, nginx still holds the OLD page -> Varnish re-caches it.
     lab_get( $V, '/a/' );
-    chk( lab_is_cached( $V, '/a/' ), 'setup: a request in the busy window re-cached /a/ in Varnish (from the stale nginx)', '' );
+    chk( lab_is_cached( $V, '/a/' ), 'setup: in the busy window /a/ is served from Varnish (nginx still holds the old page)', '' );
+    $hits_before_idle = origin_hits( '/a/' );   // every origin fetch up to here produced (or re-produced) the OLD page
 
+    chk( is_array( $st ) && ( $st['hooks'] ?? [] ) === [ 'nppp_preload_all_started' ], 'the deferred follow-up carries nppp_preload_all_started (not nppp_purged_all)', json_encode( $st ) );
     ngx_idle();
-    chk( crawl_done(), 'queue idle: the gated crawl runs', '' );
-    if ( ( $t = state() ) !== null ) { cron_run(); }          // nothing is armed on this path; a tick is harmless
+    usleep( 4000000 );
+    chk( log_ts( 'CRAWL_START' ) === null, 'queue idle, follow-up still pending: the gated crawl holds', '' );
+    chk( wait_for( fn() => log_ts( 'POST' ) !== null, 15 ), 'queue idle: the waiter POSTs the one-shot wake request', '' );
+    chk( wake( (string) ( $st['token'] ?? '' ) ) === 200, 'the wake handler claims the token and fires the deferred hook', '' );
+    chk( crawl_done(), 'the held crawl runs after the follow-up', '' );
+    $h = hook_events( 'nppp_preload_all_started' )[0]['t'] ?? INF; $c = log_ts( 'CRAWL_START' ) ?? 0;
+    chk( count( hook_events( 'nppp_preload_all_started' ) ) === 1 && $h < $c, 'nppp_preload_all_started fired once, BEFORE the crawl started', sprintf( 'hook %.3f crawl %.3f', $h, $c ) );
+    chk( hook_events( 'nppp_purged_all' ) === [], 'nppp_purged_all (Cloudflare) was NOT introduced on the direct Preload All path', json_encode( $T2['tl'] ) );
+    chk( state() === null && ! is_file( nppp_http_purge_hold_file() ), 'follow-up consumed and crawl hold released', '' );
+    chk( varnish_bans() === 1, 'exactly one ban reached Varnish, after the queue was idle', 'bans: ' . varnish_bans() );
     $late_bans = count( array_filter( $T2['tl'], fn( $e ) => strpos( $e['ev'], 'hook:' ) === 0 && ! $e['busy'] ) );   // each Varnish-triggering hook = one ban
     chk( $late_bans >= 1, 'BUG? a Varnish purge-all was sent AFTER nginx became clean', 'Varnish purge triggers after the queue was idle: ' . $late_bans . '. Nobody purges Varnish again when the queue finishes (the deferral exists only behind nppp_purged_all).' );
-    chk( ! lab_is_cached_for_window( $V, '/a/' ), 'BUG? the page re-cached from stale nginx during the window does not survive in Varnish after the queue is idle', 'it is still served from Varnish: stale HTML until its TTL runs out.' );
+    $now = lab_get( $V, '/a/' )['body']; preg_match( '/hit=(\d+)/', $now, $mm ); $served = (int) ( $mm[1] ?? 0 );
+    chk( $served > $hits_before_idle, 'BUG? the page cached while nginx was still deleting does not survive in Varnish after the queue is idle', "served object is origin fetch #$served, the last pre-idle fetch was #$hits_before_idle: stale HTML until its TTL runs out." );
     exit( vt_summary() );
 }
-function lab_is_cached_for_window( array $v, string $p ): bool { return lab_is_cached( $v, $p ); }
 
 /* ================================================================================================================
  * supersede : the follow-up chain itself (cron-only, no waiter: PATH without wget, Auto Preload off).
@@ -394,6 +418,71 @@ if ( $S === 'supersede' ) {
     do_purge_all();
     $h = hook_events( 'nppp_purged_all' );
     chk( count( $h ) === 1 && $h[0]['busy'] === true && varnish_bans() === 1 && state() === null, 'U4: filter nppp_defer_purged_all_while_queue_busy=false: immediate hook, nothing deferred (documented opt-out)', json_encode( $T2['tl'] ) );
+    // U5: a Purge All and a direct Preload All behind the same busy queue share ONE chain; both hooks fire once at idle.
+    fx( 'accepted', false, false );
+    do_purge_all(); $t1 = (string) ( state()['token'] ?? '' );
+    do_preload_all_direct(); $s5 = state();
+    chk( $t1 !== '' && ( $s5['token'] ?? '' ) === $t1 && count( $T2['cron'] ) === 1, 'U5: the Preload All re-arms the Purge All chain (same token, one cron event)', json_encode( [ $s5, $T2['cron'] ] ) );
+    $hk = $s5['hooks'] ?? [];
+    sort( $hk );
+    chk( $hk === [ 'nppp_preload_all_started', 'nppp_purged_all' ], 'U5: both hooks are kept (Cloudflare purge-all must not be lost, Redis flush on preload must not be lost)', json_encode( $hk ) );
+    chk( varnish_bans() === 0 && $T2['tl'] === [], 'U5: nothing fired while the queue is busy', json_encode( [ varnish_bans(), $T2['tl'] ] ) );
+    ngx_idle(); cron_run();
+    chk( count( hook_events( 'nppp_purged_all' ) ) === 1 && count( hook_events( 'nppp_preload_all_started' ) ) === 1, 'U5: each hook fired exactly once at idle', json_encode( $T2['tl'] ) );
+    chk( varnish_bans() === 1, 'U5: one Varnish ban for the pair (compat-varnish dedupes the preload trigger after a purge)', 'bans: ' . varnish_bans() );
+    chk( state() === null && ! is_file( nppp_http_purge_hold_file() ), 'U5: state consumed, hold released', '' );
+    // U6: the documented opt-out also restores the immediate nppp_preload_all_started on the direct Preload All path.
+    fx( 'accepted', false, false );
+    add_filter( 'nppp_defer_purged_all_while_queue_busy', fn() => false );
+    do_preload_all_direct();
+    $h = hook_events( 'nppp_preload_all_started' );
+    chk( count( $h ) === 1 && $h[0]['busy'] === true && state() === null, 'U6: filter nppp_defer_purged_all_while_queue_busy=false: immediate nppp_preload_all_started, nothing deferred', json_encode( $T2['tl'] ) );
+    // U7: a legacy row (written before the hooks key existed) still means Purge All.
+    fx( 'accepted', false, false );
+    do_purge_all(); $leg = state(); unset( $leg['hooks'] ); update_option( 'nppp_purged_all_deferred', $leg, false );
+    ngx_idle(); cron_run();
+    chk( count( hook_events( 'nppp_purged_all' ) ) === 1 && count( hook_events( 'nppp_preload_all_started' ) ) === 0 && varnish_bans() === 1, 'U7: a row without "hooks" fires nppp_purged_all only (upgrade-safe)', json_encode( $T2['tl'] ) );
+    exit( vt_summary() );
+}
+/* ================================================================================================================
+ * holdgate : the shell side of the order rule, run by a real sh. A pending follow-up (hold file) must hold the crawl
+ * AFTER the queue is idle; no file, an expired deadline or a garbage file must not.
+ * ============================================================================================================== */
+if ( $S === 'holdgate' ) {
+    fx( 'purged', false, true );                     // idle queue (status file), shim wget first in PATH
+    $pending = [ 'status_url' => 'http://nginx.test/npp-vt-queue-status', 'host' => 'example.com' ];
+    $hold    = nppp_http_purge_hold_file();
+    $run     = function ( bool $with_hold, int $max = 6 ) use ( $pending ): array {
+        $cmd = 'timeout ' . $max . ' sh -c ' . escapeshellarg( nppp_http_purge_gate_snippet( $pending, $with_hold ) . ' echo GATE_OPEN' );
+        $t0  = microtime( true ); $out = []; exec( $cmd . ' 2>&1', $out, $rc );
+        return [ 'open' => in_array( 'GATE_OPEN', $out, true ), 'secs' => microtime( true ) - $t0, 'rc' => $rc ];
+    };
+    chk( strpos( nppp_http_purge_gate_snippet( $pending, false ), 'g_f=' ) === false, 'waiter snippet (hold=false) has no hold phase (it would wait for itself)', '' );
+    @unlink( $hold ); $r = $run( true );
+    chk( $r['open'] && $r['secs'] < 4, 'no hold file: the gate opens as soon as the queue is idle', json_encode( $r ) );
+    file_put_contents( $hold, (string) ( time() + 600 ) ); $r = $run( true, 5 );
+    chk( ! $r['open'] && $r['rc'] === 124, 'live hold (deadline in the future): the gate stays closed although the queue is idle', json_encode( $r ) );
+    $r = $run( false );
+    chk( $r['open'], 'the same pending hold does not block the waiter snippet', json_encode( $r ) );
+    file_put_contents( $hold, (string) ( time() - 5 ) ); $r = $run( true );
+    chk( $r['open'] && $r['secs'] < 4, 'expired deadline: fail-open (a crashed follow-up can never strand a crawl)', json_encode( $r ) );
+    file_put_contents( $hold, 'garbage' ); $r = $run( true );
+    chk( $r['open'] && $r['secs'] < 4, 'unreadable hold content: fail-open', json_encode( $r ) );
+    // released while the gate is waiting
+    file_put_contents( $hold, (string) ( time() + 600 ) );
+    $cmd = 'timeout 15 sh -c ' . escapeshellarg( nppp_http_purge_gate_snippet( $pending, true ) . ' echo GATE_OPEN' ) . ' > ' . escapeshellarg( lab_dir() . '/gate.out' ) . ' 2>&1 &';
+    @unlink( lab_dir() . '/gate.out' ); shell_exec( $cmd ); sleep( 4 );
+    chk( trim( (string) @file_get_contents( lab_dir() . '/gate.out' ) ) === '', 'holding: nothing printed yet after 4 s', '' );
+    unlink( $hold );
+    chk( wait_for( fn() => trim( (string) @file_get_contents( lab_dir() . '/gate.out' ) ) === 'GATE_OPEN', 6 ), 'hold released: the waiting gate opens within a second or two', '' );
+    // PHP side of the hold: set is atomic and readable, release respects a newer chain
+    nppp_http_purge_hold_set( time() + 100 );
+    chk( is_file( $hold ) && (int) file_get_contents( $hold ) > time(), 'hold_set writes the deadline', '' );
+    update_option( 'nppp_purged_all_deferred', [ 'token' => str_repeat( 'a', 32 ), 'auto_preload' => false, 'armed_at' => time(), 'waiter' => false ], false );
+    nppp_http_purge_hold_release();
+    chk( is_file( $hold ), 'hold_release keeps the hold while a newer follow-up row exists', '' );
+    delete_option( 'nppp_purged_all_deferred' ); nppp_http_purge_hold_release();
+    chk( ! is_file( $hold ) && glob( $hold . '.*.tmp' ) === [], 'hold_release removes the hold (and leaves no temp file) when nothing is pending', '' );
     exit( vt_summary() );
 }
 function notice_contains( string $needle ): bool { foreach ( $GLOBALS['VT']['notices'] as $n ) { if ( stripos( $n, $needle ) !== false ) { return true; } } return false; }
