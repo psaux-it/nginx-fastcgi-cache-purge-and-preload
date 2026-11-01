@@ -340,7 +340,8 @@ if ( $S === 'preload' ) {
     chk( $before === 0, 'nginx cache directory is empty after Purge All', "files=$before" );
 
     $r = topo_wp( [ 'npp', 'preload', '--porcelain' ] );
-    chk( $r['rc'] === 0 && $r['token'] = topo_token( $r['out'] ) && $r['token'] !== 'error', 'wp npp preload starts', 'rc=' . $r['rc'] . "\n" . $r['out'] );
+    $r['token'] = topo_token( $r['out'] );
+    chk( $r['rc'] === 0 && $r['token'] !== 'error', 'wp npp preload starts', 'rc=' . $r['rc'] . "\n" . $r['out'] );
 
     // Watch the cache DIRECTORY, not the pages: a GET from here would fill the very caches we want to inspect.
     $deadline = time() + 240; $last = -1; $stable = 0;
