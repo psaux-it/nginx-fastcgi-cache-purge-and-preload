@@ -114,9 +114,12 @@ function vt_load( bool $http_helpers = true ): void {
  * ========================================================================================================= */
 $GLOBALS['VT_PASS'] = 0; $GLOBALS['VT_FAIL'] = 0; $GLOBALS['VT_KNOWN'] = 0; $GLOBALS['VT_SKIP'] = 0;
 
-function chk( $cond, string $name, string $detail = '' ): void {
+function chk( $cond, string $name, $detail = '' ): void {
     if ( $cond ) { $GLOBALS['VT_PASS']++; return; }
     $GLOBALS['VT_FAIL']++;
+    // $detail may be a Closure: it runs only on failure. A detail that does HTTP (layers()) must never run while the
+    // assertion passes, because its GET through the edge re-fills Varnish and corrupts the NEXT assertion.
+    $detail = $detail instanceof \Closure ? (string) $detail() : (string) $detail;
     echo 'FAIL: ' . $name . ( $detail !== '' ? "\n      -> " . str_replace( "\n", "\n         ", $detail ) : '' ) . "\n";
 }
 
@@ -125,9 +128,10 @@ function chk( $cond, string $name, string $detail = '' ): void {
  * It passes while the behaviour is still as documented. If the plugin changes and the condition no longer holds,
  * the test FAILS, so a fixed gap (or a regression that hides one) forces this line to be updated.
  */
-function known( $cond, string $name, string $detail = '' ): void {
+function known( $cond, string $name, $detail = '' ): void {
     if ( $cond ) { $GLOBALS['VT_KNOWN']++; echo 'KNOWN: ' . $name . "\n"; return; }
     $GLOBALS['VT_FAIL']++;
+    $detail = $detail instanceof \Closure ? (string) $detail() : (string) $detail;
     echo 'FAIL: KNOWN-BEHAVIOUR CHANGED: ' . $name . ( $detail !== '' ? "\n      -> $detail" : '' ) . "\n      (the documented gap no longer holds: update the test and the docs)\n";
 }
 

@@ -85,7 +85,7 @@ if ( $S === 'wiring' ) {
     $pages = topo_pages();
     chk( count( $pages ) >= 1, 'at least one page is cached by both layers (2nd visitor GET is a Varnish HIT)', 'tried / and the permalinks of the published posts and pages' );
     if ( $pages ) {
-        chk( topo_origin_state( $pages[0] ) === 'HIT', 'nginx layer: ' . $pages[0] . ' is a HIT after warming', layers( $pages[0] ) );
+        chk( topo_origin_state( $pages[0] ) === 'HIT', 'nginx layer: ' . $pages[0] . ' is a HIT after warming', fn() => layers( $pages[0] ) );
 
         // The key nginx wrote: Varnish talks to the origin over plain http, so the scheme part is "http" (default.varnish.conf).
         $keys = topo_cache_keys();
@@ -114,8 +114,8 @@ if ( $S === 'single' ) {
     chk( $ids === 1, "Varnish layer: $a was purged (visitor GET is a MISS, X-Varnish ids=1)", "ids=$ids (2 = Varnish still serves the stale page)" );
 
     if ( $b !== null ) {
-        chk( topo_origin_state( $b ) === 'HIT', "nginx layer: $b was NOT purged", layers( $b ) );
-        chk( topo_edge_ids( $b ) === 2, "Varnish layer: $b was NOT purged", layers( $b ) );
+        chk( topo_origin_state( $b ) === 'HIT', "nginx layer: $b was NOT purged", fn() => layers( $b ) );
+        chk( topo_edge_ids( $b ) === 2, "Varnish layer: $b was NOT purged", fn() => layers( $b ) );
     } else {
         skip( 'selectivity (only one cacheable page found)' );
     }
@@ -123,7 +123,7 @@ if ( $S === 'single' ) {
     $ev = topo_events( $r );
     chk( preg_match( '/INFO VARNISH: 1 URL purged on/', $ev ) === 1, 'log: "INFO VARNISH: 1 URL purged on ..."', substr( $ev, -600 ) );
     chk( topo_count( '/WARNING VARNISH/', $ev ) === 0, 'log: no Varnish warning', substr( $ev, -600 ) );
-    chk( topo_edge_ids( $a ) === 2, "$a is cached again afterwards (HIT)", layers( $a ) );
+    chk( topo_edge_ids( $a ) === 2, "$a is cached again afterwards (HIT)", fn() => layers( $a ) );
 }
 
 if ( $S === 'purgeall' ) {
@@ -143,7 +143,7 @@ if ( $S === 'purgeall' ) {
     chk( preg_match( '/INFO VARNISH: host-wide purge sent to 1 Varnish/', $ev ) === 1, 'log: "INFO VARNISH: host-wide purge sent to 1 ... endpoint"', substr( $ev, -600 ) );
     chk( topo_count( '/WARNING VARNISH/', $ev ) === 0, 'log: no Varnish warning', substr( $ev, -600 ) );
     foreach ( $pages as $p ) {
-        chk( topo_edge_ids( $p ) === 2, "$p cached again after the ban (the ban does not hit objects stored later)", layers( $p ) );
+        chk( topo_edge_ids( $p ) === 2, "$p cached again after the ban (the ban does not hit objects stored later)", fn() => layers( $p ) );
     }
 }
 
@@ -157,8 +157,8 @@ if ( $S === 'outsider' ) {
         $r = topo_http( 'PURGE', $TOPO['edge'] . $path, topo_hdrs( $extra ), 10.0 );
         chk( $r['code'] === 405, "visitor PURGE through the edge $label -> 405", 'code=' . $r['code'] . ' ' . $r['err'] );
     }
-    chk( topo_edge_ids( $a ) === 2, "$a is still cached in Varnish after the visitor PURGEs", layers( $a ) );
-    chk( topo_origin_state( $a ) === 'HIT', "$a is still cached in nginx after the visitor PURGEs", layers( $a ) );
+    chk( topo_edge_ids( $a ) === 2, "$a is still cached in Varnish after the visitor PURGEs", fn() => layers( $a ) );
+    chk( topo_origin_state( $a ) === 'HIT', "$a is still cached in nginx after the visitor PURGEs", fn() => layers( $a ) );
 
     foreach ( [ '/npp_purge_all', '/npp_purge_single/', '/npp_purge_single' . $a ] as $p ) {
         $e = topo_http( 'GET', $TOPO['edge'] . $p, topo_hdrs(), 10.0 );
@@ -166,7 +166,7 @@ if ( $S === 'outsider' ) {
         $o = topo_http( 'GET', $TOPO['origin'] . $p, topo_hdrs(), 10.0 );
         chk( $o['code'] === 404, "origin :8080: GET $p -> 404 (not served where Varnish connects)", 'code=' . $o['code'] );
     }
-    chk( topo_origin_state( $a ) === 'HIT' && topo_edge_ids( $a ) === 2, 'nothing was purged by those GETs', layers( $a ) );
+    chk( topo_origin_state( $a ) === 'HIT' && topo_edge_ids( $a ) === 2, 'nothing was purged by those GETs', fn() => layers( $a ) );
 }
 
 /* ============================================================================================================
@@ -201,7 +201,7 @@ if ( $S === 'vclclass' ) {
             $r = topo_purge_single( $pages[0] );
             $ev = topo_events( $r );
             chk( preg_match( '/WARNING VARNISH: .*refused the PURGE request \(HTTP 405\)/', $ev ) === 1, 'NPP logs "refused the PURGE request (HTTP 405)"', substr( $ev, -600 ) );
-            chk( topo_origin_state( $pages[0] ) === 'MISS', 'nginx purge is not affected by the refusal', layers( $pages[0] ) );
+            chk( topo_origin_state( $pages[0] ) === 'MISS', 'nginx purge is not affected by the refusal', fn() => layers( $pages[0] ) );
             known( topo_edge_ids( $pages[0] ) === 2, 'Varnish keeps the stale page when the ACL refuses (the nginx purge is not rolled back)' );
         }
     } elseif ( $v === 'noregex' ) {
@@ -213,7 +213,7 @@ if ( $S === 'vclclass' ) {
             topo_log_clear();
             $pr = topo_purge_all();
             $ev = topo_events( $pr );
-            chk( topo_origin_state( $pages[0] ) === 'MISS', 'Purge All emptied nginx', layers( $pages[0] ) );
+            chk( topo_origin_state( $pages[0] ) === 'MISS', 'Purge All emptied nginx', fn() => layers( $pages[0] ) );
             known( topo_edge_ids( $pages[0] ) === 2 && topo_count( '/WARNING VARNISH/', $ev ) === 0, 'Purge All: NPP reports success, Varnish still serves the stale page (silent no-op, documented in the Help tab)' );
         }
     } elseif ( $v === 'nopurge' ) {
@@ -232,10 +232,10 @@ if ( $S === 'foreignhost' ) {
     chk( topo_warm( $a ), "warm $a in both layers" );
     $r = topo_purge_raw( $a, topo_key_hdr(), 'other.example' );
     chk( $r['code'] === 200, 'PURGE for Host other.example is accepted', 'code=' . $r['code'] );
-    chk( topo_edge_ids( $a ) === 2, "...but $a of this site is still cached (the hash includes the Host)", layers( $a ) );
+    chk( topo_edge_ids( $a ) === 2, "...but $a of this site is still cached (the hash includes the Host)", fn() => layers( $a ) );
     $r = topo_purge_raw( '/.*', topo_key_hdr() + [ 'X-Purge-Method' => 'regex' ], 'other.example' );
     chk( $r['code'] === 200, 'host-wide ban for Host other.example is accepted', 'code=' . $r['code'] );
-    chk( topo_edge_ids( $a ) === 2, "...but $a of this site survives it (the ban expression is host-scoped)", layers( $a ) );
+    chk( topo_edge_ids( $a ) === 2, "...but $a of this site survives it (the ban expression is host-scoped)", fn() => layers( $a ) );
 }
 
 /** One purge of $a while the Varnish side is broken; returns the result and what was logged. */
@@ -257,7 +257,7 @@ if ( $S === 'badkey' ) {
         [ $r, $ev ] = broken_purge( $a );
         chk( $r['rc'] === 0 && $r['token'] !== 'error', "$label: the purge command itself succeeds", 'rc=' . $r['rc'] . ' token=' . $r['token'] );
         chk( topo_count( '/WARNING VARNISH: .*refused the PURGE request \(HTTP 403\)/', $ev ) === 1, "$label: exactly one \"refused the PURGE request (HTTP 403)\" warning", substr( $ev, -700 ) );
-        chk( topo_origin_state( $a ) === 'MISS', "$label: nginx was purged anyway", layers( $a ) );
+        chk( topo_origin_state( $a ) === 'MISS', "$label: nginx was purged anyway", fn() => layers( $a ) );
         known( topo_edge_ids( $a ) === 2, "$label: Varnish keeps the stale page (the nginx purge is not rolled back)" );
         chk( stripos( $ev, $TOPO['key'] ) === false, "$label: the control key is not in the log" );
     }
@@ -273,7 +273,7 @@ if ( $S === 'dns' ) {
     chk( $r['rc'] === 0 && $r['token'] !== 'error', 'unresolvable endpoint: the purge command succeeds', 'rc=' . $r['rc'] . ' token=' . $r['token'] );
     chk( topo_count( '/WARNING VARNISH: .*unreachable/', $ev ) === 1, 'exactly one "unreachable" warning', substr( $ev, -700 ) );
     chk( preg_match( '/unreachable \((DNS failure|transport error)\)/', $ev ) === 1, 'the reason is DNS failure (or the generic transport error of newer libcurl)', substr( $ev, -700 ) );
-    chk( topo_origin_state( $a ) === 'MISS', 'nginx purge is not affected', layers( $a ) );
+    chk( topo_origin_state( $a ) === 'MISS', 'nginx purge is not affected', fn() => layers( $a ) );
     chk( $r['sec'] < 10.0, 'the command returns inside the time budget', sprintf( '%.1fs', $r['sec'] ) );
 
     // Circuit breaker: the endpoint is skipped for 5 minutes, no second warning, no second wait.
@@ -282,14 +282,14 @@ if ( $S === 'dns' ) {
     $r2 = topo_purge_single( $a );
     $ev2 = topo_events( $r2 );
     chk( topo_count( '/WARNING VARNISH/', $ev2 ) === 0, 'second purge: breaker is open, no new warning', substr( $ev2, -600 ) );
-    chk( topo_origin_state( $a ) === 'MISS', 'second purge: nginx purged as usual', layers( $a ) );
+    chk( topo_origin_state( $a ) === 'MISS', 'second purge: nginx purged as usual', fn() => layers( $a ) );
 
     // A dead endpoint beside a live one: the live one is still purged.
     topo_set( 'nppp_varnish_endpoints', "http://npp-topo-missing:80\n" . $TOPO['varnish'] );
     [ $r3, $ev3 ] = broken_purge( $a );
     chk( topo_count( '/WARNING VARNISH: .*endpoint #1 is unreachable/', $ev3 ) === 1, 'two endpoints: only the dead one (#1) is reported', substr( $ev3, -700 ) );
-    chk( topo_origin_state( $a ) === 'MISS', 'two endpoints: nginx purged', layers( $a ) );
-    chk( topo_edge_ids( $a ) === 1, 'two endpoints: the live Varnish was still purged', layers( $a ) );
+    chk( topo_origin_state( $a ) === 'MISS', 'two endpoints: nginx purged', fn() => layers( $a ) );
+    chk( topo_edge_ids( $a ) === 1, 'two endpoints: the live Varnish was still purged', fn() => layers( $a ) );
 }
 
 if ( $S === 'refused' ) {
@@ -301,7 +301,7 @@ if ( $S === 'refused' ) {
     [ $r, $ev ] = broken_purge( $a );
     chk( $r['rc'] === 0 && $r['token'] !== 'error', 'closed port: the purge command succeeds', 'rc=' . $r['rc'] . ' token=' . $r['token'] );
     chk( preg_match( '/unreachable \((connection refused|transport error)\)/', $ev ) === 1 && topo_count( '/WARNING VARNISH/', $ev ) === 1, 'exactly one warning: unreachable (connection refused)', substr( $ev, -700 ) );
-    chk( topo_origin_state( $a ) === 'MISS', 'nginx purge is not affected', layers( $a ) );
+    chk( topo_origin_state( $a ) === 'MISS', 'nginx purge is not affected', fn() => layers( $a ) );
     chk( $r['sec'] < 10.0, 'the command returns inside the time budget', sprintf( '%.1fs', $r['sec'] ) );
 }
 
@@ -313,7 +313,7 @@ if ( $S === 'blackhole' ) {
     [ $r, $ev ] = broken_purge( $a );
     chk( $r['rc'] === 0 && $r['token'] !== 'error', 'black-holed endpoint: the purge command succeeds', 'rc=' . $r['rc'] . ' token=' . $r['token'] );
     chk( topo_count( '/WARNING VARNISH/', $ev ) === 1, 'exactly one warning', substr( $ev, -700 ) );
-    chk( topo_origin_state( $a ) === 'MISS', 'nginx purge is not affected', layers( $a ) );
+    chk( topo_origin_state( $a ) === 'MISS', 'nginx purge is not affected', fn() => layers( $a ) );
     // 1 s connect + 3 s total per request, ~6 s budget, plus the WP-CLI bootstrap. A hang would show as the 120 s timeout.
     chk( $r['sec'] < 12.0, 'the command is not held hostage by a dead endpoint (budget ~6 s + WP-CLI start)', sprintf( '%.1fs', $r['sec'] ) );
     echo sprintf( "INFO: black-holed endpoint: purge took %.1fs\n", $r['sec'] );
@@ -357,7 +357,7 @@ if ( $S === 'preload' ) {
         // First touch of every page: HIT in both layers means the crawl came in through the edge and Varnish stored it.
         $ids = topo_edge_ids( $a );
         chk( $ids === 2, "first visitor GET of $a after the preload is a Varnish HIT (the crawl went through Varnish)", "ids=$ids (1 = the crawl bypassed Varnish or did not reach this page)" );
-        chk( topo_origin_state( $a ) === 'HIT', "nginx layer: $a is a HIT", layers( $a ) );
+        chk( topo_origin_state( $a ) === 'HIT', "nginx layer: $a is a HIT", fn() => layers( $a ) );
     }
 }
 
