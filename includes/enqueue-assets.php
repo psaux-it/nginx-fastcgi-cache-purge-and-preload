@@ -226,17 +226,51 @@ function nppp_is_linux() {
     return false;
 }
 
-// Checks if the specified shell commands are available in the environment, indicating
-// specially whether the system is likely Dockerized
-function nppp_is_dockerized() {
+// Run the whole shell toolset probe in ONE shell: which of $commands are missing,
+// plus the raw `wget --version` text when wget exists. Returns null when the script
+// did not really run (sentinel absent): unknown is never reported as "missing".
+function nppp_run_toolset_probe(array $commands) {
+    $sentinel  = '__NPPP_CMD_CHECK_OK__';
+    $wget_mark = '__NPPP_WGET_VERSION__';
+
+    // The command names are hardcoded by the caller, so nothing here needs escaping.
+    $script = 'for c in ' . implode(' ', $commands)
+            . '; do command -v "$c" >/dev/null 2>&1 || echo "$c"; done; '
+            . 'echo ' . $wget_mark . '; '
+            . 'if command -v wget >/dev/null 2>&1; then wget --version 2>&1; fi; '
+            . 'echo ' . $sentinel;
+
+    // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+    $lines = explode("\n", (string) shell_exec($script));
+    $lines = array_map('rtrim', $lines);
+
+    $mark_at = array_search($wget_mark, $lines, true);
+    $end_at  = array_search($sentinel, $lines, true);
+    if ($mark_at === false || $end_at === false || $end_at < $mark_at) {
+        return null;
+    }
+
+    return [
+        'missing'     => array_values(array_intersect($commands, array_slice($lines, 0, $mark_at))),
+        'wget_output' => implode("\n", array_slice($lines, $mark_at + 1, $end_at - $mark_at - 1)),
+    ];
+}
+
+// Shell toolset state: which core commands are missing and whether wget is
+// compatible, from ONE shell and ONE 60s cache. Returns null only when the shell
+// could not be measured at all (not cached, the next request measures again).
+function nppp_shell_toolset_state() {
     // Static key base for transient
     $static_key_base = 'nppp';
-    $transient_key = 'nppp_missing_commands_' . md5($static_key_base);
+    $transient_key   = 'nppp_missing_commands_' . md5($static_key_base);
+    $compat_key      = 'nppp_wget_compatibility_' . md5($static_key_base);
 
-    // Check if transient exists and is valid
+    // Check if transient exists and is valid. The wget compatibility verdict is
+    // produced by the same probe, so the two caches live and die together.
     $missing_commands = get_transient($transient_key);
+    $wget_compat      = get_transient($compat_key);
 
-    if (false === $missing_commands) {
+    if (false === $missing_commands || false === $wget_compat) {
         // Set env
         nppp_prepare_request_env(true);
 
@@ -246,38 +280,41 @@ function nppp_is_dockerized() {
         if (!function_exists('shell_exec')) {
             // No shell at all: every command is unusable.
             $missing_commands = $commands_to_check;
+            $wget_compat      = ['ok' => false, 'reason' => 'missing'];
         } else {
-            // One shell for the whole list instead of one fork per command.
-            // The sentinel proves the script really ran, so a failed spawn can never be
-            // mistaken for "every command is missing". The command names above are
-            // hardcoded, so nothing here needs escaping.
-            $sentinel = '__NPPP_CMD_CHECK_OK__';
-            $script   = 'for c in ' . implode(' ', $commands_to_check)
-                      . '; do command -v "$c" >/dev/null 2>&1 || echo "$c"; done; echo ' . $sentinel;
-            $output   = shell_exec($script);
-            $lines    = array_map('trim', explode("\n", (string) $output));
+            // One shell for the whole list AND the wget version, instead of one fork per command.
+            $probe = nppp_run_toolset_probe($commands_to_check);
 
-            if (!in_array($sentinel, $lines, true)) {
+            if ($probe === null) {
                 // Could not measure. Unknown is not "missing": do not cache and do not
                 // report anything, the next request measures again.
-                return [];
+                return null;
             }
 
-            // Every line the loop printed is a command that was not found.
-            $missing_commands = array_values(array_intersect($commands_to_check, $lines));
+            $missing_commands = $probe['missing'];
+            $wget_compat      = in_array('wget', $missing_commands, true)
+                ? ['ok' => false, 'reason' => 'missing']
+                : nppp_classify_wget_version_output($probe['wget_output']);
         }
 
         // Cache for 60 seconds: short enough to follow the real system state
         // (a removed or newly installed command is noticed within a minute),
         // long enough that the shell check does not run on every request.
         set_transient($transient_key, $missing_commands, MINUTE_IN_SECONDS);
-
-        // Keep wget compatibility cache in sync with command availability refresh.
-        delete_transient('nppp_wget_compatibility_' . md5($static_key_base));
+        set_transient($compat_key, $wget_compat, MINUTE_IN_SECONDS);
     }
 
-    // Return the list of missing commands (or an empty array if none are missing)
-    return $missing_commands;
+    return ['missing' => $missing_commands, 'wget' => $wget_compat];
+}
+
+// Checks if the specified shell commands are available in the environment, indicating
+// specially whether the system is likely Dockerized
+function nppp_is_dockerized() {
+    $state = nppp_shell_toolset_state();
+
+    // Return the list of missing commands (or an empty array if none are missing
+    // or the shell could not be measured: unknown is not "missing").
+    return $state === null ? [] : $state['missing'];
 }
 
 // Conditionally disable Nginx Cache features
