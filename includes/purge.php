@@ -16,6 +16,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Purge cache operation helper
 function nppp_purge_helper($nginx_cache_path, $tmp_path) {
+    // Varnish-only mode: nginx has no cache to clean. Report 2 ("nothing to purge", a non-error
+    // status every caller already handles) so Purge All and Preload All continue unchanged into
+    // nppp_purged_all / nppp_preload_all_started, which is where the Varnish sync runs.
+    if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() ) {
+        return 2;
+    }
+
     $wp_filesystem = nppp_initialize_wp_filesystem();
 
     if ($wp_filesystem === false) {
@@ -108,6 +115,14 @@ function nppp_purge_single( $nginx_cache_path, $current_page_url, $nppp_auto_pur
     }
 
     try {
+        // Varnish-only mode: no nginx cache to resolve (FP1-FP4 are all nginx work). Go straight to
+        // the post-purge step: nppp_purged_urls (Varnish sync) first, then auto-preload. Kept inside
+        // the try so the purge lock is still held, which nppp_preload_cache_on_update() requires.
+        if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() ) {
+            nppp_purge_post_purge( $ctx );
+            return;
+        }
+
         if ( nppp_purge_fp1_http( $ctx ) ) return;
         if ( nppp_purge_fp2_index( $ctx ) ) return;
         if ( nppp_purge_fp3_rg( $ctx ) !== 'skip' ) return;
@@ -383,6 +398,11 @@ function nppp_purge_post_purge( array &$ctx ): void {
         (int) url_to_postid( $ctx['primary_url'] ),
         (bool) $ctx['nppp_auto_purge']
     );
+
+    // Varnish-only mode: the Varnish result is the whole outcome, show it (notice / log / admin banner).
+    if ( function_exists( 'nppp_varnish_only_mode' ) && function_exists( 'nppp_varnish_only_report' ) && nppp_varnish_only_mode() ) {
+        nppp_varnish_only_report( 'urls', (bool) $ctx['nppp_auto_purge'], (string) $ctx['primary_decoded'] );
+    }
 
     // Auto-preload
     if ( $ctx['chain_autopreload'] ) {
@@ -2369,6 +2389,14 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         }
     }
 
+    // Varnish-only mode: status 2 only means "there is no Nginx cache"; the stock "no cache found"
+    // notice would suggest the purge did nothing. The Varnish report below replaces it.
+    $nppp_vo = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode();
+    if ( $nppp_vo && isset( $status ) && $status === 2 ) {
+        $message_type    = '';
+        $message_content = '';
+    }
+
     // All cache filesystem work done — release lock before post-purge
     // side effects (do_action hooks, preload spawn) so other admins
     // are not blocked during external or background operations.
@@ -2398,6 +2426,11 @@ function nppp_purge($nginx_cache_path, $PIDFILE, $tmp_path, $nppp_is_rest_api = 
         nppp_http_purge_fire_purged_all(isset($status) ? $status : null, (bool) $auto_preload);
     } else {
         do_action('nppp_purged_all', $auto_preload);
+    }
+
+    // Varnish-only mode: show what the Varnish purge really did (before the auto-preload starts).
+    if ( $nppp_vo && function_exists( 'nppp_varnish_only_report' ) ) {
+        nppp_varnish_only_report( 'all', (bool) $nppp_is_auto_purge );
     }
 
     // If set call preload immediately after purge

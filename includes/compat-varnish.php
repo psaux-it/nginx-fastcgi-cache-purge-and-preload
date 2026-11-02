@@ -324,6 +324,238 @@ if ( ! function_exists( 'nppp_varnish_endpoints' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_varnish_only_mode' ) ) {
+    /**
+     * Varnish-only mode: nginx has NO cache of its own (visitor -> nginx:443 -> Varnish -> origin).
+     *
+     * There is no inner layer, so the "nginx first, Varnish second" order rule has nothing to order:
+     * a purge reduces to the Varnish PURGE / ban that the nppp_purged_* hooks already send, and the
+     * nginx cache directory is neither required nor touched.
+     *
+     * Strictly opt-in, so no existing install changes behaviour:
+     *   define( 'NPPP_VARNISH_ONLY', true );              // wp-config.php
+     *   add_filter( 'nppp_varnish_only', '__return_true' );
+     * and only while Varnish sync is ON with at least one valid endpoint. With sync OFF (or no
+     * endpoint) the mode is never active, so a half-configured site keeps the stock nginx path
+     * and its error messages instead of silently doing nothing.
+     */
+    function nppp_varnish_only_mode(): bool {
+        $on = defined( 'NPPP_VARNISH_ONLY' ) && NPPP_VARNISH_ONLY;
+        $on = (bool) apply_filters( 'nppp_varnish_only', $on );
+
+        // nppp_varnish_endpoints() is already empty while the sync switch is OFF.
+        return $on && nppp_varnish_endpoints() !== array();
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_breaker_seconds' ) ) {
+    /**
+     * How long an unreachable endpoint stays parked.
+     *
+     * 300 s next to an Nginx cache (the Nginx purge already cleaned the origin layer). In Varnish-only
+     * mode Varnish is the ONLY layer, so every second of parking is a window in which edits are not
+     * purged anywhere: 15 s there, just enough to keep a dead endpoint from stalling every save.
+     */
+    function nppp_varnish_breaker_seconds(): int {
+        $seconds = nppp_varnish_only_mode() ? 15 : 300;
+
+        /**
+         * Filters the circuit-breaker park time in seconds (clamped to 5 - 3600).
+         *
+         * @param int $seconds 300 by default, 15 in Varnish-only mode.
+         */
+        $seconds = (int) apply_filters( 'nppp_varnish_breaker_seconds', $seconds );
+
+        return max( 5, min( 3600, $seconds ) );
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_run_count' ) ) {
+    /**
+     * Counts one request outcome of the current purge run (request-local).
+     *
+     * kind: ok | absent | denied | unreachable | fail (a request that was sent),
+     *       parked (endpoint skipped, breaker open) | budget (requests skipped, time budget used up).
+     */
+    function nppp_varnish_run_count( string $kind ): void {
+        if ( ! isset( $GLOBALS['NPPP_VARNISH_RUN'] ) || ! is_array( $GLOBALS['NPPP_VARNISH_RUN'] ) ) {
+            $GLOBALS['NPPP_VARNISH_RUN'] = array();
+        }
+        $GLOBALS['NPPP_VARNISH_RUN'][ $kind ] = (int) ( $GLOBALS['NPPP_VARNISH_RUN'][ $kind ] ?? 0 ) + 1;
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_run_take' ) ) {
+    /** Returns the counters of the run that just finished and starts a new run. */
+    function nppp_varnish_run_take(): array {
+        $c = ( isset( $GLOBALS['NPPP_VARNISH_RUN'] ) && is_array( $GLOBALS['NPPP_VARNISH_RUN'] ) ) ? $GLOBALS['NPPP_VARNISH_RUN'] : array();
+        $GLOBALS['NPPP_VARNISH_RUN'] = array();
+
+        return $c;
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_run_summary' ) ) {
+    /**
+     * @return array{status:string,good:int,bad:int,detail:string}
+     *         status: ok (everything accepted) | partial | failed (nothing accepted) | none (nothing was sent)
+     */
+    function nppp_varnish_run_summary( array $c ): array {
+        $n    = static function ( string $k ) use ( $c ): int {
+            return (int) ( $c[ $k ] ?? 0 );
+        };
+        $good = $n( 'ok' ) + $n( 'absent' );
+        $bad  = $n( 'denied' ) + $n( 'unreachable' ) + $n( 'fail' ) + $n( 'parked' ) + $n( 'budget' );
+
+        if ( $good + $bad === 0 ) {
+            $status = 'none';
+        } elseif ( $bad === 0 ) {
+            $status = 'ok';
+        } elseif ( $good > 0 ) {
+            $status = 'partial';
+        } else {
+            $status = 'failed';
+        }
+
+        $labels = array(
+            'unreachable' => 'unreachable',
+            'denied'      => 'refused (ACL / control key / PURGE not handled)',
+            'fail'        => 'HTTP error',
+            'parked'      => 'endpoint parked after an earlier failure',
+            'budget'      => 'skipped, time budget used up',
+        );
+        $parts  = array();
+        foreach ( $labels as $k => $label ) {
+            if ( $n( $k ) > 0 ) {
+                $parts[] = $label . ': ' . $n( $k );
+            }
+        }
+
+        return array( 'status' => $status, 'good' => $good, 'bad' => $bad, 'detail' => implode( ', ', $parts ) );
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_unexpected_suffix' ) ) {
+    /**
+     * Tail of the "unexpected error" log line. Never throws: it runs inside a catch block, and the
+     * exception being handled may have come from the very filter nppp_varnish_only_mode() applies.
+     */
+    function nppp_varnish_unexpected_suffix(): string {
+        try {
+            return nppp_varnish_only_mode()
+                ? 'nothing was purged (Varnish-only mode).'
+                : 'the Nginx purge is not affected.';
+        } catch ( \Throwable $e ) {
+            return 'the Nginx purge is not affected.';
+        }
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
+    /**
+     * Varnish-only mode: tells the operator what the Varnish purge of this action really did.
+     *
+     * With an Nginx cache the Nginx purge result is the visible outcome and Varnish is a side channel
+     * that may stay log-only. Without one the Varnish result IS the outcome, so it must be shown the way
+     * the Nginx result is: a notice on manual actions (admin bar, Advanced tab, REST, WP-CLI), the log
+     * for automatic ones, plus a persistent admin notice after any failure that clears on the next success.
+     *
+     * @param string $scope   'all' (Purge All / Preload All ban) or 'urls' (single purge).
+     * @param bool   $is_auto Automatic purge (log only, no on-screen notice).
+     * @param string $target  Primary URL of a single purge, for the message.
+     * @param bool   $quiet_none Say nothing when no request was sent at all (deduplicated ban).
+     */
+    function nppp_varnish_only_report( string $scope, bool $is_auto = false, string $target = '', bool $quiet_none = false ): void {
+        $counts = nppp_varnish_run_take();
+        $s      = nppp_varnish_run_summary( $counts );
+
+        // Preload All fires the ban hook right after a Purge All that already reported (the listener
+        // deduplicates it). Nothing was sent THIS time, which is not a failure: stay silent.
+        if ( $quiet_none && $s['status'] === 'none' ) {
+            return;
+        }
+        $detail = $s['detail'] !== '' ? ' (' . $s['detail'] . ')' : '';
+
+        switch ( $s['status'] ) {
+            case 'ok':
+                $type = 'success';
+                if ( $scope === 'all' ) {
+                    $msg = __( 'SUCCESS VARNISH: Purge All accepted by Varnish / Vinyl Cache (host-wide ban). Varnish-only mode: no Nginx cache is involved.', 'fastcgi-cache-purge-and-preload-nginx' );
+                } else {
+                    /* translators: %s: page URL */
+                    $msg = sprintf( __( 'SUCCESS VARNISH: PURGE accepted by Varnish / Vinyl Cache for %s and its related URLs.', 'fastcgi-cache-purge-and-preload-nginx' ), $target );
+                }
+                break;
+
+            case 'partial':
+                $type = 'warning';
+                /* translators: %s: failure details */
+                $msg = sprintf( __( 'WARNING VARNISH: Only part of the Varnish / Vinyl Cache purge went through%s. What failed stays cached until its TTL expires.', 'fastcgi-cache-purge-and-preload-nginx' ), $detail );
+                break;
+
+            case 'failed':
+                $type = 'error';
+                /* translators: %s: failure details */
+                $msg = sprintf( __( 'ERROR VARNISH: Purge FAILED on Varnish / Vinyl Cache%s. Varnish-only mode has no other cache layer, so the page stays cached until its TTL expires. Check that Varnish is running, the purge ACL, the control header and the VCL (Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ), $detail );
+                break;
+
+            default:
+                $type = 'warning';
+                $msg  = __( 'WARNING VARNISH: No PURGE request was sent to Varnish / Vinyl Cache (no valid URL of this site, or a filter vetoed the sync). Nothing was purged.', 'fastcgi-cache-purge-and-preload-nginx' );
+                break;
+        }
+
+        if ( $is_auto ) {
+            nppp_display_admin_notice( $type, $msg, true, false );
+        } else {
+            nppp_display_admin_notice( $type, $msg );
+        }
+
+        // Persistent record for the admin notice (a failed automatic purge has no screen to show it on).
+        if ( function_exists( 'nppp_state_set' ) ) {
+            if ( $s['status'] === 'ok' ) {
+                nppp_state_delete( 'varnish_vo_failure' );
+            } elseif ( $s['status'] !== 'none' ) {   // 'none' = nothing was attempted: neither a failure nor a recovery
+                nppp_state_set(
+                    'varnish_vo_failure',
+                    array( 'at' => time(), 'status' => $s['status'], 'scope' => $scope, 'detail' => $s['detail'] ),
+                    7 * DAY_IN_SECONDS
+                );
+            }
+        }
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_only_admin_notice' ) ) {
+    /**
+     * wp-admin banner while the last Varnish-only purge did not fully succeed.
+     * Cleared by the next fully successful purge, or after 7 days.
+     */
+    function nppp_varnish_only_admin_notice(): void {
+        if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        if ( ! function_exists( 'nppp_state_get' ) || ! nppp_varnish_only_mode() ) {
+            return;
+        }
+
+        $f = nppp_state_get( 'varnish_vo_failure' );
+        if ( ! is_array( $f ) || empty( $f['at'] ) ) {
+            return;
+        }
+
+        $ago = function_exists( 'human_time_diff' ) ? human_time_diff( (int) $f['at'], time() ) : ( ( time() - (int) $f['at'] ) . 's' );
+        $txt = sprintf(
+            /* translators: 1: time since the failure, 2: failure details */
+            __( 'NPP Varnish-only mode: the last Varnish / Vinyl Cache purge did not fully succeed (%1$s ago%2$s). Pages may be stale until their TTL expires. Run Purge All once Varnish is reachable; this notice clears after the next successful purge.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $ago,
+            ( ! empty( $f['detail'] ) && is_string( $f['detail'] ) ) ? ': ' . $f['detail'] : ''
+        );
+
+        echo '<div class="notice notice-error"><p>' . esc_html( $txt ) . '</p></div>';
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_extra_header' ) ) {
     /**
      * The optional control header, re-validated at send time. [] when none / invalid.
@@ -509,13 +741,13 @@ if ( ! function_exists( 'nppp_varnish_breaker_open' ) ) {
 
 if ( ! function_exists( 'nppp_varnish_breaker_arm' ) ) {
     /**
-     * Parks an endpoint for 5 minutes.
+     * Parks an endpoint for nppp_varnish_breaker_seconds() (300 s, 15 s in Varnish-only mode).
      */
     function nppp_varnish_breaker_arm( string $endpoint ): void {
         $id = nppp_varnish_endpoint_id( $endpoint );
 
         nppp_varnish_local_breaker( $id );
-        nppp_varnish_state_map_set( 'varnish_breaker', $id, 300 );
+        nppp_varnish_state_map_set( 'varnish_breaker', $id, nppp_varnish_breaker_seconds() );
     }
 }
 
@@ -818,17 +1050,29 @@ if ( ! function_exists( 'nppp_varnish_handle_result' ) ) {
     function nppp_varnish_handle_result( array $result, string $endpoint, int $index ): string {
         $label = nppp_varnish_endpoint_label( $index );
 
+        nppp_varnish_run_count( (string) $result['kind'] );
+
         switch ( $result['kind'] ) {
             case 'unreachable':
                 // Park the endpoint and warn ONCE per breaker window.
                 nppp_varnish_breaker_arm( $endpoint );
                 if ( nppp_varnish_warn_due( $endpoint, 'unreachable' ) ) {
-                    nppp_varnish_log( sprintf(
-                        /* translators: 1: endpoint label, 2: coarse reason */
-                        __( 'WARNING VARNISH: %1$s is unreachable (%2$s). Skipping it for 5 minutes; the Nginx purge is not affected.', 'fastcgi-cache-purge-and-preload-nginx' ),
-                        $label,
-                        $result['reason'] !== '' ? $result['reason'] : 'transport error'
-                    ), 'warning' );
+                    if ( nppp_varnish_only_mode() ) {
+                        nppp_varnish_log( sprintf(
+                            /* translators: 1: endpoint label, 2: coarse reason, 3: seconds */
+                            __( 'WARNING VARNISH: %1$s is unreachable (%2$s). Varnish-only mode: edits are NOT purged anywhere while it is down; retrying in %3$d seconds.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $label,
+                            $result['reason'] !== '' ? $result['reason'] : 'transport error',
+                            nppp_varnish_breaker_seconds()
+                        ), 'warning' );
+                    } else {
+                        nppp_varnish_log( sprintf(
+                            /* translators: 1: endpoint label, 2: coarse reason */
+                            __( 'WARNING VARNISH: %1$s is unreachable (%2$s). Skipping it for 5 minutes; the Nginx purge is not affected.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                            $label,
+                            $result['reason'] !== '' ? $result['reason'] : 'transport error'
+                        ), 'warning' );
+                    }
                 }
                 return 'next_endpoint';
 
@@ -836,8 +1080,11 @@ if ( ! function_exists( 'nppp_varnish_handle_result' ) ) {
                 // Configuration problem (ACL, control key, missing PURGE handler): no breaker, same answer for every URL.
                 if ( nppp_varnish_warn_due( $endpoint, 'denied' ) ) {
                     nppp_varnish_log( sprintf(
-                        /* translators: 1: endpoint label, 2: HTTP status */
-                        __( 'WARNING VARNISH: %1$s refused the PURGE request (HTTP %2$d). Check the VCL purge ACL, the control header and that PURGE is handled in vcl_recv.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        nppp_varnish_only_mode()
+                            /* translators: 1: endpoint label, 2: HTTP status */
+                            ? __( 'WARNING VARNISH: %1$s refused the PURGE request (HTTP %2$d). Varnish-only mode: nothing was purged. Check the VCL purge ACL, the control header and that PURGE is handled in vcl_recv.', 'fastcgi-cache-purge-and-preload-nginx' )
+                            /* translators: 1: endpoint label, 2: HTTP status */
+                            : __( 'WARNING VARNISH: %1$s refused the PURGE request (HTTP %2$d). Check the VCL purge ACL, the control header and that PURGE is handled in vcl_recv.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $label,
                         (int) $result['status']
                     ), 'warning' );
@@ -847,8 +1094,11 @@ if ( ! function_exists( 'nppp_varnish_handle_result' ) ) {
             case 'fail':
                 if ( nppp_varnish_warn_due( $endpoint, 'fail-' . (int) $result['status'] ) ) {
                     nppp_varnish_log( sprintf(
-                        /* translators: 1: endpoint label, 2: HTTP status */
-                        __( 'WARNING VARNISH: %1$s answered the PURGE request with HTTP %2$d.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        nppp_varnish_only_mode()
+                            /* translators: 1: endpoint label, 2: HTTP status */
+                            ? __( 'WARNING VARNISH: %1$s answered the PURGE request with HTTP %2$d. Varnish-only mode: the page may still be cached.', 'fastcgi-cache-purge-and-preload-nginx' )
+                            /* translators: 1: endpoint label, 2: HTTP status */
+                            : __( 'WARNING VARNISH: %1$s answered the PURGE request with HTTP %2$d.', 'fastcgi-cache-purge-and-preload-nginx' ),
                         $label,
                         (int) $result['status']
                     ), 'warning' );
@@ -883,9 +1133,11 @@ if ( ! function_exists( 'nppp_varnish_run_purge_all' ) ) {
         foreach ( $endpoints as $index => $endpoint ) {
             if ( microtime( true ) >= $deadline ) {
                 nppp_varnish_log( __( 'WARNING VARNISH: time budget exhausted, remaining endpoints were skipped.', 'fastcgi-cache-purge-and-preload-nginx' ), 'warning' );
+                nppp_varnish_run_count( 'budget' );
                 break;
             }
             if ( nppp_varnish_breaker_open( $endpoint ) ) {
+                nppp_varnish_run_count( 'parked' );
                 continue;
             }
 
@@ -979,6 +1231,7 @@ if ( ! function_exists( 'nppp_varnish_purge_urls' ) ) {
 
             foreach ( $endpoints as $index => $endpoint ) {
                 if ( nppp_varnish_breaker_open( $endpoint ) ) {
+                    nppp_varnish_run_count( 'parked' );
                     continue;
                 }
 
@@ -1016,6 +1269,7 @@ if ( ! function_exists( 'nppp_varnish_purge_urls' ) ) {
             }
 
             if ( $skipped_budget > 0 ) {
+                nppp_varnish_run_count( 'budget' );
                 nppp_varnish_log( sprintf(
                     /* translators: %d: number of PURGE requests skipped */
                     __( 'WARNING VARNISH: time budget exhausted, %d PURGE request(s) were skipped.', 'fastcgi-cache-purge-and-preload-nginx' ),
@@ -1032,7 +1286,8 @@ if ( ! function_exists( 'nppp_varnish_purge_urls' ) ) {
             }
         } catch ( \Throwable $e ) {
             // A Varnish problem must never break the purge that already succeeded on Nginx.
-            nppp_varnish_log( 'WARNING VARNISH: unexpected error (' . get_class( $e ) . '); the Nginx purge is not affected.', 'warning' );
+            nppp_varnish_run_count( 'fail' );
+            nppp_varnish_log( 'WARNING VARNISH: unexpected error (' . get_class( $e ) . '); ' . nppp_varnish_unexpected_suffix(), 'warning' );
         }
     }
 }
@@ -1068,7 +1323,8 @@ if ( ! function_exists( 'nppp_varnish_purge_all' ) ) {
             $done = true;
             nppp_varnish_run_purge_all();
         } catch ( \Throwable $e ) {
-            nppp_varnish_log( 'WARNING VARNISH: unexpected error (' . get_class( $e ) . '); the Nginx purge is not affected.', 'warning' );
+            nppp_varnish_run_count( 'fail' );
+            nppp_varnish_log( 'WARNING VARNISH: unexpected error (' . get_class( $e ) . '); ' . nppp_varnish_unexpected_suffix(), 'warning' );
         }
     }
 }
@@ -1076,3 +1332,4 @@ if ( ! function_exists( 'nppp_varnish_purge_all' ) ) {
 add_action( 'nppp_purged_urls', 'nppp_varnish_purge_urls', 10, 4 );
 add_action( 'nppp_purged_all', 'nppp_varnish_purge_all', 10, 1 );
 add_action( 'nppp_preload_all_started', 'nppp_varnish_purge_all', 10, 0 );
+add_action( 'admin_notices', 'nppp_varnish_only_admin_notice' );

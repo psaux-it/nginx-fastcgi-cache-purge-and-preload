@@ -734,6 +734,11 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
                 } else {
                     do_action( 'nppp_preload_all_started' );
                 }
+
+                // Varnish-only mode: if the ban failed the crawl warms pages that are still stale, say so.
+                if ( function_exists( 'nppp_varnish_only_mode' ) && function_exists( 'nppp_varnish_only_report' ) && nppp_varnish_only_mode() ) {
+                    nppp_varnish_only_report( 'all', (bool) $nppp_is_wp_cron, '', true );
+                }
             }
 
             // We are ready
@@ -1041,25 +1046,34 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
             }
         }
 
+        // Varnish-only mode: the purge result is reported by nppp_varnish_only_report(); never claim an Nginx purge.
+        $nppp_vo = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode();
+
         // Display the deferred message as admin notice
         if ( function_exists('nppp_http_purge_gate_used') && nppp_http_purge_gate_used() ) {
             // Purge All is still finishing in nginx's background queue; the crawl is gated on it.
             nppp_display_admin_notice('info', __( 'INFO: Purge All was accepted by nginx and its background queue is still deleting the cache. Auto Preload is queued and starts automatically when the queue is idle. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
         } elseif (is_bool($nppp_is_rest_api) && $nppp_is_rest_api) {
             if (!$preload_mobile) {
-                nppp_display_admin_notice('success', __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                nppp_display_admin_notice('success', $nppp_vo
+                    ? __( 'SUCCESS REST: Auto preload initiated in the background (Varnish-only mode). Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+                    : __( 'SUCCESS REST: Nginx cache purged successfully. Auto preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             } else {
                 nppp_display_admin_notice('success', __( 'SUCCESS REST: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
         } elseif (is_bool($nppp_is_admin_bar) && $nppp_is_admin_bar) {
             if (!$preload_mobile) {
-                nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                nppp_display_admin_notice('success', $nppp_vo
+                    ? __( 'SUCCESS ADMIN: Auto Preload initiated in the background (Varnish-only mode). Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+                    : __( 'SUCCESS ADMIN: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             } else {
                 nppp_display_admin_notice('success', __( 'SUCCESS ADMIN: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
         } else {
             if (!$preload_mobile) {
-                nppp_display_admin_notice('success', __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                nppp_display_admin_notice('success', $nppp_vo
+                    ? __( 'SUCCESS: Auto Preload initiated in the background (Varnish-only mode). Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' )
+                    : __( 'SUCCESS: Nginx cache purged successfully. Auto Preload initiated in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             } else {
                 nppp_display_admin_notice('success', __( 'SUCCESS: Auto Preload initiated for Mobile in the background. Monitor the -Status- tab for real-time updates.', 'fastcgi-cache-purge-and-preload-nginx' ));
             }
@@ -1665,6 +1679,10 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
     // Handling success and error messages
     $devices = $preload_mobile ? array('desktop', 'mobile') : array('desktop');
 
+    // Varnish-only mode: there is no Nginx cache entry to "find", so $found is always false and
+    // "page not found in cache" would be a false statement. The purge result has its own notice.
+    $nppp_vo = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode();
+
     // Get the process ID
     foreach ($devices as $device) {
         $success_message = '';
@@ -1672,7 +1690,18 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
 
         if (isset($pids[$device])) {
             // Determine the success message based on auto purge status
-            if ($found) {
+            if ($nppp_vo) {
+                if ($device === 'mobile') {
+                    /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                } elseif ($is_manual) {
+                    /* translators: 1: Device type (e.g. "desktop") 2: Current page URL */
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Varnish purge requested, preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                } else {
+                    /* translators: 1: Device type (e.g. "desktop") 2: Current page URL */
+                    $success_message = sprintf( __( 'SUCCESS ADMIN: Auto purge requested on Varnish, Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                }
+            } elseif ($found) {
                 if ($device === 'mobile') {
                     /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
                     $success_message = sprintf( __( 'SUCCESS ADMIN: Auto preload started for %1$s version of %2$s', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
@@ -1706,7 +1735,17 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
             }
         } else {
             // Determine the error message based on auto purge status
-            if ($found) {
+            if ($nppp_vo) {
+                if ($device === 'mobile') {
+                    if ($preload_mobile) {
+                        /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
+                        $error_message = sprintf( __( 'ERROR COMMAND: Unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                    }
+                } else {
+                    /* translators: 1: Device type (desktop or mobile) 2: Current page URL */
+                    $error_message = sprintf( __( 'ERROR COMMAND: Varnish purge requested, but unable to start Auto preload for %1$s version of %2$s. Please report this issue on the plugin support page.', 'fastcgi-cache-purge-and-preload-nginx' ), $device, $current_page_url_decoded );
+                }
+            } elseif ($found) {
                 if ($device === 'mobile') {
                     if ($preload_mobile) {
                         /* translators: 1: Device type (desktop or mobile) 2: Current page URL */

@@ -13,6 +13,7 @@
  *           sslverify hosts dedupe scope exceptions logging state logreason fallback   (scripted)
  *           transport hang                                                             (real sockets)
  *           source                                                                     (static checks on the plugin sources)
+ *           varnishonly                                                                (Varnish-only mode: nginx has no cache)
  *
  * chk()   = must hold.   known() = documented limit of the plugin; passes while it still holds and FAILS when the
  * behaviour changes, so a fixed gap (or a regression hiding one) can not go unnoticed.
@@ -688,4 +689,205 @@ if ( $S === 'source' ) {   // static guarantees about the chain, checked against
     chk( array_search( 'state', $order, true ) < array_search( 'compat-varnish', $order, true ), 'state.php is loaded before compat-varnish.php', json_encode( $order ) );
     echo "INFO include order: " . implode( ' > ', $order ) . "\n";
 }
+
+/* ================================================================================================================ */
+if ( in_array( $S, [ 'varnishonly', 'varnishonly2', 'varnishonly3' ], true ) ) {   // Varnish-only mode (nginx has no cache): REAL purge.php + REAL Varnish listeners, scripted transport
+    $d = getenv( 'NPPP_INCLUDES' ) ?: dirname( __DIR__, 2 ) . '/includes';
+
+    // Dependencies of purge.php that the stub does not provide. Anything an nginx step would call is
+    // deliberately NOT stubbed: if the mode ever falls through into FP1-FP4 this section dies loudly.
+    $GLOBALS['VO'] = [ 'fs' => 0, 'isdir' => 0, 'lock' => 0, 'unlock' => 0, 'spawn' => 0, 'preload_all' => 0 ];
+    class VO_FS { function is_dir( $p ) { $GLOBALS['VO']['isdir']++; return false; } function exists( $p ) { return false; } }
+    function nppp_initialize_wp_filesystem() { $GLOBALS['VO']['fs']++; return new VO_FS(); }
+    function nppp_get_runtime_file( $n ) { return '/nonexistent/' . $n; }
+    function nppp_acquire_purge_lock( $k ) { $GLOBALS['VO']['lock']++; return true; }
+    function nppp_release_purge_lock() { $GLOBALS['VO']['unlock']++; }
+    function nppp_purge_lock_row_exists() { return true; }
+    function nppp_preload_start_in_flight() { return false; }
+    function nppp_wait_for_preload_start_idle() {}
+    function nppp_prepare_request_env( $x = false ) {}
+    function nppp_get_cache_key_regex() { return '/x/'; }
+    function nppp_get_related_urls_for_single( $u ) { return [ 'http://vo.test/related/' ]; }
+    function url_to_postid( $u ) { return 7; }
+    function nppp_preload_cache_on_update( $u, $found, $manual ) { $GLOBALS['VO']['spawn']++; $GLOBALS['VO']['spawn_seen'] = implode( "\n", urls() ); $GLOBALS['VO']['spawn_args'] = [ $u, $found, $manual ]; }
+    function nppp_preload_urls_fire_and_forget( $u ) { $GLOBALS['VO']['rel'] = $u; $GLOBALS['VO']['rel_seen'] = implode( "\n", urls() ); }
+    foreach ( [ 'nppp_fetch_default_reject_regex' => "''", 'get_site_url' => "'http://vo.test'", 'plugin_dir_path' => "'/nonexistent/includes/'" ] as $f => $ret ) { if ( ! function_exists( $f ) ) { eval( "function $f( ...\$a ) { return $ret; }" ); } }
+    function nppp_preload( ...$a ) { $GLOBALS['VO']['preload_all']++; do_action( 'nppp_preload_all_started' ); nppp_varnish_only_report( 'all', false, '', true ); }   // mirrors preload.php (asserted statically below)
+    if ( ! function_exists( '__return_true' ) ) { function __return_true() { return true; } }
+    foreach ( [ 'nppp_preload_phase_delete', 'nppp_preload_cycle_start_delete', 'nppp_kill_preload_watcher', 'nppp_watcher_delete_token' ] as $f ) { if ( ! function_exists( $f ) ) { eval( "function $f() {}" ); } }
+    if ( ! function_exists( 'nppp_perform_file_operation' ) ) { function nppp_perform_file_operation( $p, $op, $v = null ) { return true; } }
+    foreach ( [ 'wp_unschedule_hook' => '0', 'wp_next_scheduled' => 'false', 'wp_schedule_single_event' => 'true' ] as $f => $ret ) { if ( ! function_exists( $f ) ) { eval( "function $f( ...\$a ) { return $ret; }" ); } }
+    if ( ! function_exists( 'wp_clear_scheduled_hook' ) ) { function wp_clear_scheduled_hook( $h, $a = [] ) { return 0; } }
+    require $d . '/purge.php';
+
+    $vo_on  = function ( string $eps = 'http://vo1.test:6081' ) use ( $OK ) {
+        vt_reset(); vt_home( 'http://vo.test' ); vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => $eps ] );
+        $GLOBALS['VO'] = [ 'fs' => 0, 'isdir' => 0, 'lock' => 0, 'unlock' => 0, 'spawn' => 0, 'preload_all' => 0 ];
+        vt_script( '#^PURGE http://vo1\.test#', $OK );
+    };
+    $optin = function () { add_filter( 'nppp_varnish_only', '__return_true' ); };
+    // one endpoint per scenario that parks it: the breaker memo lives for the whole process
+    $vx = function ( array $hosts, array $bad = [] ) use ( $OK ) {
+        vt_reset(); vt_home( 'http://vo.test' );
+        vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => implode( "\n", array_map( fn( $h ) => 'http://' . $h . ':6081', $hosts ) ) ] );
+        $GLOBALS['VO'] = [ 'fs' => 0, 'isdir' => 0, 'lock' => 0, 'unlock' => 0, 'spawn' => 0, 'preload_all' => 0 ];
+        foreach ( $hosts as $h ) {
+            vt_script( '#^PURGE http://' . preg_quote( $h, '#' ) . '#', in_array( $h, $bad, true ) ? new WP_Error( 'http_request_failed', 'cURL error 7: Failed to connect to ' . $h . ' port 6081: Connection refused' ) : $OK );
+        }
+    };
+
+    if ( $S === 'varnishonly' ) {
+    // --- mode decision (truth table) -------------------------------------------------------------------------
+    $vo_on();
+    chk( nppp_varnish_only_mode() === false, 'no opt-in: sync ON + endpoint is NOT enough => mode OFF (stock behaviour)' );
+    $optin();
+    chk( nppp_varnish_only_mode() === true,  'opt-in + sync ON + endpoint => mode ON' );
+    vt_reset(); vt_set( [ 'nppp_varnish_sync_enabled' => 'no',  'nppp_varnish_endpoints' => 'vo2.test:6081' ] ); $optin();
+    chk( nppp_varnish_only_mode() === false, 'opt-in but sync switch OFF => mode OFF (never silently does nothing)' );
+    vt_reset(); vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => '' ] ); $optin();
+    chk( nppp_varnish_only_mode() === false, 'opt-in but no endpoint => mode OFF' );
+
+    // --- helper seam (Purge All and Preload All both call it) ------------------------------------------------
+    $vo_on(); $optin();
+    $st = nppp_purge_helper( '/dev/shm/change-me-now', '/dev/shm/change-me-now/tmp' );
+    chk( $st === 2, 'ON: nppp_purge_helper() returns 2 (nothing to purge, a non-error status)', var_export( $st, true ) );
+    chk( $GLOBALS['VO']['fs'] === 0, 'ON: the helper never touches the filesystem' );
+
+    // --- single purge, end to end: real nppp_purge_single -> real nppp_purged_urls listener -> PURGE on the wire
+    $vo_on(); $optin();
+    nppp_purge_single( '/dev/shm/change-me-now', 'http://vo.test/post-1/', true );
+    $u = implode( "\n", urls() );
+    chk( preg_match( '#^PURGE http://vo1\.test:6081/post-1/$#m', $u ) === 1, 'ON single: PURGE for the primary URL reaches Varnish', $u );
+    chk( preg_match( '#^PURGE http://vo1\.test:6081/related/$#m', $u ) === 1, 'ON single: related URL is purged on Varnish too', $u );
+    chk( $GLOBALS['VO']['lock'] === 1 && $GLOBALS['VO']['unlock'] === 1, 'ON single: purge lock taken once and released once (try/finally intact)' );
+
+    // --- Purge All, end to end: real nppp_purge -> real helper (2) -> real nppp_purged_all listener -> regex ban
+    $vo_on(); $optin();
+    nppp_purge( '/dev/shm/change-me-now', '/nonexistent/pid', '/dev/shm/change-me-now/tmp', false, false, false );
+    $u = implode( "\n", urls() );
+    chk( preg_match( '#^PURGE http://vo1\.test:6081/\.\*$#m', $u ) === 1, 'ON Purge All: host-wide regex PURGE reaches Varnish', $u );
+    chk( $GLOBALS['VO']['isdir'] === 0, 'ON Purge All: the nginx cache directory is never probed (nppp_purge itself still reads its PID file)' );
+    chk( strpos( vt_notes(), 'ERROR PATH' ) === false, 'ON Purge All: no "ERROR PATH" for a cache directory that does not exist', vt_notes() );
+
+    // --- mode OFF: stock behaviour unchanged ----------------------------------------------------------------
+    $vo_on();   // sync ON + endpoint, no opt-in
+    $st = nppp_purge_helper( '/dev/shm/change-me-now', '/dev/shm/change-me-now/tmp' );
+    chk( $st === 3, 'OFF: stock "cache path not found" (3) is unchanged', var_export( $st, true ) );
+    chk( $GLOBALS['VO']['fs'] >= 1 && $GLOBALS['VO']['isdir'] >= 1, 'OFF: the stock code still probes the cache directory' );
+    $vo_on();
+    nppp_purge( '/dev/shm/change-me-now', '/nonexistent/pid', '/dev/shm/change-me-now/tmp', false, false, false );
+    chk( strpos( vt_notes(), 'ERROR PATH' ) !== false, 'OFF Purge All: stock ERROR PATH notice is still raised', vt_notes() );
+    chk( preg_match( '#^PURGE .*/\.\*$#m', implode( "\n", urls() ) ) === 0, 'OFF Purge All: stock gate unchanged, no Varnish ban after an nginx error' );
+
+    // --- static guards ---------------------------------------------------------------------------------------
+    $c = file_get_contents( $d . '/purge.php' );
+    chk( substr_count( $c, 'nppp_varnish_only_mode()' ) === 4, 'purge.php has exactly four mode checks (helper + single seam + two report sites)' );
+    chk( preg_match( '/try \{\s*\/\/ Varnish-only mode.*?nppp_purge_post_purge\( \$ctx \);\s*return;\s*\}\s*if \( nppp_purge_fp1_http/s', $c ) === 1, 'single-purge check sits inside the try, before FP1' );
+    }   // varnishonly
+
+    if ( $S === 'varnishonly2' ) {
+    $NO_ROUTE = new WP_Error( 'http_request_failed', 'cURL error 7: Failed to connect to vo1.test port 6081: Connection refused' );
+    $fails    = function () { return array_filter( [ 'x' => nppp_state_get( 'varnish_vo_failure' ) ] ); };
+
+    // V1 order: PURGE on the wire BEFORE the auto-preload crawl is spawned
+    $vo_on(); $optin(); vt_set( [ 'nginx_cache_auto_preload' => 'yes' ] );
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', true );
+    chk( $GLOBALS['VO']['spawn'] === 1, 'V1 auto-preload spawns exactly once after a Varnish-only single purge', (string) $GLOBALS['VO']['spawn'] );
+    chk( preg_match( '#^PURGE http://vo1\.test:6081/post-1/$#m', $GLOBALS['VO']['spawn_seen'] ?? '' ) === 1, 'V1 ORDER: Varnish PURGE already sent when the crawl is spawned', $GLOBALS['VO']['spawn_seen'] ?? 'none' );
+    chk( ( $GLOBALS['VO']['spawn_args'][1] ?? null ) === false && ( $GLOBALS['VO']['spawn_args'][2] ?? null ) === false, 'V1 spawn args: found=false, is_manual=false (auto purge)', json_encode( $GLOBALS['VO']['spawn_args'] ?? null ) );
+
+    // V2 related URLs: purged first, then handed to the background warmer
+    $vo_on(); $optin(); vt_set( [ 'nppp_related_preload_after_manual' => 'yes' ] );
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', true );
+    chk( ( $GLOBALS['VO']['rel'] ?? [] ) === [ 'http://vo.test/related/' ], 'V2 related URLs reach the background warmer', json_encode( $GLOBALS['VO']['rel'] ?? null ) );
+    chk( preg_match( '#^PURGE http://vo1\.test:6081/related/$#m', $GLOBALS['VO']['rel_seen'] ?? '' ) === 1, 'V2 ORDER: related URL already purged on Varnish when warming starts', $GLOBALS['VO']['rel_seen'] ?? 'none' );
+
+    // V3 Purge All + Auto Preload: the ban goes out ONCE, the preload step stays silent (no false warning)
+    $vo_on(); $optin(); vt_set( [ 'nginx_cache_auto_preload' => 'yes' ] );
+    nppp_purge( '/dev/shm/x', '/nonexistent/pid', '/dev/shm/x/tmp', false, false, false );
+    $bans = count( array_filter( urls(), fn( $x ) => preg_match( '#^PURGE .*/\.\*$#', $x ) ) );
+    chk( $GLOBALS['VO']['preload_all'] === 1, 'V3 Purge All + Auto Preload reaches the preload step once' );
+    chk( $bans === 1, 'V3 exactly ONE host-wide ban (the preload-time hook is deduplicated)', (string) $bans );
+    chk( strpos( vt_notes(), 'No PURGE request was sent' ) === false, 'V3 no false "No PURGE request was sent" warning from the deduplicated preload hook', vt_notes() );
+    chk( strpos( vt_notes(), 'SUCCESS VARNISH: Purge All accepted' ) !== false, 'V3 the real result is reported once as a success notice', vt_notes() );
+    chk( $fails() === [], 'V3 no persistent failure record after a successful run' );
+
+    // V5 Varnish DOWN, manual single purge: visible ERROR, persistent record, honest wording
+    $vx( [ 'f5.test' ], [ 'f5.test' ] ); $optin();
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', false );
+    chk( strpos( vt_notes(), 'ERROR VARNISH: Purge FAILED' ) !== false, 'V5 manual purge with Varnish down shows a visible ERROR notice', vt_notes() );
+    chk( strpos( vt_notes(), 'the Nginx purge is not affected' ) === false, 'V5 no "Nginx purge is not affected" wording in Varnish-only mode', vt_notes() );
+    chk( strpos( vt_notes(), 'edits are NOT purged anywhere' ) !== false, 'V5 log line says edits are not purged anywhere', vt_notes() );
+    $f = nppp_state_get( 'varnish_vo_failure' );
+    chk( is_array( $f ) && $f['status'] === 'failed' && $f['scope'] === 'urls', 'V5 persistent failure record written', json_encode( $f ) );
+    $rows = $VT['notice_rows']; $err = array_values( array_filter( $rows, fn( $r ) => strpos( $r[1], 'ERROR VARNISH' ) === 0 ) );
+    chk( ! empty( $err ) && $err[0][3] === true, 'V5 manual notice is shown on screen (show=true)' );
+
+    // V6 automatic purge failing: logged but not forced onto a screen; record kept for the admin banner
+    $vx( [ 'f6.test' ], [ 'f6.test' ] ); $optin();
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', true );
+    $err = array_values( array_filter( $VT['notice_rows'], fn( $r ) => strpos( $r[1], 'ERROR VARNISH' ) === 0 ) );
+    chk( ! empty( $err ) && $err[0][3] === false && $err[0][2] === true, 'V6 auto purge failure: logged (log=true), not shown (show=false)' );
+    chk( nppp_state_get( 'varnish_vo_failure' ) !== null && nppp_state_get( 'varnish_vo_failure' ) !== false, 'V6 failure record kept for the admin banner' );
+
+    // V7 admin banner appears while the record exists, only for admins, only in the mode; clears after success
+    if ( ! function_exists( 'current_user_can' ) ) { function current_user_can( $c ) { return ! empty( $GLOBALS['VO_ADMIN'] ); } }
+    $GLOBALS['VO_ADMIN'] = true; ob_start(); nppp_varnish_only_admin_notice(); $html = ob_get_clean();
+    chk( strpos( $html, 'notice-error' ) !== false && strpos( $html, 'did not fully succeed' ) !== false, 'V7 admin banner shown while a failure record exists', $html );
+    $GLOBALS['VO_ADMIN'] = false; ob_start(); nppp_varnish_only_admin_notice(); $html = ob_get_clean();
+    chk( $html === '', 'V7 banner hidden for non-admins' );
+    $GLOBALS['VO_ADMIN'] = true; vt_reset(); vt_home( 'http://vo.test' ); vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => 'http://vo1.test:6081' ] );
+    nppp_state_set( 'varnish_vo_failure', [ 'at' => time(), 'status' => 'failed', 'scope' => 'all', 'detail' => 'unreachable: 1' ], 600 );
+    ob_start(); nppp_varnish_only_admin_notice(); $html = ob_get_clean();
+    chk( $html === '', 'V7 banner hidden when the mode is not active (stock installs never see it)' );
+    $vx( [ 's7.test' ] ); $optin(); nppp_state_set( 'varnish_vo_failure', [ 'at' => time(), 'status' => 'failed', 'scope' => 'all', 'detail' => '' ], 600 );
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', true );
+    chk( nppp_state_get( 'varnish_vo_failure' ) === null || nppp_state_get( 'varnish_vo_failure' ) === false, 'V7 next fully successful purge clears the record' );
+
+    // V8 partial success: warning, not error
+    $vx( [ 'p8a.test', 'p8b.test' ], [ 'p8b.test' ] ); $optin();
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', false );
+    chk( strpos( vt_notes(), 'WARNING VARNISH: Only part' ) !== false && strpos( vt_notes(), 'ERROR VARNISH' ) === false, 'V8 one of two endpoints down = partial WARNING, not ERROR', vt_notes() );
+
+    // V9 breaker window: 15 s in Varnish-only mode, 300 s stock, filter clamped
+    $vo_on(); $optin();
+    chk( nppp_varnish_breaker_seconds() === 15, 'V9 breaker window is 15 s in Varnish-only mode' );
+    add_filter( 'nppp_varnish_breaker_seconds', fn() => 1 ); chk( nppp_varnish_breaker_seconds() === 5, 'V9 filter value clamped to >= 5 s' );
+    $vo_on();
+    chk( nppp_varnish_breaker_seconds() === 300, 'V9 stock window stays 300 s when the mode is off' );
+    $vo_on(); $optin(); nppp_varnish_breaker_arm( 'http://brk.test' );
+    $row = $VT['options']['nppp_st_varnish_breaker'] ?? []; $exp = reset( $row['v'] );
+    chk( $exp - time() <= 15 && $exp - time() > 10, 'V9 armed endpoint is parked for ~15 s', (string) ( $exp - time() ) );
+
+    // V10 parked endpoint counts as a failure in the report (not silently OK)
+    $vx( [ 'p10.test' ] ); $optin(); nppp_varnish_breaker_arm( 'http://p10.test:6081' );
+    nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', false );
+    chk( strpos( vt_notes(), 'ERROR VARNISH' ) !== false && strpos( vt_notes(), 'parked' ) !== false, 'V10 purge skipped by an open breaker is reported as FAILED (parked)', vt_notes() );
+
+    // V11 stock mode untouched: no report, no record, original wording
+    $vx( [ 'q11.test' ], [ 'q11.test' ] );   // no opt-in: stock mode
+    do_action( 'nppp_purged_all', false );
+    chk( strpos( vt_notes(), 'the Nginx purge is not affected' ) !== false, 'V11 stock mode keeps the original "Nginx purge is not affected" wording', vt_notes() );
+    chk( nppp_state_get( 'varnish_vo_failure' ) === null || nppp_state_get( 'varnish_vo_failure' ) === false, 'V11 stock mode never writes a Varnish-only failure record' );
+
+    // V12 static guards on the seams that need a live preload/WordPress to execute
+    $pl = file_get_contents( $d . '/preload.php' ); $cv = file_get_contents( $d . '/compat-varnish.php' );
+    $pa = strpos( $pl, 'nppp_http_purge_fire_preload_all_started( $status )' ); $pb = strpos( $pl, 'nppp_varnish_only_report( \'all\', (bool) $nppp_is_wp_cron, \'\', true );' ); $pc = strpos( $pl, '// We are ready', (int) $pa );
+    chk( $pa !== false && $pb !== false && $pa < $pb && $pb < $pc, 'V12 Preload All: quiet report sits right after the ban hook and before the crawl is spawned' );
+    chk( substr_count( $pl, "nppp_varnish_only_report( '" ) === 1, 'V12 preload.php has exactly one report call' );
+    chk( substr_count( $pl, '$nppp_vo' ) >= 5, 'V12 preload.php success/error messages are mode-aware' );
+    chk( strpos( $cv, "add_action( 'admin_notices', 'nppp_varnish_only_admin_notice' );" ) !== false, 'V12 admin banner is registered' );
+    chk( substr_count( $cv, 'nppp_varnish_run_count(' ) >= 7, 'V12 all outcome kinds are counted (sent / parked / budget / exception)' );
+    }   // varnishonly2
+
+    if ( $S === 'varnishonly3' ) {   // own process: the Purge All dedupe flag is a static
+    // V4 Preload All button (no prior purge): the ban fires at preload time and is reported
+    $vo_on(); $optin();
+    nppp_preload();
+    chk( preg_match( '#^PURGE http://vo1\.test:6081/\.\*$#m', implode( "\n", urls() ) ) === 1, 'V4 Preload All: ban sent at crawl start' );
+    chk( strpos( vt_notes(), 'SUCCESS VARNISH: Purge All accepted' ) !== false, 'V4 Preload All: ban result is reported', vt_notes() );
+
+    }   // varnishonly3
+}
+
 exit( vt_summary() );

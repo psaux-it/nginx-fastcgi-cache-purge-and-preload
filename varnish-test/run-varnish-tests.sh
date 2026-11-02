@@ -26,7 +26,7 @@
 HERE=$(cd "$(dirname "$0")" && pwd) || exit 2
 PHP=${PHP:-php}
 
-UNIT_SECTIONS="parse config classify single results budget all preload allveto allfail sslverify hosts dedupe scope exceptions logging state logreason fallback transport hang source"
+UNIT_SECTIONS="parse config classify single results budget all preload allveto allfail sslverify hosts dedupe scope exceptions logging state logreason fallback transport hang source varnishonly varnishonly2 varnishonly3"
 E2E_SECTIONS="vcl single purgeall preload escalate scope auth noregex multi tls lurker"
 DEFERRED_SECTIONS="sync gen async deferred waiterdead preloadall supersede holdgate"
 
