@@ -14,6 +14,7 @@
  *           transport hang                                                             (real sockets)
  *           source                                                                     (static checks on the plugin sources)
  *           varnishonly                                                                (Varnish-only mode: nginx has no cache)
+ *           voprobe                                                                    (read-only lookup of the Advanced tab: includes/varnish-probe.php)
  *
  * chk()   = must hold.   known() = documented limit of the plugin; passes while it still holds and FAILS when the
  * behaviour changes, so a fixed gap (or a regression hiding one) can not go unnoticed.
@@ -1029,6 +1030,148 @@ if ( in_array( $S, [ 'varnishonly4', 'varnishonly5', 'varnishonly6', 'varnishonl
         chk( substr_count( $pl, '$nppp_perm_msg' ) === 3, 'H12 both permission checks of the single preload use the mode-aware message' );
         chk( strpos( file_get_contents( dirname( $d ) . '/readme.txt' ), 'NPPP_VARNISH_ONLY' ) !== false, 'H13 readme changelog mentions the mode' );
     }
+}
+
+/* ================================================================================================================ */
+if ( $S === 'voprobe' ) {   // includes/varnish-probe.php: the read-only lookup behind the Advanced tab (Varnish-only mode)
+    $d = vt_includes();
+    $PO = static function ( string $state, array $more = [] ) { return [ 'code' => 200, 'headers' => array_merge( [ 'x-npp-probe-state' => $state ], $more ) ]; };
+    $vp = function ( string $header = 'X-Control-Key: s3cret' ) { vt_reset(); vt_home( 'http://vp.test' ); vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => 'http://vp1.test:6081', 'nppp_varnish_header' => $header ] ); };
+    $st = function ( array $b, string $u ): string { return $b['results'][ $u ]['state'] ?? 'MISSING'; };
+    $nreq = function (): int { return count( reqs() ); };
+    chk( function_exists( 'nppp_varnish_probe_batch' ), 'varnish-probe.php is loaded by the harness' );
+
+    // --- request target: only what reaches Varnish byte for byte ---------------------------------------------------
+    $vp();
+    $T = function ( string $u ) { return nppp_varnish_probe_target( $u ); };
+    chk( $T( 'http://vp.test/a/' )['target'] === '/a/', 'plain path' );
+    chk( $T( 'https://vp.test' )['target'] === '/', 'empty path is /' );
+    chk( $T( 'http://vp.test/a/?x=1&y=2' )['target'] === '/a/?x=1&y=2', 'query is kept' );
+    chk( $T( 'https://vp.test/caf%C3%A9/' )['target'] === '/caf%C3%A9/', 'upper-case escapes are stable on the wire: allowed' );
+    chk( $T( 'http://vp.test/caf%c3%a9/' )['target'] === '', 'lower-case escapes would be rewritten (UPPER-CASE hex): refused, never a false MISS' );
+    chk( $T( 'http://vp.test/%41bc/' )['target'] === '', 'escape of an unreserved character is decoded by the client: refused' );
+    chk( $T( 'http://vp.test/100%/' )['target'] === '', 'a stray percent sign becomes %25 on the wire: refused' );
+    chk( $T( 'http://vp.test/a/?q=%e4' )['target'] === '', 'lower-case escape in the query: refused' );
+    chk( $T( 'http://vp.test/a/?q=%E4' )['target'] === '/a/?q=%E4', 'upper-case escape in the query: allowed' );
+    chk( $T( 'http://vp.test/a b/' )['target'] === '' && $T( "http://vp.test/a\n/" )['target'] === '', 'whitespace / control characters refused' );
+    chk( $T( 'http://vp.test/a/../b/' )['target'] === '' && $T( 'http://vp.test/a/%2e%2e/b/' )['target'] === '', 'dot segments refused (also hidden behind escapes)' );
+    chk( $T( 'http://vp.test/a//b/' )['target'] === '' && $T( 'http://vp.test/a\\b/' )['target'] === '', 'repeated slashes / backslash refused' );
+    chk( $T( 'http://vp.test/a{b}/' )['target'] === '' && $T( 'http://vp.test/a|b/' )['target'] === '', 'characters the client would encode refused' );
+    chk( $T( "http://vp.test/caf\xC3\xA9/" )['target'] === '', 'raw non-ASCII bytes refused' );
+    chk( $T( 'http://other.test/a/' )['target'] === '' && $T( 'http://vp.test:8080/a/' )['target'] === '', 'another host or port is not this site' );
+    chk( $T( 'ftp://vp.test/a/' )['target'] === '' && $T( '' )['target'] === '' && $T( '/relative/' )['target'] === '', 'not an http(s) URL of the site: refused' );
+
+    // --- wire contract + answers -----------------------------------------------------------------------------------
+    $vp();
+    vt_script( '#^NPPPROBE http://vp1\.test:6081/hit/$#', $PO( 'HIT', [ 'x-npp-probe-age' => '12.5', 'x-npp-probe-ttl' => '287.5' ] ) );
+    vt_script( '#^NPPPROBE http://vp1\.test:6081/stale/$#', $PO( 'STALE', [ 'x-npp-probe-age' => '400', 'x-npp-probe-ttl' => '-100' ] ) );
+    vt_script( '#^NPPPROBE http://vp1\.test:6081/miss/$#', $PO( 'MISS' ) );
+    vt_script( '#^NPPPROBE http://vp1\.test:6081/pass/$#', $PO( 'pass' ) );   // case-insensitive marker
+    $urls = [ 'http://vp.test/hit/', 'http://vp.test/stale/', 'http://vp.test/miss/', 'http://vp.test/pass/' ];
+    $b = nppp_varnish_probe_batch( $urls );
+    chk( $b['status'] === 'ok' && $nreq() === 4, 'four URLs: four requests, status ok', json_encode( $b ) );
+    chk( $st( $b, $urls[0] ) === 'HIT' && $b['results'][ $urls[0] ]['age'] === 12.5 && $b['results'][ $urls[0] ]['ttl'] === 287.5, 'HIT with Age and TTL' );
+    chk( $st( $b, $urls[1] ) === 'STALE' && $b['results'][ $urls[1] ]['stale'] === true && $b['results'][ $urls[1] ]['ttl'] === -100.0, 'STALE (negative TTL, still in grace)' );
+    chk( $st( $b, $urls[2] ) === 'MISS' && $b['results'][ $urls[2] ]['age'] === null, 'MISS has no Age' );
+    chk( $st( $b, $urls[3] ) === 'PASS', 'PASS (hit-for-pass)' );
+    $r = reqs()[0];
+    chk( $r['method'] === 'NPPPROBE' && ( $r['headers']['Host'] ?? '' ) === 'vp.test' && ( $r['headers']['X-Control-Key'] ?? '' ) === 's3cret', 'method NPPPROBE, Host = site authority, control header sent', json_encode( $r['headers'] ) );
+    chk( ( $r['headers']['Accept-Encoding'] ?? '' ) === 'identity' && ( $r['args']['redirection'] ?? -1 ) === 0 && ( $r['args']['limit_response_size'] ?? 0 ) <= 1024, 'asks for the crawler\'s identity variant, no redirects, small response cap' );
+    chk( ! isset( $r['headers']['X-Purge-Method'] ) && count( array_filter( reqs(), fn( $q ) => $q['method'] === 'PURGE' ) ) === 0, 'never a PURGE and no purge header' );
+    chk( $r['curl_hooked'] === true && has_action( 'http_api_curl', 'nppp_varnish_curl_connect_timeout' ) === false, 'short connect timeout applied for the request, hook removed afterwards' );
+    chk( leaks( [ 's3cret', 'vp1.test' ] ) === [], 'no secret / address in the log' );
+
+    // --- limits ----------------------------------------------------------------------------------------------------
+    $vp();
+    vt_script( '#^NPPPROBE #', $PO( 'HIT', [ 'x-npp-probe-age' => '1' ] ) );
+    $many = []; for ( $i = 0; $i < 60; $i++ ) { $many[] = "http://vp.test/p$i/"; }
+    $b = nppp_varnish_probe_batch( array_merge( $many, [ 'http://vp.test/p0/' ] ) );
+    chk( count( $b['results'] ) === 50 && $nreq() === 50, 'at most 50 URLs per call, duplicates collapse', (string) count( $b['results'] ) );
+    $b = nppp_varnish_probe_batch( [] );
+    chk( $b['status'] === 'none' && $b['results'] === [], 'nothing to ask' );
+    $vp(); vt_script( '#^NPPPROBE #', $PO( 'HIT' ) );
+    $b = nppp_varnish_probe_batch( [ 'http://other.test/x/', 'http://vp.test/ok/' ] );
+    chk( $st( $b, 'http://other.test/x/' ) === 'UNKNOWN' && $st( $b, 'http://vp.test/ok/' ) === 'HIT' && $nreq() === 1, 'a foreign URL is UNKNOWN without a request, the next URL is still asked' );
+
+    // --- answers that end the batch --------------------------------------------------------------------------------
+    $vp(); vt_script( '#^NPPPROBE #', [ 'code' => 200, 'body' => '<html>origin page</html>' ] );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/', 'http://vp.test/b/' ] );
+    chk( $b['status'] === 'unsupported' && $nreq() === 1 && $st( $b, 'http://vp.test/b/' ) === 'UNKNOWN', 'answer without the marker (old VCL passed it to the origin): ONE request, status unsupported', json_encode( $b ) );
+    chk( substr_count( vt_notes(), 'did not answer the live status lookup' ) === 1, 'one info line' );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/' ] );
+    chk( $b['status'] === 'unsupported' && $nreq() === 1, 'remembered for an hour: no second request' );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/' ], true );
+    chk( $nreq() === 2, 'force asks again' );
+    vt_script( '#^NPPPROBE #', $PO( 'HIT' ) );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/' ], true );
+    chk( $b['status'] === 'ok' && $st( $b, 'http://vp.test/a/' ) === 'HIT', 'after the VCL is fixed, force clears the verdict' );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/b/' ] );
+    chk( $b['status'] === 'ok', 'and it stays cleared' );
+
+    foreach ( [ 403, 405, 501, 401 ] as $code ) {
+        $vp(); vt_script( '#^NPPPROBE #', [ 'code' => $code ] );
+        $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/', 'http://vp.test/b/' ] );
+        chk( $b['status'] === 'denied' && $nreq() === 1 && $st( $b, 'http://vp.test/b/' ) === 'UNKNOWN', "HTTP $code: status denied after ONE request", json_encode( $b ) );
+    }
+    $vp(); vt_script( '#^NPPPROBE #', [ 'code' => 403 ] );
+    nppp_varnish_probe_batch( [ 'http://vp.test/a/' ] ); nppp_varnish_probe_batch( [ 'http://vp.test/b/' ] );
+    chk( substr_count( vt_notes(), 'refused the live status lookup (HTTP 403)' ) === 1, 'refusal warns once per window, not per request' );
+    chk( nppp_varnish_breaker_open( 'http://vp1.test:6081' ) === false, 'a refusal does not park the endpoint' );
+
+    $vp(); vt_script( '#^NPPPROBE #', new WP_Error( 'http_request_failed', 'cURL error 7: Failed to connect to vp1.test port 6081: Connection refused' ) );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/', 'http://vp.test/b/' ] );
+    chk( $b['status'] === 'unreachable' && $nreq() === 1, 'unreachable: ONE request (not one timeout per URL)', json_encode( $b ) );
+    chk( nppp_varnish_breaker_open( 'http://vp1.test:6081' ) === false, 'a failed lookup never arms the PURGE circuit breaker' );
+    chk( leaks( [ 'vp1.test', '6081' ] ) === [], 'no address in the log' );
+
+    $vp(); vt_script( '#^NPPPROBE http://vp1\.test:6081/bad/#', [ 'code' => 500 ] ); vt_script( '#^NPPPROBE http://vp1\.test:6081/good/#', $PO( 'HIT' ) );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/bad/', 'http://vp.test/good/' ] );
+    chk( $b['status'] === 'ok' && $b['results']['http://vp.test/bad/']['reason'] === 'HTTP 500' && $st( $b, 'http://vp.test/good/' ) === 'HIT', 'another HTTP status concerns that URL only', json_encode( $b ) );
+
+    $vp(); nppp_varnish_breaker_arm( 'http://vp1.test:6081' );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/' ] );
+    chk( $b['status'] === 'parked' && $nreq() === 0, 'an endpoint parked by a failed PURGE is not asked' );
+
+    $vp(); vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => "http://vp1.test:6081\nhttp://vp2.test:6081", 'nppp_varnish_header' => '' ] );
+    nppp_varnish_breaker_arm( 'http://vp1.test:6081' ); vt_script( '#^NPPPROBE http://vp2\.test:6081/#', $PO( 'MISS' ) );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/' ] );
+    chk( $b['status'] === 'ok' && strpos( reqs()[0]['url'], 'vp2.test' ) !== false && ! isset( reqs()[0]['headers']['X-Control-Key'] ), 'the first endpoint that is not parked is asked; no control header when none is configured' );
+
+    $vp(); vt_set( [ 'nppp_varnish_sync_enabled' => 'no' ] );
+    $b = nppp_varnish_probe_batch( [ 'http://vp.test/a/' ] );
+    chk( $b['status'] === 'none' && $nreq() === 0, 'sync OFF / no endpoint: nothing is sent' );
+
+    // --- static guarantees -----------------------------------------------------------------------------------------
+    $f  = file_get_contents( $d . '/varnish-probe.php' ); $ad = file_get_contents( $d . '/advanced.php' ); $cv = file_get_contents( $d . '/compat-varnish.php' );
+    $en = file_get_contents( $d . '/enqueue-assets.php' ); $lg = file_get_contents( $d . '/log.php' ); $hp = file_get_contents( $d . '/help.php' );
+    $bt = file_get_contents( dirname( $d ) . '/admin/fastcgi-cache-purge-and-preload-nginx-admin.php' );
+    chk( substr_count( $f, 'wp_remote_request(' ) === 1 && strpos( $f, "'method'                  => 'NPPPROBE'" ) !== false, 'varnish-probe.php has exactly one HTTP call site and it sends NPPPROBE' );
+    chk( strpos( $f, 'nppp_varnish_breaker_arm(' ) === false && strpos( $f, 'nppp_varnish_run_count(' ) === false, 'the lookup never touches the purge breaker or the purge run counters' );
+    chk( substr_count( $cv, 'wp_remote_request(' ) === 1 && strpos( $cv, 'NPPPROBE' ) === false, 'compat-varnish.php (the PURGE path) is untouched: still one call site, no probe' );
+    chk( strpos( $bt, "require_once dirname(__DIR__) . '/includes/varnish-probe.php';" ) !== false && strpos( $bt, "add_action('wp_ajax_nppp_vo_probe', 'nppp_vo_probe_callback');" ) !== false, 'bootstrap loads the file and registers the AJAX action (admin only, no nopriv)' );
+    chk( strpos( $bt, 'wp_ajax_nopriv_nppp_vo_probe' ) === false, 'no unauthenticated AJAX action' );
+    preg_match( '/function nppp_vo_probe_callback\(.*?\n}\n/s', $ad, $m ); $cb = $m[0] ?? '';
+    $pn = strpos( $cb, "'nppp_vo_probe_nonce'" ); $pc = strpos( $cb, "current_user_can( 'manage_options' )" ); $pm = strpos( $cb, 'nppp_varnish_only_mode()' ); $pb = strpos( $cb, 'nppp_varnish_probe_batch(' );
+    chk( $pn !== false && $pc !== false && $pm !== false && $pb !== false && $pn < $pc && $pc < $pm && $pm < $pb, 'AJAX handler order: nonce, capability, mode check, then the lookup' );
+    chk( strpos( $cb, 'nppp_varnish_probe_max_urls()' ) !== false && strpos( $cb, 'esc_url_raw(' ) !== false, 'AJAX handler caps the list and sanitizes every URL' );
+    chk( strpos( $en, "wp_create_nonce('nppp_vo_probe_nonce')" ) !== false && strpos( $en, 'nppp-vo-advanced.js' ) !== false, 'enqueue-assets.php creates the nonce and loads the script' );
+    chk( strpos( $lg, 'nppp_vo_probe' ) === false, 'the lookup is not on the AJAX notice allowlist (log.php): it can never print an admin notice into the JSON answer' );
+    chk( strpos( $ad, "if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() ) {\n        return nppp_premium_html_vo( \$wp_filesystem );" ) !== false, 'Advanced tab delegates to the Varnish-only table right after WP_Filesystem is ready' );
+    $pos_vo = strpos( $ad, 'return nppp_premium_html_vo(' ); $pos_ns = strpos( $ad, 'ERROR CRITICAL: Please get help from plugin support forum! (ERROR 1071)' );
+    chk( $pos_vo !== false && $pos_ns !== false && $pos_vo < $pos_ns, 'the delegation sits before every Nginx cache directory check (stock path unchanged below it)' );
+    preg_match( '/function nppp_premium_html_vo\(.*?\n}\n/s', $ad, $m ); $vo = $m[0] ?? '';
+    chk( $vo !== '' && strpos( $vo, 'nppp_extract_cached_urls' ) === false && strpos( $vo, 'nppp_index_merge_hits' ) === false && strpos( $vo, 'update_option' ) === false, 'Varnish-only table does not scan the scratch directory, merge the URL index or write options' );
+    chk( strpos( $vo, 'disabled' ) === false, 'no Purge button is disabled in Varnish-only mode (PURGE is idempotent)' );
+    preg_match( '/function nppp_preload_cache_premium_callback\(.*?\n}\n/s', $ad, $m ); $pr = $m[0] ?? '';
+    $a1 = strpos( $pr, "'vo'      => true" ); $a2 = strpos( $pr, "shell_exec('command -v rg" );
+    chk( $a1 !== false && $a2 !== false && $a1 < $a2, 'single preload answers before any ripgrep scan in Varnish-only mode' );
+    // the Example VCL: the probe blocks exist, use the documented ACL + secret, and never fetch / purge
+    preg_match( '#<pre>(vcl 4\.1;.*?)</pre>#s', $hp, $m ); $vcl = html_entity_decode( strip_tags( $m[1] ?? '' ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+    chk( substr_count( $vcl, 'req.method == "NPPPROBE"' ) === 5, 'Example VCL: NPPPROBE handled in vcl_recv, vcl_hit, vcl_miss, vcl_pass, vcl_synth' );
+    preg_match( '/if \(req\.method == "NPPPROBE"\) \{\s*(.*?)\n    \}\n\}/s', $vcl, $m ); $blk = $m[1] ?? '';
+    chk( strpos( $blk, 'client.ip !~ purge' ) !== false && strpos( $blk, 'change-me-long-random-secret' ) !== false && strpos( $blk, 'return (hash);' ) !== false, 'Example VCL: the probe uses the PURGE ACL and the same secret, then only looks up (return (hash))' );
+    chk( substr_count( $vcl, 'change-me-long-random-secret' ) === 2, 'Example VCL: the secret appears exactly twice (PURGE + probe), the lab / docs replace both' );
+    chk( strpos( $vcl, 'return (fetch)' ) === false && strpos( $vcl, 'return (pass)' ) === false, 'Example VCL: no probe path fetches or passes' );
 }
 
 exit( vt_summary() );

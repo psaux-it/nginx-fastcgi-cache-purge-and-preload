@@ -68,6 +68,7 @@ function lab_example_vcl(): string {
  *   noregex   only `return (purge)`: X-Purge-Method: regex falls through to it (the gap the Help text warns about)
  *   aclnone   the ACL does not contain 127.0.0.1 -> every PURGE gets 405
  *   nopurge   no PURGE handler at all
+ *   noprobe   no NPPPROBE handler (a VCL from before the Advanced tab lookup existed)
  */
 function lab_vcl( string $variant, int $backend_port ): string {
     $v = lab_example_vcl();
@@ -80,6 +81,7 @@ function lab_vcl( string $variant, int $backend_port ): string {
         case 'noregex': $v = $sub( $v, 'req.http.X-Purge-Method == "regex"', 'req.http.X-Purge-Method == "__never__"' ); break;
         case 'aclnone': $v = $sub( $v, 'acl purge { "127.0.0.1"; "::1"; }', 'acl purge { "203.0.113.7"; }' ); break;
         case 'nopurge': $v = $sub( $v, 'req.method == "PURGE"', 'req.method == "__never__"' ); break;
+        case 'noprobe': $v = $sub( $v, 'req.method == "NPPPROBE"', 'req.method == "__never__"' ); break;
         default: fwrite( STDERR, "unknown VCL variant $variant\n" ); exit( 2 );
     }
     return $v . "\nbackend default { .host = \"127.0.0.1\"; .port = \"$backend_port\"; }\n";

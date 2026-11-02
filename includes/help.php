@@ -625,7 +625,8 @@ fastcgi_cache_key $cache_purge_key;</pre>
                             <li><strong>Purge and Purge All</strong> send the Varnish <code>PURGE</code> / host-wide ban and nothing else: no Nginx cache directory is probed, so there is no "ERROR PATH" for a cache that does not exist.</li>
                             <li><strong>Preload</strong> still crawls your public URLs through Varnish and warms it. The directory set as <strong>Nginx Cache Directory</strong> is only the crawler's scratch space here: set it to a real, <em>empty</em>, persistent directory that PHP can read and write (for example <code>/var/cache/npp-varnish-only</code>, not <code>/dev/shm</code>, which is cleared at reboot). On aaPanel with <code>open_basedir</code>, add that directory to it.</li>
                             <li><strong>Results are visible.</strong> Varnish is the only layer, so its result is the purge result: a success, partial warning or error notice on manual actions, the log for automatic ones, and a banner on the NPP pages after a failure that clears on the next fully successful purge.</li>
-                            <li><strong>Not applicable.</strong> The Advanced tab lists Nginx cache files and the Status tab cache cards (hits, coverage) read the Nginx cache, so neither is meaningful in this mode. The "cache is empty" and cache-key-regex warnings are not shown.</li>
+                            <li><strong>Advanced tab.</strong> The list is the URL set of the last completed <strong>Preload All</strong> crawl (there are no Nginx cache files to scan). <strong>Status</strong> and <strong>Age</strong> come from a read-only lookup against Varnish, once for the rows on screen and for every row with <strong>Check all</strong>; Purge and Preload act on Varnish and their row is checked again afterwards. This needs the optional probe block of the Example VCL below (<code>NPPPROBE</code>); without it the list, Purge and Preload still work and Status shows <code>?</code>. <code>MISS</code> also appears for pages that are not cacheable, <code>PASS</code> for hit-for-pass pages, and a URL whose escapes the WordPress HTTP API would rewrite (for example lower-case percent-encoding) is not looked up and shows <code>?</code>. With several endpoints the first one that is not parked is asked.</li>
+                            <li><strong>Not applicable.</strong> The Status tab cache cards (hits, coverage) read the Nginx cache, so they are not meaningful in this mode. The "cache is empty" and cache-key-regex warnings are not shown.</li>
                         </ul>
 
                         <h4><strong>When NPP purges Varnish</strong></h4>
@@ -688,6 +689,15 @@ sub vcl_recv {
         }
         return (purge);
     }
+
+    # OPTIONAL, read-only: lets the Advanced tab show the real HIT / MISS in Varnish-only mode.
+    # Looks the object up and answers from vcl_hit / vcl_miss below; never fetches, caches or purges.
+    # Put it next to the PURGE block, after the same URL normalization, and use the same secret.
+    if (req.method == "NPPPROBE") {
+        if (client.ip !~ purge) { return (synth(405, "Not allowed")); }
+        if (req.http.X-Control-Key != "change-me-long-random-secret") { return (synth(403, "Forbidden")); }
+        return (hash);
+    }
 }
 
 sub vcl_backend_response {
@@ -699,7 +709,43 @@ sub vcl_backend_response {
 sub vcl_deliver {
     unset resp.http.x-url;
     unset resp.http.x-host;
+}
+
+# OPTIONAL: answers of the read-only lookup above (Advanced tab, Varnish-only mode)
+sub vcl_hit {
+    if (req.method == "NPPPROBE") {
+        set req.http.X-NPP-Probe-State = "STALE";
+        if (obj.ttl &gt; 0s) { set req.http.X-NPP-Probe-State = "HIT"; }
+        set req.http.X-NPP-Probe-Age = obj.age;
+        set req.http.X-NPP-Probe-TTL = obj.ttl;
+        return (synth(200, "Probe"));
+    }
+}
+
+sub vcl_miss {
+    if (req.method == "NPPPROBE") {
+        set req.http.X-NPP-Probe-State = "MISS";
+        return (synth(200, "Probe"));
+    }
+}
+
+sub vcl_pass {
+    if (req.method == "NPPPROBE") {
+        set req.http.X-NPP-Probe-State = "PASS";
+        return (synth(200, "Probe"));
+    }
+}
+
+sub vcl_synth {
+    if (req.method == "NPPPROBE" &amp;&amp; req.http.X-NPP-Probe-State) {
+        set resp.http.X-NPP-Probe-State = req.http.X-NPP-Probe-State;
+        if (req.http.X-NPP-Probe-Age) { set resp.http.X-NPP-Probe-Age = req.http.X-NPP-Probe-Age; }
+        if (req.http.X-NPP-Probe-TTL) { set resp.http.X-NPP-Probe-TTL = req.http.X-NPP-Probe-TTL; }
+        set resp.http.Cache-Control = "no-store";
+        return (deliver);
+    }
 }</pre>
+                        <p>The <code>NPPPROBE</code> parts (the second block in <code>vcl_recv</code>, <code>vcl_hit</code>, <code>vcl_miss</code>, <code>vcl_pass</code>, <code>vcl_synth</code>) are optional and only feed the Advanced tab in Varnish-only mode. They use the same ACL and the same secret as the <code>PURGE</code> block: change the secret in both places, and merge them into your own <code>vcl_hit</code> / <code>vcl_miss</code> / <code>vcl_pass</code> / <code>vcl_synth</code> if you have them. A VCL without them passes the unknown method to the origin on Varnish 7 and older (once per hour, NPP then stops asking) or answers <code>501</code> on Varnish 8+ and Vinyl; <em>Check all</em> asks again after you update it. Like <code>PURGE</code>, <code>NPPPROBE</code> from a visitor is refused without the control key; you can also block it in the public Nginx server block next to <code>PURGE</code>.</p>
                         <p>Compile-check it with <code>vinyld -C -f file.vcl</code> (Vinyl Cache 9.x) or <code>varnishd -C -f file.vcl</code> (Varnish 8 and older). On Varnish 6.5 and older <code>std.ban()</code> does not exist; use the plain <code>ban(...)</code> statement.</p>
 
                         <h4><strong>Settings</strong></h4>

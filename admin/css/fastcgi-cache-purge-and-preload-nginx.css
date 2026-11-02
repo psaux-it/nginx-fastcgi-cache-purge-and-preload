@@ -7249,3 +7249,30 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 #nppp-accordion .ui-accordion-header:not(.ui-state-active):hover {
     background-color: #e5e5e5 !important;
 }
+
+/* ── Advanced tab, Varnish-only mode: live status from Varnish ── */
+#nppp-premium-table td.nppp-status.is-stale > strong { color: #b26200; font-weight: 700; }
+#nppp-premium-table td.nppp-status.is-pass  > strong { color: #646970; font-weight: 700; }
+#nppp-premium-table td.nppp-status.is-progress > strong { color: #1d4ed8; font-weight: 700; }
+#nppp-premium-table td.nppp-status.is-pending > strong,
+#nppp-premium-table td.nppp-status.is-unknown > strong { color: #9ca3af; font-weight: 700; }
+
+.dtr-data.nppp-status.is-stale    strong { color: #b26200; font-weight: 700; }
+.dtr-data.nppp-status.is-pass     strong { color: #646970; font-weight: 700; }
+.dtr-data.nppp-status.is-progress strong { color: #1d4ed8; font-weight: 700; }
+
+/* Column widths: the table keeps the Nginx layout, "Last crawled" and "Age" are short. */
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(1) { width: 42% !important; }
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(2) { width: 15% !important; }
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(5) { width: 8% !important; }
+#nppp-premium-table[data-nppp-vo="1"] td.nppp-cache-path { white-space: nowrap; color: #646970; }
+
+.nppp-vo-probe-notice {
+    background: #f0f6fc;
+    border-left: 6px solid #72aee6;
+    padding: 6px 10px;
+    margin: 0 0 12px;
+    max-width: max-content;
+    font-size: 13px;
+}
+.nppp-vo-probe-notice.is-warning { background: #fcf9e8; border-left-color: #dba617; }

@@ -82,6 +82,31 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     // Set script i18n translations
     wp_set_script_translations('nppp_admin-js', 'fastcgi-cache-purge-and-preload-nginx');
 
+    // Advanced tab in Varnish-only mode: live HIT / MISS from Varnish. Inert unless the table carries
+    // data-nppp-vo (the mode can be switched without a page reload, so the file is always loaded).
+    wp_enqueue_script('nppp-vo-advanced-js', plugins_url('../admin/js/nppp-vo-advanced.js', __FILE__), array('jquery', 'nppp_admin-js'), '2.1.9', true);
+    wp_localize_script('nppp-vo-advanced-js', 'nppp_vo_data', array(
+        'probe_nonce' => wp_create_nonce('nppp_vo_probe_nonce'),
+        'i18n'        => array(
+            'unsupported' => __( 'Varnish does not answer the live status lookup, so the Status column is empty. Add the probe block of the Example VCL (Help tab), then press Check all.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'denied'      => __( 'Varnish refused the live status lookup. Check the VCL purge ACL, the control header and the probe block (Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'unreachable' => __( 'Varnish is not reachable for the live status lookup.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'parked'      => __( 'The Varnish endpoint is parked after a failure. Try again in a few seconds.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'       => __( 'The live status lookup failed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'stillCached' => __( 'Varnish still serves this URL after the purge. A visitor may have re-cached it; if it persists, check the VCL purge handler (Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'checking'    => __( 'Checking Varnish…', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'progress'    => __( 'Preload sent, waiting for Varnish to cache it', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'unknown'     => __( 'Status unknown', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'hit'         => __( 'Cached in Varnish', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'stale'       => __( 'Cached in Varnish, past its TTL (served stale while it is refreshed)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'miss'        => __( 'Not cached in Varnish (or the page is not cacheable)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'pass'        => __( 'Varnish passes this URL to the origin (hit-for-pass)', 'fastcgi-cache-purge-and-preload-nginx' ),
+            /* translators: 1: checked URLs, 2: total URLs */
+            'checkedOf'   => __( 'Checked %1$s of %2$s URLs…', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'checkedAll'  => __( 'Checked all URLs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        ),
+    ));
+
     // Create a nonce for clearing nginx cache logs
     $clear_nginx_cache_logs_nonce = wp_create_nonce('nppp-clear-nginx-cache-logs');
     // Create a nonce for updating send mail option

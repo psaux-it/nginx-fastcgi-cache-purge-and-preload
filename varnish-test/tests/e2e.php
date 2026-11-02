@@ -23,13 +23,14 @@
  *   multi      several endpoints: a dead one is parked, the others are still purged; a Varnish that dies mid-way
  *   tls        https:// endpoint in front of a plain-HTTP Varnish: unreachable, parked, no secret over the wire
  *   lurker     the ban expression is lurker-friendly (obj.* only) and the lurker really kills the objects
+ *   probe      the read-only NPPPROBE lookup of the Advanced tab: real HIT / MISS, never warms, never purges, old VCL detected
  *
  * Exit codes: 0 pass, 1 failures, 2 lab / usage error, 77 varnishd (or a helper) is not installed -> skipped.
  */
 require __DIR__ . '/../lib/lab.php';
 
 $S = $argv[1] ?? '';
-$SECTIONS = [ 'vcl', 'single', 'purgeall', 'preload', 'escalate', 'scope', 'auth', 'noregex', 'multi', 'tls', 'lurker' ];
+$SECTIONS = [ 'vcl', 'single', 'purgeall', 'preload', 'escalate', 'scope', 'auth', 'noregex', 'multi', 'tls', 'lurker', 'probe' ];
 if ( ! in_array( $S, $SECTIONS, true ) ) {
     fwrite( STDERR, "usage: php tests/e2e.php <" . implode( '|', $SECTIONS ) . ">\n" );
     exit( 2 );
@@ -69,7 +70,7 @@ if ( $S === 'vcl' ) {
     chk( strpos( $vcl, '&amp;' ) === false && strpos( $vcl, '&quot;' ) === false, 'HTML entities of the Help page were decoded' );
     chk( strpos( $vcl, LAB_SECRET ) !== false, 'the documented VCL carries the placeholder control key (this harness uses it)' );
     chk( strpos( $vcl, 'req.http.X-Purge-Method == "regex"' ) !== false && strpos( $vcl, 'return (purge);' ) !== false, 'both documented branches exist: regex => ban, default => purge' );
-    foreach ( [ 'example', 'noregex', 'aclnone', 'nopurge' ] as $variant ) {
+    foreach ( [ 'example', 'noregex', 'aclnone', 'nopurge', 'noprobe' ] as $variant ) {
         $bad = lab_vcl_check( lab_vcl( $variant, 9 ) );
         chk( $bad === '', "VCL variant '$variant' compiles (varnishd -C)", $bad );
     }
@@ -409,6 +410,90 @@ if ( $S === 'lurker' ) {
     chk( $killed === $N, "the ban lurker killed all $N objects with no request touching them", (string) $killed );
     chk( stat_val( $v, 'MAIN.bans_obj_killed' ) === 0, 'none of them had to be killed by a lookup', (string) stat_val( $v, 'MAIN.bans_obj_killed' ) );
     chk( gone( $v, '/page/1/' ) && gone( $v, '/page/30/' ), 'and the next requests miss' );
+}
+
+/* ================================================================================================================ */
+if ( $S === 'probe' ) {
+    // The read-only lookup behind the Advanced tab in Varnish-only mode (includes/varnish-probe.php + the NPPPROBE
+    // blocks of the documented VCL). "Read-only" is the property under test: it must not warm, purge or load the origin.
+    $v = lab_start_varnish( 'v1' );
+    lab_plugin_on( [ $v ] );
+    $st = function ( array $b, string $url ): string { return $b['results'][ $url ]['state'] ?? 'MISSING'; };
+    $P  = site( '/probe/' ); $Q = site( '/probe/?a=1&b=2' ); $C = site( '/cold/' );
+
+    chk( lab_prime( $v, '/probe/' ) && lab_prime( $v, '/probe/?a=1&b=2' ), 'primed /probe/ and /probe/?a=1&b=2' );
+    $o0 = lab_origin( '/probe/' ); $o1 = lab_origin( '/probe/?a=1&b=2' );
+    $b = nppp_varnish_probe_batch( [ $P, $Q, $C ] );
+    chk( $b['status'] === 'ok', 'documented VCL answers the lookup: status ok', json_encode( $b ) );
+    chk( $st( $b, $P ) === 'HIT' && $st( $b, $Q ) === 'HIT', 'cached objects are HIT (path and path+query are different objects)', json_encode( $b['results'] ) );
+    chk( $st( $b, $C ) === 'MISS', 'an object that was never fetched is MISS', json_encode( $b['results'] ) );
+    chk( is_float( $b['results'][ $P ]['age'] ) && $b['results'][ $P ]['age'] >= 0 && $b['results'][ $P ]['age'] < 60 && $b['results'][ $P ]['ttl'] > 0, 'HIT carries a numeric Age and a positive TTL', json_encode( $b['results'][ $P ] ) );
+    chk( lab_origin( '/probe/' ) === $o0 && lab_origin( '/probe/?a=1&b=2' ) === $o1 && lab_origin( '/cold/' ) === 0, 'the lookup never reached the origin (no GET counted anywhere)', json_encode( lab_counts() ) );
+
+    // MISS stays MISS: asking does not fill the cache
+    $b = nppp_varnish_probe_batch( [ $C ] ); $b = nppp_varnish_probe_batch( [ $C ] );
+    chk( $st( $b, $C ) === 'MISS' && lab_origin( '/cold/' ) === 0, 'asking twice about a MISS does not warm it: still MISS, origin still untouched' );
+    lab_get( $v, '/cold/' );
+    chk( lab_origin( '/cold/' ) === 1, 'the first real GET after the lookups is the one that fetches (origin 1)' );
+    chk( $st( nppp_varnish_probe_batch( [ $C ] ), $C ) === 'HIT', 'and only then the lookup says HIT' );
+
+    // The lookup is not a purge
+    chk( $st( nppp_varnish_probe_batch( [ $P ] ), $P ) === 'HIT' && lab_is_cached( $v, '/probe/' ), 'a lookup does not remove the object it asks about' );
+
+    // The lookup follows the plugin's own purges (the point of the Status column)
+    lab_plugin_on( [ $v ] ); fire_urls( [ $P ] );
+    $b = nppp_varnish_probe_batch( [ $P, $Q ] );
+    chk( $st( $b, $P ) === 'MISS' && $st( $b, $Q ) === 'HIT', 'single purge: purged URL turns MISS, its sibling stays HIT', json_encode( $b['results'] ) );
+    lab_plugin_on( [ $v ] ); fire_all();
+    $b = nppp_varnish_probe_batch( [ $P, $Q, $C ] );
+    chk( $st( $b, $P ) === 'MISS' && $st( $b, $Q ) === 'MISS' && $st( $b, $C ) === 'MISS', 'Purge All (host-wide ban): everything is MISS', json_encode( $b['results'] ) );
+
+    // Not cacheable: Varnish stores a hit-for-miss marker, which a lookup can only call MISS (documented in Help)
+    lab_get( $v, '/nostore/a' ); lab_get( $v, '/nostore/a' );
+    known( $st( nppp_varnish_probe_batch( [ site( '/nostore/a' ) ] ), site( '/nostore/a' ) ) === 'MISS', 'an uncacheable page (hit-for-miss) reads MISS, not a separate state' );
+
+    // Scope and encoding
+    $n0 = count( $GLOBALS['VT']['reqs'] );
+    $b = nppp_varnish_probe_batch( [ site( '/probe/', 'other.example' ), 'ftp://example.com/x' ] );
+    chk( count( $GLOBALS['VT']['reqs'] ) === $n0 && $b['results'][ site( '/probe/', 'other.example' ) ]['state'] === 'UNKNOWN', 'a URL of another host (or scheme) is UNKNOWN and never sent' );
+    $GLOBALS['VT']['wire_wp'] = true;   // the stub rewrites the request target like WordPress' Requests library
+    lab_prime( $v, '/caf%C3%A9/' ); lab_prime( $v, '/caf%c3%a9/' );
+    $up = site( '/caf%C3%A9/' ); $lo = site( '/caf%c3%a9/' );
+    $n0 = count( $GLOBALS['VT']['reqs'] );
+    $b = nppp_varnish_probe_batch( [ $up, $lo ] );
+    chk( $st( $b, $up ) === 'HIT', 'upper-case percent escapes reach Varnish unchanged: HIT', json_encode( $b['results'] ) );
+    chk( $st( $b, $lo ) === 'UNKNOWN' && count( $GLOBALS['VT']['reqs'] ) === $n0 + 1, 'lower-case escapes would be rewritten on the wire: UNKNOWN and no request (never a false MISS)', json_encode( $b['results'] ) );
+    $GLOBALS['VT']['wire_wp'] = false;
+
+    // Wrong control key: refused, nothing changes, one warning
+    lab_prime( $v, '/probe/' );
+    lab_plugin_on( [ $v ], 'X-Control-Key: wrong-key' );
+    $b = nppp_varnish_probe_batch( [ $P, $Q ] );
+    chk( $b['status'] === 'denied' && count( $GLOBALS['VT']['reqs'] ) === 1 && $st( $b, $P ) === 'UNKNOWN', 'wrong control key: status denied, one request, rows UNKNOWN', json_encode( $b ) );
+    chk( strpos( vt_notes(), 'refused the live status lookup (HTTP 403)' ) !== false && leaks( [ 'wrong-key', '127.0.0.1' ] ) === [], 'warning logged without the key or the address', vt_notes() );
+    chk( lab_is_cached( $v, '/probe/' ), 'the refused lookup changed nothing' );
+
+    // Old VCL (no probe block): detected by the first answer, remembered, forgotten by force
+    $old = lab_start_varnish( 'v2', 'noprobe' );
+    lab_plugin_on( [ $old ] );
+    lab_prime( $old, '/probe/' ); $g0 = lab_origin( '/probe/' );
+    $key = 'NPPPROBE ' . LAB_HOST . '/probe/'; $key2 = 'NPPPROBE ' . LAB_HOST . '/probe/?a=1&b=2';
+    $b = nppp_varnish_probe_batch( [ $P, $Q ] );
+    chk( $b['status'] === 'unsupported' && $st( $b, $P ) === 'UNKNOWN' && $st( $b, $Q ) === 'UNKNOWN', 'VCL without the probe block: status unsupported', json_encode( $b ) );
+    chk( ( lab_counts()[ $key ] ?? 0 ) === 1 && ( lab_counts()[ $key2 ] ?? 0 ) === 0, 'the origin saw ONE unknown-method request, the second URL was never asked', json_encode( lab_counts() ) );
+    chk( lab_origin( '/probe/' ) === $g0 && lab_is_cached( $old, '/probe/' ), 'and it did not cache or purge anything (GET count unchanged, object still cached)' );
+    $b = nppp_varnish_probe_batch( [ $P ] );
+    chk( $b['status'] === 'unsupported' && ( lab_counts()[ $key ] ?? 0 ) === 1, 'asking again within the hour sends nothing (remembered)' );
+    $b = nppp_varnish_probe_batch( [ $P ], true );
+    chk( $b['status'] === 'unsupported' && ( lab_counts()[ $key ] ?? 0 ) === 2, 'force (Check all) asks again' );
+    chk( strpos( vt_notes(), 'has no probe block' ) !== false, 'one info line explains it', vt_notes() );
+
+    // Unreachable endpoint: UNKNOWN, and the PURGE circuit breaker is NOT armed by a lookup
+    vt_reset(); vt_home( 'http://' . LAB_HOST );
+    vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => 'http://127.0.0.1:' . lab_free_port(), 'nppp_varnish_header' => 'X-Control-Key: ' . LAB_SECRET ] );
+    $b = nppp_varnish_probe_batch( [ $P, $Q ] );
+    chk( $b['status'] === 'unreachable' && $st( $b, $P ) === 'UNKNOWN', 'nothing listening: status unreachable', json_encode( $b ) );
+    chk( nppp_varnish_breaker_open( nppp_varnish_endpoints()[0] ) === false, 'a failed lookup does not park the endpoint for PURGE' );
 }
 
 exit( vt_summary() );

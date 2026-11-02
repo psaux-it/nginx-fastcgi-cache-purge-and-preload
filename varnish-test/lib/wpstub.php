@@ -105,6 +105,9 @@ function vt_load( bool $http_helpers = true ): void {
         require_once $d . '/purge-http.php';
     }
     require_once $d . '/compat-varnish.php';
+    if ( is_file( $d . '/varnish-probe.php' ) ) {
+        require_once $d . '/varnish-probe.php';   // read-only lookup of the Advanced tab (Varnish-only mode)
+    }
     $GLOBALS['VT_BASE_ACTIONS'] = $GLOBALS['VT']['actions'];   // what the plugin files registered
     vt_reset();
 }

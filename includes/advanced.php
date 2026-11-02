@@ -677,6 +677,12 @@ function nppp_premium_html($nginx_cache_path) {
                 </div>';
     }
 
+    // Varnish-only mode: Nginx has no cache, so the cache directory checks, the cache scan and the
+    // URL index below do not apply. The rows come from the crawl snapshot, the status from Varnish.
+    if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() ) {
+        return nppp_premium_html_vo( $wp_filesystem );
+    }
+
     // Handle case where option doesn't exist
     if (empty($nginx_cache_path)) {
         return '<div style="background-color: #f9edbe; border-left: 6px solid red; padding: 10px; margin-bottom: 15px; max-width: max-content;">
@@ -956,6 +962,122 @@ function nppp_premium_html($nginx_cache_path) {
     return ob_get_clean();
 }
 
+/**
+ * Advanced tab in Varnish-only mode.
+ *
+ * The rows are the URLs the preload crawler knows (its completed snapshot, or the live log while a crawl runs).
+ * Status and Age start empty and are filled by a read-only lookup against Varnish
+ * (admin/js/nppp-vo-advanced.js -> nppp_vo_probe). The column layout is the Nginx table's, so the shared
+ * table script keeps working: "Cache Path" becomes "Last crawled", "Variants" becomes "Age".
+ *
+ * @param object $wp_filesystem Initialized WP_Filesystem.
+ * @return string HTML.
+ */
+function nppp_premium_html_vo( $wp_filesystem ) {
+    $preload_running = nppp_is_preload_running( $wp_filesystem );
+    $snapshot_path   = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
+
+    if ( ! $preload_running && ! $wp_filesystem->exists( $snapshot_path ) ) {
+        $wget_msg = __(
+            'No completed <strong>crawl</strong> snapshot found. Run <strong>Preload All</strong> once to build the full snapshot — <strong>ALL</strong> URLs will then appear here.',
+            'fastcgi-cache-purge-and-preload-nginx'
+        );
+        return '<div style="background-color:#f9edbe;border-left:6px solid #f0c36d;padding:10px;margin-bottom:15px;max-width:max-content;">
+                    <p style="margin:0;display:flex;align-items:center;">
+                        <span class="dashicons dashicons-warning" style="font-size:22px;color:#ffba00;margin-right:8px;"></span>
+                        <span style="font-size:14px;">' .
+                            wp_kses( $wget_msg, array( 'strong' => array() ) ) .
+                        '</span>
+                    </p>
+                </div>';
+    }
+
+    $rows = array_values( nppp_parse_wget_log_urls( $wp_filesystem ) );
+
+    ob_start();
+    ?>
+    <h2></h2>
+    <div class="nppp-premium-refresh-wrap">
+        <button type="button" id="nppp-premium-refresh-btn" class="nppp-premium-refresh-btn" title="<?php esc_attr_e( 'Refresh table data', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+            <span class="dashicons dashicons-update" style="font-size:16px;margin:0 4px 0 0;padding:0;vertical-align:middle;"></span>
+            <?php esc_html_e( 'Refresh', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </button>
+        <button type="button" id="nppp-vo-check-all" class="nppp-premium-refresh-btn" title="<?php esc_attr_e( 'Ask Varnish for the status of every URL in the list (lookup only: nothing is fetched, cached or purged)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>">
+            <span class="dashicons dashicons-search" style="font-size:16px;margin:0 4px 0 0;padding:0;vertical-align:middle;"></span>
+            <?php esc_html_e( 'Check all', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+        </button>
+    </div>
+    <div id="nppp-vo-probe-notice" class="nppp-vo-probe-notice" role="status" style="display:none;"></div>
+    <?php if ( ! $preload_running && ! empty( $rows ) ) : ?>
+    <div class="nppp-preload-miss-wrap" style="display:none;">
+        <button type="button" id="nppp-preload-miss-all" class="nppp-preload-miss-btn">
+            <span class="dashicons dashicons-update" style="font-size:16px;margin:0 4px 0 0;padding:0;vertical-align:middle;"></span>
+            <?php esc_html_e( 'Preload All MISS', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+            <span class="nppp-vo-miss-count"></span>
+        </button>
+        <span id="nppp-preload-miss-progress" style="display:none;font-size:13px;color:#646970;"></span>
+    </div>
+    <?php endif; ?>
+    <?php if ( $preload_running ) : ?>
+    <div class="nppp-table-loading-notice">
+        <span class="dashicons dashicons-update-alt spin"></span>
+        <?php esc_html_e( 'Preload is running — data reflects crawl progress at tab load. Revisit this tab for updated results or check the Status tab for live progress.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+    </div>
+    <?php endif; ?>
+    <table id="nppp-premium-table" class="display<?php echo $preload_running ? ' nppp-table-loading' : ''; ?>" data-nppp-vo="1">
+        <thead>
+            <tr>
+                <th><?php esc_html_e( 'URL', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Last crawled', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Content', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Age', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+                <th><?php esc_html_e( 'Action', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
+            </tr>
+        </thead>
+        <tbody>
+        <?php if ( empty( $rows ) ) : ?>
+            <tr><td colspan="6"><?php esc_html_e( 'No cacheable URLs found yet.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></td></tr>
+        <?php else :
+            foreach ( $rows as $row ) :
+                $row_url = ! empty( $row['url_encoded'] ) ? $row['url_encoded'] : $row['url'];
+                ?>
+                <tr>
+                    <td class="nppp-url">
+                        <a href="<?php echo esc_url( $row_url ); ?>" target="_blank" rel="noopener">
+                            <?php echo esc_html( $row['url'] ); ?>
+                        </a>
+                    </td>
+                    <td class="nppp-cache-path"><?php echo esc_html( $row['log_date'] ); ?></td>
+                    <td><?php echo esc_html( $row['category'] ); ?></td>
+                    <td class="nppp-status is-pending"><strong>…</strong></td>
+                    <td class="nppp-variant-cell nppp-vo-age">—</td>
+                    <td>
+                        <button type="button"
+                                class="nppp-purge-btn"
+                                aria-label="<?php /* translators: %s: page URL */ echo esc_attr( sprintf( __( 'Purge %s', 'fastcgi-cache-purge-and-preload-nginx' ), $row['url'] ) ); ?>"
+                                data-url="<?php echo esc_attr( $row['url_encoded'] ); ?>">
+                            <span class="dashicons dashicons-trash" style="font-size:16px;margin:0;padding:0;" aria-hidden="true"></span>
+                            <?php echo esc_html__( 'Purge', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+
+                        <button type="button"
+                                class="nppp-preload-btn"
+                                aria-label="<?php /* translators: %s: page URL */ echo esc_attr( sprintf( __( 'Preload %s', 'fastcgi-cache-purge-and-preload-nginx' ), $row['url'] ) ); ?>"
+                                data-url="<?php echo esc_attr( $row['url_encoded'] ); ?>">
+                            <span class="dashicons dashicons-update" style="font-size:16px;margin:0;padding:0;" aria-hidden="true"></span>
+                            <?php echo esc_html__( 'Preload', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                        </button>
+                    </td>
+                </tr>
+            <?php endforeach;
+        endif; ?>
+        </tbody>
+    </table>
+    <?php
+    return ob_get_clean();
+}
+
 // Log and send error
 function nppp_log_and_send_error($error_message, $log_file_path) {
     if (!empty($log_file_path)) {
@@ -1208,6 +1330,55 @@ function nppp_preload_miss_batch_callback() {
     wp_send_json_success( array( 'queued' => count( $urls ) ) );
 }
 
+/**
+ * AJAX: live Varnish status of up to 50 table rows (Varnish-only mode, Advanced tab).
+ *
+ * Read-only: one lookup request per URL to the first configured Varnish endpoint, answered by the probe
+ * block of the Example VCL. The answer keeps the order of the request, so the page matches rows by index.
+ */
+function nppp_vo_probe_callback() {
+    if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_vo_probe_nonce' ) ) {
+        wp_send_json_error( 'Nonce verification failed.' );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( 'Permission denied.', 403 );
+    }
+    if ( ! function_exists( 'nppp_varnish_only_mode' ) || ! nppp_varnish_only_mode() || ! function_exists( 'nppp_varnish_probe_batch' ) ) {
+        wp_send_json_error( 'Varnish-only mode is not active.' );
+    }
+
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- every element is passed through esc_url_raw() below.
+    $posted = isset( $_POST['urls'] ) && is_array( $_POST['urls'] ) ? wp_unslash( $_POST['urls'] ) : array();
+    $force  = ! empty( $_POST['force'] ) && $_POST['force'] === '1';
+
+    $list = array();
+    foreach ( array_slice( array_values( $posted ), 0, nppp_varnish_probe_max_urls() ) as $candidate ) {
+        $list[] = is_string( $candidate ) ? esc_url_raw( $candidate ) : '';
+    }
+
+    if ( empty( $list ) ) {
+        wp_send_json_error( 'No URLs provided.' );
+    }
+
+    $probe   = nppp_varnish_probe_batch( array_values( array_filter( $list, 'strlen' ) ), $force );
+    $results = array();
+    foreach ( $list as $url ) {
+        $item = ( $url !== '' && isset( $probe['results'][ $url ] ) ) ? $probe['results'][ $url ] : array();
+
+        $results[] = array(
+            'state'  => isset( $item['state'] ) ? (string) $item['state'] : 'UNKNOWN',
+            'age'    => isset( $item['age'] ) ? $item['age'] : null,
+            'ttl'    => isset( $item['ttl'] ) ? $item['ttl'] : null,
+            'reason' => isset( $item['reason'] ) ? (string) $item['reason'] : '',
+        );
+    }
+
+    wp_send_json_success( array(
+        'status'  => (string) $probe['status'],
+        'results' => $results,
+    ) );
+}
+
 // Preload triggered from the Advanced tab
 function nppp_preload_cache_premium_callback() {
     // Verify nonce
@@ -1278,6 +1449,18 @@ function nppp_preload_cache_premium_callback() {
 
     if (($GLOBALS['nppp_last_notice_type'] ?? 'success') === 'error') {
         wp_send_json_error($output);
+    }
+
+    // Varnish-only mode: there is no Nginx cache file to look for. The scan below would search the scratch
+    // directory, find nothing and make the Advanced tab claim the page was bypassed. The row status comes
+    // from the live Varnish lookup (nppp-vo-advanced.js), not from this response.
+    if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() ) {
+        wp_send_json_success( array(
+            'message' => $output,
+            'cached'  => false,
+            'rg_used' => false,
+            'vo'      => true,
+        ) );
     }
 
     // Give enough headroom for PID wait + rg scan

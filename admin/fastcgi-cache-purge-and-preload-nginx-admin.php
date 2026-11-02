@@ -158,6 +158,7 @@ require_once dirname(__DIR__) . '/includes/compat-elementor.php';
 require_once dirname(__DIR__) . '/includes/compat-gutenberg.php';
 require_once dirname(__DIR__) . '/includes/compat-redis-cache.php';
 require_once dirname(__DIR__) . '/includes/compat-varnish.php';
+require_once dirname(__DIR__) . '/includes/varnish-probe.php';
 require_once dirname(__DIR__) . '/includes/compat-woocommerce.php';
 
 // Hook into well-known cache plugin purge events.
@@ -198,6 +199,7 @@ add_action('wp_ajax_nppp_load_premium_content', 'nppp_load_premium_content_callb
 add_action('wp_ajax_nppp_purge_cache_premium', 'nppp_purge_cache_premium_callback');
 add_action('wp_ajax_nppp_preload_cache_premium', 'nppp_preload_cache_premium_callback');
 add_action('wp_ajax_nppp_preload_miss_batch', 'nppp_preload_miss_batch_callback');
+add_action('wp_ajax_nppp_vo_probe', 'nppp_vo_probe_callback');
 add_action('wp_ajax_nppp_update_api_key_option', 'nppp_update_api_key_option');
 add_action('wp_ajax_nppp_update_default_reject_regex_option', 'nppp_update_default_reject_regex_option');
 add_action('wp_ajax_nppp_update_default_reject_extension_option', 'nppp_update_default_reject_extension_option');

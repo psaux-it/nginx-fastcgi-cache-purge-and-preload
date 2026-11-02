@@ -62,6 +62,14 @@ class Handler(BaseHTTPRequestHandler):
         cc = 'no-store' if self.path.startswith('/nostore') else 'public, max-age=300'
         self._send(200, 'page host=%s target=%s hit=%d\n' % (host, self.path, n), {'Cache-Control': cc})
 
+    # A VCL without the probe block passes the unknown NPPPROBE method to the origin (Varnish 7 and older).
+    # Counted apart from GET, so "the object count did not move" keeps meaning "Varnish answered from cache".
+    def do_NPPPROBE(self):
+        key = 'NPPPROBE ' + self.headers.get('Host', '') + self.path
+        with LOCK:
+            COUNTS[key] = COUNTS.get(key, 0) + 1
+        self._send(200, 'origin answered a probe-method request\n', {'Cache-Control': 'no-store'})
+
     # PURGE must never reach the origin through a correct VCL; if it does, say so loudly (the test asserts on 405).
     def do_PURGE(self):
         self._send(405, 'PURGE reached the origin (the VCL did not handle it)\n')
