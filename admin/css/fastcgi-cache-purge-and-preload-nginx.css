@@ -400,7 +400,9 @@ td.action, td.check {
    place above the table, independent of DataTables' responsive search/length DOM */
 .nppp-premium-refresh-wrap {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: 8px;
     margin-bottom: 10px;
 }
 
@@ -7262,9 +7264,13 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 .dtr-data.nppp-status.is-progress strong { color: #1d4ed8; font-weight: 700; }
 
 /* Column widths: the table keeps the Nginx layout, "Last crawled" and "Age" are short. */
-#nppp-premium-table[data-nppp-vo="1"] th:nth-child(1) { width: 42% !important; }
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(1) { width: 36% !important; }
 #nppp-premium-table[data-nppp-vo="1"] th:nth-child(2) { width: 15% !important; }
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(3) { width: 11% !important; }
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(4) { width: 10% !important; }
 #nppp-premium-table[data-nppp-vo="1"] th:nth-child(5) { width: 8% !important; }
+#nppp-premium-table[data-nppp-vo="1"] th:nth-child(6) { width: 20% !important; }
+#nppp-premium-table[data-nppp-vo="1"] td:last-child { white-space: nowrap; }
 #nppp-premium-table[data-nppp-vo="1"] td.nppp-cache-path { white-space: nowrap; color: #646970; }
 
 .nppp-vo-probe-notice {
