@@ -525,6 +525,9 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 [ 'Field' => __( 'Cloudflare Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                          'Value' => $settings['nppp_cloudflare_apo_sync']            ?? 'no' ],
                 [ 'Field' => __( 'Redis Object Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nppp_redis_cache_sync']               ?? 'no' ],
                 [ 'Field' => __( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),                                     'Value' => $settings['nppp_varnish_sync_enabled']           ?? 'no' ],
+                [ 'Field' => __( 'Varnish-only mode', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => function_exists( 'nppp_varnish_only_optin' )
+                    ? ( ( nppp_varnish_only_optin() ? 'yes' : 'no' ) . ( ( function_exists( 'nppp_varnish_only_locked' ) && nppp_varnish_only_locked() ) ? ' (NPPP_VARNISH_ONLY)' : '' ) . ( ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_optin() && ! nppp_varnish_only_mode() ) ? ' (not active: Varnish sync is OFF or has no endpoint)' : '' ) )
+                    : ( $settings['nppp_varnish_only_enabled'] ?? 'no' ) ],
                 [ 'Field' => __( 'Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),                                                          'Value' => $settings['nginx_cache_preload_enable_proxy']    ?? 'no' ],
                 [ 'Field' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
                 [ 'Field' => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_pctnorm_mode']            ?? 'off' ],
@@ -649,6 +652,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *     wp npp settings set nppp_varnish_endpoints "http://127.0.0.1:6081"
      *     wp npp settings set nppp_varnish_header "X-Control-Key: your-secret"
      *     wp npp settings set nppp_varnish_endpoints ""
+     *     wp npp settings set nppp_varnish_only_enabled yes
      *
      * @when after_wp_load
      */
@@ -1239,6 +1243,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_varnish_sync_enabled',
             'nppp_varnish_endpoints',
             'nppp_varnish_header',
+            'nppp_varnish_only_enabled',
         ];
         $is_optional_key = in_array( $key, $optional_keys, true );
         $clears_optional = ( $is_optional_key && array_key_exists( 2, $args ) );
@@ -1288,7 +1293,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_autopurge_posts',        'nppp_autopurge_terms',     'nppp_autopurge_plugins',
             'nppp_autopurge_themes',       'nppp_autopurge_3rdparty',  'nppp_http_purge_enabled',
             'nppp_rg_purge_enabled',       'nginx_cache_bypass_path_restriction',
-            'nppp_varnish_sync_enabled',
+            'nppp_varnish_sync_enabled',   'nppp_varnish_only_enabled',
             'nppp_related_include_home',   'nppp_related_include_category',
             'nppp_related_apply_manual',   'nppp_related_preload_after_manual',
             'nginx_cache_preload_feeds',
@@ -1307,6 +1312,11 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nginx_cache_wait_request',   'nginx_cache_read_timeout',
             'nginx_cache_preload_proxy_port',
         ];
+
+        // Varnish-only mode: NPPP_VARNISH_ONLY in wp-config.php is authoritative, do not store a value behind it.
+        if ( $key === 'nppp_varnish_only_enabled' && function_exists( 'nppp_varnish_only_locked' ) && nppp_varnish_only_locked() ) {
+            WP_CLI::error( __( 'Varnish-only mode is set by NPPP_VARNISH_ONLY in wp-config.php. Change it there.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        }
 
         if ( in_array( $key, $yes_no_keys, true ) ) {
             if ( ! in_array( $value, [ 'yes', 'no' ], true ) ) {
@@ -1542,6 +1552,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             nppp_state_delete( 'varnish_breaker' );
             nppp_state_delete( 'varnish_warn' );
         }
+        // Varnish-only mode switched: the breaker window and the recorded failure belong to the old mode.
+        if ( $key === 'nppp_varnish_only_enabled'
+            && $prev_value !== (string) $sanitized
+            && function_exists( 'nppp_varnish_only_reset_state' ) ) {
+            nppp_varnish_only_reset_state();
+        }
 
         // The control header value is a secret: show only the header name.
         $shown_value = ( $key === 'nppp_varnish_header' && (string) $sanitized !== '' )
@@ -1671,6 +1687,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_varnish_sync_enabled'           => __( 'Varnish / Vinyl Cache Sync', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_varnish_endpoints'              => __( 'Varnish / Vinyl Cache Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nppp_varnish_header'                 => __( 'Varnish / Vinyl Cache Control Header', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nppp_varnish_only_enabled'           => __( 'Varnish-only mode', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),

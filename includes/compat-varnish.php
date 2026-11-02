@@ -324,25 +324,60 @@ if ( ! function_exists( 'nppp_varnish_endpoints' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_varnish_only_locked' ) ) {
+    /**
+     * Is Varnish-only mode pinned by NPPP_VARNISH_ONLY in wp-config.php?
+     *
+     * While the constant is defined it is authoritative, in BOTH directions (true forces the request
+     * ON, false forces it OFF), and the Settings switch is shown but locked. Code that defines a
+     * constant is a deliberate deployment decision; a switch in the database must not undo it.
+     */
+    function nppp_varnish_only_locked(): bool {
+        return defined( 'NPPP_VARNISH_ONLY' );
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_only_optin' ) ) {
     /**
-     * Has the site owner asked for Varnish-only mode (constant or filter)?
+     * Has the site owner asked for Varnish-only mode (constant, Settings switch or filter)?
      *
      * This is only the REQUEST. Whether the mode is really active also depends on the Varnish sync
      * settings, see nppp_varnish_only_mode().
+     *
+     * Source, in order: the NPPP_VARNISH_ONLY constant when it is defined (see
+     * nppp_varnish_only_locked()), otherwise the Settings switch (nppp_varnish_only_enabled === 'yes').
+     * The nppp_varnish_only filter gets the last word, as before.
      *
      * The constant is read as a boolean the way WordPress people write it: true, 1, '1', 'true',
      * 'yes', 'on' enable it; false, 0, '0', 'false', 'no', 'off', '' and anything else do not.
      * A plain truthiness test would turn define( 'NPPP_VARNISH_ONLY', 'false' ) into ON.
      */
     function nppp_varnish_only_optin(): bool {
-        $on = false;
-
-        if ( defined( 'NPPP_VARNISH_ONLY' ) ) {
+        if ( nppp_varnish_only_locked() ) {
             $on = ( filter_var( NPPP_VARNISH_ONLY, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) === true );
+        } else {
+            $on = ( nppp_varnish_option( 'nppp_varnish_only_enabled' ) === 'yes' );
         }
 
         return (bool) apply_filters( 'nppp_varnish_only', $on );
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_only_reset_state' ) ) {
+    /**
+     * Forget the runtime state of the previous mode after the Varnish-only switch changed.
+     *
+     * The parked-endpoint window differs per mode (300 s vs 15 s) and a failure recorded in one mode
+     * says nothing about the other, so the breaker, the throttled warning and the wp-admin failure
+     * banner start clean. Shared by the Settings save, the AJAX switch and WP-CLI.
+     */
+    function nppp_varnish_only_reset_state(): void {
+        if ( ! function_exists( 'nppp_state_delete' ) ) {
+            return;
+        }
+        nppp_state_delete( 'varnish_breaker' );
+        nppp_state_delete( 'varnish_warn' );
+        nppp_state_delete( 'varnish_vo_failure' );
     }
 }
 
@@ -354,8 +389,9 @@ if ( ! function_exists( 'nppp_varnish_only_mode' ) ) {
      * a purge reduces to the Varnish PURGE / ban that the nppp_purged_* hooks already send, and the
      * nginx cache directory is neither required nor touched by a purge.
      *
-     * Strictly opt-in, so no existing install changes behaviour:
-     *   define( 'NPPP_VARNISH_ONLY', true );              // wp-config.php
+     * Strictly opt-in, so no existing install changes behaviour (default OFF everywhere):
+     *   Settings > Varnish / Vinyl Cache Sync > Varnish-only mode  (switch)
+     *   define( 'NPPP_VARNISH_ONLY', true );              // wp-config.php, locks the switch
      *   add_filter( 'nppp_varnish_only', '__return_true' );
      * and only while Varnish sync is ON with at least one valid endpoint. With sync OFF (or no
      * endpoint) the mode is never active, so a half-configured site keeps the stock nginx path
@@ -593,7 +629,7 @@ if ( ! function_exists( 'nppp_varnish_only_inactive_notice' ) ) {
             return;
         }
 
-        $txt = __( 'NPP Varnish-only mode is requested (NPPP_VARNISH_ONLY) but NOT active: turn ON "Varnish / Vinyl Cache Sync" in NPP Settings and add at least one valid endpoint. Until then NPP runs in the stock Nginx-cache mode and purges do not reach Varnish.', 'fastcgi-cache-purge-and-preload-nginx' );
+        $txt = __( 'NPP Varnish-only mode is requested but NOT active: turn ON "Varnish / Vinyl Cache Sync" in NPP Settings and add at least one valid endpoint (or switch Varnish-only mode off there). Until then NPP runs in the stock Nginx-cache mode and purges do not reach Varnish.', 'fastcgi-cache-purge-and-preload-nginx' );
 
         echo '<div class="notice notice-warning notice-nppp"><p>' . esc_html( $txt ) . '</p></div>';
     }

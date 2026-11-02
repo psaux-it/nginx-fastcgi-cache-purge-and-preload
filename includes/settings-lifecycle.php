@@ -245,6 +245,7 @@ function nppp_defaults_on_plugin_activation() {
         'nppp_varnish_sync_enabled'           => 'no',
         'nppp_varnish_endpoints'              => '',
         'nppp_varnish_header'                 => '',
+        'nppp_varnish_only_enabled'           => 'no',
         'nginx_cache_bypass_path_restriction' => 'no',
     );
 

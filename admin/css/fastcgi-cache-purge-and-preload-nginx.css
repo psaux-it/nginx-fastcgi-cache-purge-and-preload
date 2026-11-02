@@ -4838,6 +4838,88 @@ body.has-sticky-submit .nppp-scrollfab{
     cursor: not-allowed;
 }
 
+/* Varnish-only mode toggle (same look as the Varnish / Vinyl Cache Sync switch) */
+.nppp-onoffswitch-varnish-only {
+    position: relative;
+    overflow: hidden;
+    display: inline-block;
+}
+
+.nppp-onoffswitch-checkbox-varnish-only {
+    display: none;
+}
+
+.nppp-onoffswitch-label-varnish-only {
+    cursor: pointer;
+    display: inline-block;
+    position: relative;
+    width: 121px;
+    height: 30px;
+    font-weight: 600;
+    background: #ffffff;
+    border: 2px solid #f1f1f1;
+    transition: background-color 0.3s;
+}
+
+.nppp-onoffswitch-inner-varnish-only .nppp-on-varnish-only,
+.nppp-onoffswitch-inner-varnish-only .nppp-off-varnish-only {
+    position: absolute;
+    line-height: 30px;
+    font-size: 14px;
+    z-index: 2;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+}
+
+.nppp-onoffswitch-inner-varnish-only .nppp-on-varnish-only {
+    right: 18px;
+}
+
+.nppp-onoffswitch-inner-varnish-only .nppp-off-varnish-only {
+    left: 20px;
+    color: #23282d;
+}
+
+/* Handle: RED when OFF */
+.nppp-onoffswitch-switch-varnish-only {
+    display: inline-block;
+    position: absolute;
+    z-index: 1;
+    background: #ea1919;
+    width: 55px;
+    height: 24px;
+    top: 3px;
+    left: 3px;
+    transition: all 200ms cubic-bezier(0.445, 0.05, 0.55, 0.95);
+    transform: translateX(0px);
+}
+
+/* Checked: knob right, GREEN */
+#nppp_varnish_only_enabled:checked + .nppp-onoffswitch-label-varnish-only .nppp-onoffswitch-inner-varnish-only .nppp-on-varnish-only {
+    color: #23282d;
+}
+
+#nppp_varnish_only_enabled:checked + .nppp-onoffswitch-label-varnish-only .nppp-onoffswitch-switch-varnish-only {
+    width: 55px;
+    transform: translateX(60px);
+    background: #66b317;
+}
+
+.nppp-onoffswitch-checkbox-varnish-only + .nppp-onoffswitch-label-varnish-only .nppp-off-varnish-only {
+    display: block;
+}
+
+#nppp_varnish_only_enabled {
+    position: absolute;
+    left: -99em;
+}
+
+/* Locked by NPPP_VARNISH_ONLY in wp-config.php (checkbox is rendered disabled) */
+.nppp-onoffswitch-checkbox-varnish-only[disabled] + .nppp-onoffswitch-label-varnish-only {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Override WordPress 7.0 colored notice backgrounds — keep NPP notices stylish */
 .notice-nppp.notice-error,
 .notice-nppp.notice-warning,
@@ -7091,7 +7173,8 @@ body.nppp-f2b-modal-open { overflow: hidden; }
 #nppp-http-purge-queue-status-row td > p.description,
 #nppp-varnish-main-row td > p.description,
 #nppp-varnish-endpoints-row td > p.description,
-#nppp-varnish-header-row td > p.description {
+#nppp-varnish-header-row td > p.description,
+#nppp-varnish-only-row td > p.description {
     max-width: 67em;
     box-sizing: border-box;
     line-height: 1.5;

@@ -888,6 +888,37 @@ function nppp_varnish_sync_enabled_callback(): void {
     <?php
 }
 
+// Callback function for Varnish-only mode (ON / OFF switch). Locked (disabled) while NPPP_VARNISH_ONLY is defined.
+function nppp_varnish_only_enabled_callback(): void {
+    $locked = function_exists( 'nppp_varnish_only_locked' ) && nppp_varnish_only_locked();
+    if ( $locked ) {
+        // The constant decides; show what it decides.
+        $is_checked = function_exists( 'nppp_varnish_only_optin' ) && nppp_varnish_only_optin();
+    } else {
+        $options    = get_option( 'nginx_cache_settings', [] );
+        $is_checked = is_array( $options ) && isset( $options['nppp_varnish_only_enabled'] ) && $options['nppp_varnish_only_enabled'] === 'yes';
+    }
+    $checked  = $is_checked ? 'checked' : '';
+    $disabled = $locked ? 'disabled' : '';
+
+    ?>
+    <input type="checkbox"
+           name="nginx_cache_settings[nppp_varnish_only_enabled]"
+           class="nppp-onoffswitch-checkbox-varnish-only"
+           value="yes"
+           id="nppp_varnish_only_enabled"
+           <?php echo esc_attr( $checked ); ?>
+           <?php echo esc_attr( $disabled ); ?>>
+    <label class="nppp-onoffswitch-label-varnish-only" for="nppp_varnish_only_enabled">
+        <span class="nppp-onoffswitch-inner-varnish-only">
+            <span class="nppp-off-varnish-only"><?php esc_html_e( 'OFF', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+            <span class="nppp-on-varnish-only"><?php esc_html_e( 'ON', 'fastcgi-cache-purge-and-preload-nginx' ); ?></span>
+        </span>
+        <span class="nppp-onoffswitch-switch-varnish-only"></span>
+    </label>
+    <?php
+}
+
 // Callback function for Varnish / Vinyl Cache Sync endpoints (one per line)
 function nppp_varnish_endpoints_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );

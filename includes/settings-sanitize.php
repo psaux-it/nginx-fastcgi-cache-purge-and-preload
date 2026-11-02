@@ -699,6 +699,20 @@ function nppp_nginx_cache_settings_sanitize($input) {
             ? $nppp_vc_stored['nppp_varnish_header'] : '';
     }
 
+    // Varnish-only mode (Nginx has no cache of its own). A plain yes/no switch, EXCEPT while
+    // NPPP_VARNISH_ONLY is defined in wp-config.php: the switch is rendered disabled then, a disabled
+    // checkbox is never submitted, and the constant is authoritative anyway, so keep the stored value
+    // (and ignore a hand-crafted POST) instead of turning it into "no" on the next save.
+    if ( function_exists( 'nppp_varnish_only_locked' ) && nppp_varnish_only_locked() ) {
+        $sanitized_input['nppp_varnish_only_enabled'] =
+            ( isset( $nppp_vc_stored['nppp_varnish_only_enabled'] ) && $nppp_vc_stored['nppp_varnish_only_enabled'] === 'yes' )
+            ? 'yes' : 'no';
+    } else {
+        $sanitized_input['nppp_varnish_only_enabled'] =
+            ( isset( $input['nppp_varnish_only_enabled'] ) && $input['nppp_varnish_only_enabled'] === 'yes' )
+            ? 'yes' : 'no';
+    }
+
     // Sanitize bypass path restriction
     $sanitized_input['nginx_cache_bypass_path_restriction'] =
         ( isset( $input['nginx_cache_bypass_path_restriction'] ) && $input['nginx_cache_bypass_path_restriction'] === 'yes' )
@@ -840,6 +854,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
             || ( $nppp_prev_settings['nppp_varnish_header'] ?? '' ) !== ( $sanitized_input['nppp_varnish_header'] ?? '' ) ) ) {
         nppp_state_delete( 'varnish_breaker' );
         nppp_state_delete( 'varnish_warn' );
+    }
+
+    // Varnish-only mode switched: the parked-endpoint window and the recorded failure belong to the old mode.
+    if ( function_exists( 'nppp_varnish_only_reset_state' )
+        && ( $nppp_prev_settings['nppp_varnish_only_enabled'] ?? 'no' ) !== ( $sanitized_input['nppp_varnish_only_enabled'] ?? 'no' ) ) {
+        nppp_varnish_only_reset_state();
     }
 
     return $sanitized_input;

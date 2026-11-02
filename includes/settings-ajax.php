@@ -368,6 +368,37 @@ function nppp_update_varnish_sync_option(): void {
     nppp_save_toggle_option( 'nppp-update-varnish-sync-option', 'varnish_sync', 'nppp_varnish_sync_enabled' );
 }
 
+// AJAX handler Varnish-only mode
+function nppp_update_varnish_only_option(): void {
+    nppp_ajax_auth( 'nppp-update-varnish-only-option' );
+
+    // A constant in wp-config.php is authoritative: the switch is locked, refuse to change the stored value behind it.
+    if ( function_exists( 'nppp_varnish_only_locked' ) && nppp_varnish_only_locked() ) {
+        wp_send_json_error(
+            __( 'Varnish-only mode is set by NPPP_VARNISH_ONLY in wp-config.php. Change it there.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            409
+        );
+    }
+
+    $raw   = sanitize_text_field( wp_unslash( $_POST['varnish_only'] ?? '' ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- nonce verified in nppp_ajax_auth()
+    $value = ( $raw === 'yes' ) ? 'yes' : 'no';
+
+    $opts = get_option( 'nginx_cache_settings', [] );
+    if ( ! is_array( $opts ) ) {
+        $opts = [];
+    }
+    $prev_value                         = (string) ( $opts['nppp_varnish_only_enabled'] ?? 'no' );
+    $opts['nppp_varnish_only_enabled'] = $value;
+    update_option( 'nginx_cache_settings', $opts );
+
+    // The settings sanitizer is not attached on AJAX requests, so mirror its reset here.
+    if ( $prev_value !== $value && function_exists( 'nppp_varnish_only_reset_state' ) ) {
+        nppp_varnish_only_reset_state();
+    }
+
+    wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+}
+
 // AJAX handler RG Purge
 function nppp_update_rg_purge_option(): void {
     // Verify nonce

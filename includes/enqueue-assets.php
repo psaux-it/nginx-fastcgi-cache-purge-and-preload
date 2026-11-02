@@ -138,6 +138,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
     $update_http_purge_option_nonce = wp_create_nonce('nppp-update-http-purge-option');
     // Create a nonce for Varnish / Vinyl Cache Sync toggle
     $update_varnish_sync_option_nonce = wp_create_nonce('nppp-update-varnish-sync-option');
+    $update_varnish_only_option_nonce = wp_create_nonce('nppp-update-varnish-only-option');
     // Create a nonce for Ripgrep Turbo Purge toggle
     $update_rg_purge_option_nonce = wp_create_nonce('nppp-update-rg-purge-option');
 
@@ -181,6 +182,7 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         'pctnorm_nonce'                => wp_create_nonce('nppp-update-pctnorm-mode'),
         'http_purge_nonce'             => $update_http_purge_option_nonce,
         'varnish_sync_nonce'           => $update_varnish_sync_option_nonce,
+        'varnish_only_nonce'           => $update_varnish_only_option_nonce,
         'rg_purge_nonce'               => $update_rg_purge_option_nonce,
         'bypass_pr_nonce'              => wp_create_nonce( 'nppp-update-bypass-path-restriction' ),
         'dismiss_vary_nonce'           => wp_create_nonce( 'nppp-dismiss-vary-notice' ),

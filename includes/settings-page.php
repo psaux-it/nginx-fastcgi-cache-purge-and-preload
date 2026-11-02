@@ -463,7 +463,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address below, before any preload starts, so both layers stay aligned. With an Nginx cache, a Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'No Nginx cache (Nginx → Varnish → Apache / PHP-FPM)? Add define( \'NPPP_VARNISH_ONLY\', true ); to wp-config.php. NPP then purges and preloads through Varnish only. Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'No Nginx cache (Nginx → Varnish → Apache / PHP-FPM)? Turn on Varnish-only mode below. NPP then purges and preloads through Varnish only. Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. If you use HTTP Purge, also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -491,6 +491,28 @@ function nppp_nginx_cache_settings_page() {
                                 <?php nppp_varnish_header_callback(); ?>
                                 <p class="description">
                                     <?php echo esc_html__( 'Optional control header sent with every PURGE, as Name: value (e.g. X-Control-Key: secret) for a VCL that requires a key. Stored in plain text in the plugin settings, like the API key. Never written to the log.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                            </td>
+                        </tr>
+                        <tr valign="top" id="nppp-varnish-only-row">
+                            <th scope="row">
+                                <span class="dashicons dashicons-superhero-alt"></span>
+                                <?php echo esc_html__( 'Varnish-only mode', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <div class="nppp-auto-preload-container">
+                                    <div class="nppp-onoffswitch-varnish-only">
+                                        <?php nppp_varnish_only_enabled_callback(); ?>
+                                    </div>
+                                </div>
+                                <?php if ( function_exists( 'nppp_varnish_only_locked' ) && nppp_varnish_only_locked() ) : ?>
+                                <p class="description">
+                                    <strong><?php echo esc_html__( 'Locked by wp-config.php.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                    <?php echo esc_html__( 'NPPP_VARNISH_ONLY is defined, so the constant decides and this switch only shows its value. Change or remove define( \'NPPP_VARNISH_ONLY\', true ); in wp-config.php to use the switch.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <?php endif; ?>
+                                <p class="description">
+                                    <?php echo esc_html__( 'For setups where Nginx has NO cache of its own and Varnish / Vinyl Cache is the only layer (Nginx → Varnish → Apache / PHP-FPM). Purge, Purge All and Preload then go through Varnish only, and its result is the purge result. Leave it OFF when Nginx has a cache. It takes effect only while the sync switch above is ON with at least one valid address.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
