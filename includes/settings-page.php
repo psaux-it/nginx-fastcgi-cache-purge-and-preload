@@ -451,7 +451,7 @@ function nppp_nginx_cache_settings_page() {
                                 if ( $nppp_vo_active ) : ?>
                                 <p class="description">
                                     <strong><?php echo esc_html__( 'Varnish-only mode is ACTIVE.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                    <?php echo esc_html__( 'Nginx has no cache here, so Varnish / Vinyl Cache is the only layer NPP purges. Its result is the purge result: a failure is shown as a notice (and as a banner in wp-admin until the next successful purge). "Nginx Cache Directory" is only the scratch space of Preload; it must be a real, empty directory PHP can write to.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Nginx has no cache here, so Varnish / Vinyl Cache is the only layer NPP purges. Its result is the purge result: a failure is shown as a notice (and as a banner on the NPP pages until the next successful purge). "Nginx Cache Directory" is only the scratch space of Preload; it must be a real, empty directory PHP can write to.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <?php elseif ( $nppp_vo_request ) : ?>
                                 <p class="description">

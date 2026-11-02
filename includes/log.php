@@ -137,6 +137,7 @@ function nppp_display_admin_notice($type, $message, $log_message = true, $displa
             'nppp_update_pctnorm_mode'                     => 'nppp-update-pctnorm-mode',
             'nppp_update_http_purge_option'                => 'nppp-update-http-purge-option',
             'nppp_update_varnish_sync_option'              => 'nppp-update-varnish-sync-option',
+            'nppp_update_varnish_only_option'              => 'nppp-update-varnish-only-option',
             'nppp_update_rg_purge_option'                  => 'nppp-update-rg-purge-option',
             'nppp_update_bypass_path_restriction'          => 'nppp-update-bypass-path-restriction',
             'nppp_update_preload_feeds_option'             => 'nppp-update-preload-feeds-option',

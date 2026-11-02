@@ -582,16 +582,41 @@ if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_varnish_on_own_screen' ) ) {
+    /**
+     * True only on NPP's own admin screens: the same allowlist nppp_display_admin_notice() applies in log.php.
+     *
+     * NPP never prints notices on other wp-admin screens (Dashboard, Plugins, Posts ...). The two
+     * Varnish-only notices below use this as a cheap first gate so they neither render nor run their
+     * state lookups anywhere else. Keep the ids in sync with $nppp_own_screens in log.php.
+     */
+    function nppp_varnish_on_own_screen(): bool {
+        if ( ! function_exists( 'get_current_screen' ) ) {
+            return false;
+        }
+
+        $screen = get_current_screen();
+
+        return $screen && in_array( $screen->id, array( 'settings_page_nginx_cache_settings', 'admin_page_nppp-setup' ), true );
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_only_admin_notice' ) ) {
     /**
-     * wp-admin banner while the last Varnish-only purge did not fully succeed.
+     * Banner on NPP's own screens while the last Varnish-only purge did not fully succeed.
      * Cleared by the next fully successful purge, or after 7 days.
+     *
+     * Rendered through nppp_display_admin_notice() like every other NPP notice, so it follows the
+     * plugin's screen allowlist and markup (notice-nppp). Never logged here: it fires on every page load.
      */
     function nppp_varnish_only_admin_notice(): void {
+        if ( ! nppp_varnish_on_own_screen() ) {
+            return;
+        }
         if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
             return;
         }
-        if ( ! function_exists( 'nppp_state_get' ) || ! nppp_varnish_only_mode() ) {
+        if ( ! function_exists( 'nppp_state_get' ) || ! function_exists( 'nppp_display_admin_notice' ) || ! nppp_varnish_only_mode() ) {
             return;
         }
 
@@ -608,9 +633,7 @@ if ( ! function_exists( 'nppp_varnish_only_admin_notice' ) ) {
             ( ! empty( $f['detail'] ) && is_string( $f['detail'] ) ) ? ': ' . $f['detail'] : ''
         );
 
-        // notice-nppp: the NPP settings page hides every admin notice without this class
-        // (nppp_manage_admin_notices()), and that page is where the admin needs to see this.
-        echo '<div class="notice notice-error notice-nppp"><p>' . esc_html( $txt ) . '</p></div>';
+        nppp_display_admin_notice( 'error', $txt, false, true );
     }
 }
 
@@ -622,16 +645,19 @@ if ( ! function_exists( 'nppp_varnish_only_inactive_notice' ) ) {
      * Nginx-cache path and reports a missing cache path, which looks like a plugin bug. Say why.
      */
     function nppp_varnish_only_inactive_notice(): void {
+        if ( ! nppp_varnish_on_own_screen() ) {
+            return;
+        }
         if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
             return;
         }
-        if ( ! nppp_varnish_only_optin() || nppp_varnish_only_mode() ) {
+        if ( ! function_exists( 'nppp_display_admin_notice' ) || ! nppp_varnish_only_optin() || nppp_varnish_only_mode() ) {
             return;
         }
 
         $txt = __( 'NPP Varnish-only mode is requested but NOT active: turn ON "Varnish / Vinyl Cache Sync" in NPP Settings and add at least one valid endpoint (or switch Varnish-only mode off there). Until then NPP runs in the stock Nginx-cache mode and purges do not reach Varnish.', 'fastcgi-cache-purge-and-preload-nginx' );
 
-        echo '<div class="notice notice-warning notice-nppp"><p>' . esc_html( $txt ) . '</p></div>';
+        nppp_display_admin_notice( 'warning', $txt, false, true );
     }
 }
 

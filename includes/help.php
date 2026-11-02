@@ -624,7 +624,7 @@ fastcgi_cache_key $cache_purge_key;</pre>
                         <ul>
                             <li><strong>Purge and Purge All</strong> send the Varnish <code>PURGE</code> / host-wide ban and nothing else: no Nginx cache directory is probed, so there is no "ERROR PATH" for a cache that does not exist.</li>
                             <li><strong>Preload</strong> still crawls your public URLs through Varnish and warms it. The directory set as <strong>Nginx Cache Directory</strong> is only the crawler's scratch space here: set it to a real, <em>empty</em>, persistent directory that PHP can read and write (for example <code>/var/cache/npp-varnish-only</code>, not <code>/dev/shm</code>, which is cleared at reboot). On aaPanel with <code>open_basedir</code>, add that directory to it.</li>
-                            <li><strong>Results are visible.</strong> Varnish is the only layer, so its result is the purge result: a success, partial warning or error notice on manual actions, the log for automatic ones, and a banner in wp-admin after a failure that clears on the next fully successful purge.</li>
+                            <li><strong>Results are visible.</strong> Varnish is the only layer, so its result is the purge result: a success, partial warning or error notice on manual actions, the log for automatic ones, and a banner on the NPP pages after a failure that clears on the next fully successful purge.</li>
                             <li><strong>Not applicable.</strong> The Advanced tab lists Nginx cache files and the Status tab cache cards (hits, coverage) read the Nginx cache, so neither is meaningful in this mode. The "cache is empty" and cache-key-regex warnings are not shown.</li>
                         </ul>
 

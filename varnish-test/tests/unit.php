@@ -832,14 +832,28 @@ if ( in_array( $S, [ 'varnishonly', 'varnishonly2', 'varnishonly3' ], true ) ) {
 
     // V7 admin banner appears while the record exists, only for admins, only in the mode; clears after success
     if ( ! function_exists( 'current_user_can' ) ) { function current_user_can( $c ) { return ! empty( $GLOBALS['VO_ADMIN'] ); } }
-    $GLOBALS['VO_ADMIN'] = true; ob_start(); nppp_varnish_only_admin_notice(); $html = ob_get_clean();
-    chk( strpos( $html, 'notice-error' ) !== false && strpos( $html, 'did not fully succeed' ) !== false, 'V7 admin banner shown while a failure record exists', $html );
-    $GLOBALS['VO_ADMIN'] = false; ob_start(); nppp_varnish_only_admin_notice(); $html = ob_get_clean();
-    chk( $html === '', 'V7 banner hidden for non-admins' );
+    // The banner must reach the screen through the plugin's own renderer (nppp_display_admin_notice()), never by echoing.
+    $vn = function ( callable $fn ): array {
+        $before = count( $GLOBALS['VT']['notice_rows'] ?? [] );
+        ob_start(); $fn(); $echo = (string) ob_get_clean();
+        return [ $echo, array_slice( $GLOBALS['VT']['notice_rows'] ?? [], $before ) ];
+    };
+    $GLOBALS['VO_ADMIN'] = true; [ $echo, $rows ] = $vn( 'nppp_varnish_only_admin_notice' );
+    chk( $echo === '' && count( $rows ) === 1 && $rows[0][0] === 'error' && strpos( $rows[0][1], 'did not fully succeed' ) !== false, 'V7 admin banner shown (error, via nppp_display_admin_notice) while a failure record exists', json_encode( $rows ) . $echo );
+    chk( count( $rows ) === 1 && $rows[0][2] === false && $rows[0][3] === true, 'V7 banner is shown but never logged (it fires on every page load)', json_encode( $rows ) );
+    foreach ( [ 'dashboard', 'plugins', 'edit-post', 'options-general' ] as $scr ) {
+        $GLOBALS['VT_SCREEN'] = $scr; [ $echo, $rows ] = $vn( 'nppp_varnish_only_admin_notice' );
+        chk( $echo === '' && $rows === [], "V7 banner hidden on the '$scr' screen (NPP notices stay on NPP's own pages)", json_encode( $rows ) . $echo );
+    }
+    $GLOBALS['VT_SCREEN'] = 'admin_page_nppp-setup'; [ $echo, $rows ] = $vn( 'nppp_varnish_only_admin_notice' );
+    chk( count( $rows ) === 1, 'V7 banner also follows the plugin allowlist on the setup screen', json_encode( $rows ) );
+    unset( $GLOBALS['VT_SCREEN'] );
+    $GLOBALS['VO_ADMIN'] = false; [ $echo, $rows ] = $vn( 'nppp_varnish_only_admin_notice' );
+    chk( $echo === '' && $rows === [], 'V7 banner hidden for non-admins' );
     $GLOBALS['VO_ADMIN'] = true; vt_reset(); vt_home( 'http://vo.test' ); vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => 'http://vo1.test:6081' ] );
     nppp_state_set( 'varnish_vo_failure', [ 'at' => time(), 'status' => 'failed', 'scope' => 'all', 'detail' => 'unreachable: 1' ], 600 );
-    ob_start(); nppp_varnish_only_admin_notice(); $html = ob_get_clean();
-    chk( $html === '', 'V7 banner hidden when the mode is not active (stock installs never see it)' );
+    [ $echo, $rows ] = $vn( 'nppp_varnish_only_admin_notice' );
+    chk( $echo === '' && $rows === [], 'V7 banner hidden when the mode is not active (stock installs never see it)' );
     $vx( [ 's7.test' ] ); $optin(); nppp_state_set( 'varnish_vo_failure', [ 'at' => time(), 'status' => 'failed', 'scope' => 'all', 'detail' => '' ], 600 );
     nppp_purge_single( '/dev/shm/x', 'http://vo.test/post-1/', true );
     chk( nppp_state_get( 'varnish_vo_failure' ) === null || nppp_state_get( 'varnish_vo_failure' ) === false, 'V7 next fully successful purge clears the record' );
@@ -877,6 +891,12 @@ if ( in_array( $S, [ 'varnishonly', 'varnishonly2', 'varnishonly3' ], true ) ) {
     chk( substr_count( $pl, "nppp_varnish_only_report( '" ) === 1, 'V12 preload.php has exactly one report call' );
     chk( substr_count( $pl, '$nppp_vo' ) >= 5, 'V12 preload.php success/error messages are mode-aware' );
     chk( strpos( $cv, "add_action( 'admin_notices', 'nppp_varnish_only_admin_notice' );" ) !== false, 'V12 admin banner is registered' );
+    chk( strpos( $cv, "echo '<div class=\"notice" ) === false && strpos( $cv, 'echo \'<div class="notice' ) === false, 'V12 compat-varnish.php prints no notice markup itself (notices go through nppp_display_admin_notice())' );
+    $lg = file_get_contents( $d . '/log.php' ); $ea = file_get_contents( $d . '/enqueue-assets.php' );
+    foreach ( [ 'nppp_update_varnish_sync_option' => 'nppp-update-varnish-sync-option', 'nppp_update_varnish_only_option' => 'nppp-update-varnish-only-option' ] as $act => $nonce ) {
+        chk( strpos( $lg, "'$act'" ) !== false && strpos( $lg, "'$nonce'" ) !== false, "V12 log.php AJAX allowlist knows $act" );
+        chk( strpos( $ea, "wp_create_nonce('$nonce')" ) !== false, "V12 enqueue-assets.php creates the $nonce nonce the allowlist expects" );
+    }
     chk( substr_count( $cv, 'nppp_varnish_run_count(' ) >= 7, 'V12 all outcome kinds are counted (sent / parked / budget / exception)' );
     }   // varnishonly2
 
@@ -909,7 +929,13 @@ if ( in_array( $S, [ 'varnishonly4', 'varnishonly5', 'varnishonly6', 'varnishonl
     ] as $f => $impl ) {
         if ( ! function_exists( $f ) ) { $GLOBALS['H_IMPL'][ $f ] = $impl; eval( "function $f( ...\$a ) { return (\$GLOBALS['H_IMPL']['$f'])( ...\$a ); }" ); }
     }
-    $html = function ( callable $fn ): string { ob_start(); $fn(); return (string) ob_get_clean(); };
+    // What a callback would put on screen: direct output plus every notice handed to nppp_display_admin_notice() as "type: message".
+    $html = function ( callable $fn ): string {
+        $before = count( $GLOBALS['VT']['notice_rows'] ?? [] );
+        ob_start(); $fn(); $echo = (string) ob_get_clean();
+        $new = array_slice( $GLOBALS['VT']['notice_rows'] ?? [], $before );
+        return $echo . implode( "\n", array_map( fn( $r ) => $r[0] . ': ' . $r[1], $new ) );
+    };
 
     if ( $S === 'varnishonly4' ) {   // constant = true
         define( 'NPPP_VARNISH_ONLY', true );
@@ -919,7 +945,10 @@ if ( in_array( $S, [ 'varnishonly4', 'varnishonly5', 'varnishonly6', 'varnishonl
         $vo( 'http://hd1.test:6081', 'no' );
         chk( nppp_varnish_only_optin() === true && nppp_varnish_only_mode() === false, 'H1 constant true but sync OFF => requested, not active' );
         $o = $html( 'nppp_varnish_only_inactive_notice' );
-        chk( strpos( $o, 'notice-nppp' ) !== false && strpos( $o, 'NOT active' ) !== false, 'H2 requested-but-inactive mode raises a visible warning (notice-nppp)', $o );
+        chk( strpos( $o, 'warning: ' ) === 0 && strpos( $o, 'NOT active' ) !== false, 'H2 requested-but-inactive mode raises a visible warning (rendered by nppp_display_admin_notice => notice-nppp)', $o );
+        $GLOBALS['VT_SCREEN'] = 'dashboard';
+        chk( $html( 'nppp_varnish_only_inactive_notice' ) === '', 'H2 the warning never shows on the Dashboard or any other non-NPP screen' );
+        unset( $GLOBALS['VT_SCREEN'] );
         $vo( '', 'yes' );
         chk( nppp_varnish_only_mode() === false && strpos( $html( 'nppp_varnish_only_inactive_notice' ), 'NOT active' ) !== false, 'H2 sync ON but no endpoint => same warning' );
         $GLOBALS['H_ADMIN'] = false;
@@ -945,13 +974,16 @@ if ( in_array( $S, [ 'varnishonly4', 'varnishonly5', 'varnishonly6', 'varnishonl
         chk( nppp_varnish_only_mode() === true, 'H4 constant "yes" enables the mode' );
         nppp_state_set( 'varnish_vo_failure', [ 'at' => time(), 'status' => 'failed', 'scope' => 'all', 'detail' => 'unreachable: 1' ], 600 );
         $o = $html( 'nppp_varnish_only_admin_notice' );
-        chk( strpos( $o, 'notice-error' ) !== false && strpos( $o, 'notice-nppp' ) !== false, 'H5 failure banner carries notice-nppp (the settings page hides every other notice)', $o );
+        chk( strpos( $o, 'error: ' ) === 0, 'H5 failure banner is an error notice rendered by nppp_display_admin_notice (which adds notice-nppp)', $o );
+        $GLOBALS['VT_SCREEN'] = 'dashboard';
+        chk( $html( 'nppp_varnish_only_admin_notice' ) === '', 'H5 failure banner hidden on the Dashboard and other non-NPP screens' );
+        unset( $GLOBALS['VT_SCREEN'] );
         chk( strpos( $o, 'unreachable: 1' ) !== false, 'H5 banner shows the failure detail', $o );
         $GLOBALS['H_ADMIN'] = false;
         chk( $html( 'nppp_varnish_only_admin_notice' ) === '', 'H5 banner hidden for non-admins' );
         // the CSS rule that hides notices on the NPP pages, read from the plugin: this is why the class is required
         $en = file_get_contents( $d . '/enqueue-assets.php' );
-        chk( strpos( $en, '.notice.notice-nppp' ) !== false && strpos( $en, 'display: none !important' ) !== false, 'H5 enqueue-assets.php still hides notices without notice-nppp (so the class above is required)' );
+        chk( strpos( $en, '.notice.notice-nppp' ) !== false && strpos( $en, 'display: none !important' ) !== false, 'H5 enqueue-assets.php still hides notices without notice-nppp (nppp_display_admin_notice() renders with it)' );
     }
 
     if ( $S === 'varnishonly7' ) {   // real nppp_pre_checks() cut out of pre-checks.php, stubbed collaborators; texts

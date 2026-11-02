@@ -257,6 +257,11 @@ function nppp_display_admin_notice( $type, $message, $log = true, $show = true )
     $GLOBALS['VT']['notice_rows'][] = [ $type, $message, $log, $show ];
 }
 
+/* The current admin screen. Tests switch it with $GLOBALS['VT_SCREEN']; the default is NPP's own settings screen. */
+function get_current_screen() {
+    return (object) [ 'id' => $GLOBALS['VT_SCREEN'] ?? 'settings_page_nginx_cache_settings' ];
+}
+
 /* ============================================================================================================
  * HTTP API
  * ========================================================================================================= */
