@@ -230,6 +230,41 @@ if (! function_exists('nppp_get_wget_compatibility')) {
     }
 }
 
+// Memo for "is a readable nginx.conf there?". nppp_get_nginx_conf_paths() always forks
+// `nginx -V`, and this question is asked on every admin and front-end page load of a
+// manage_options user (admin bar, mobile FAB, dashboard widget via Setup::nppp_needs_setup(),
+// plus the requirements gate) while the answer is static for the life of an install.
+// Remember the conf path that answered yes and re-verify it with a plain stat (no fork) on
+// every call. Positive only: a miss always falls through to the full live lookup, so a newly
+// installed nginx is noticed at once. The TTL is only a periodic re-validation against the
+// live lookup (e.g. nginx removed but a non-standard conf left behind), never a freshness
+// requirement for a hit. The diagnostic caller (honor_assume=false, skip_signal_probe=false)
+// never uses this.
+if (! function_exists('nppp_nginx_conf_hit_key')) {
+    function nppp_nginx_conf_hit_key(): string {
+        return 'nppp_nginx_conf_hit_' . md5('nppp');
+    }
+}
+
+if (! function_exists('nppp_nginx_conf_hit_verified')) {
+    function nppp_nginx_conf_hit_verified($wp_filesystem): bool {
+        $path = get_transient(nppp_nginx_conf_hit_key());
+        return is_string($path) && $path !== ''
+            && $wp_filesystem->exists($path) && $wp_filesystem->is_readable($path);
+    }
+}
+
+// Never remember the Assume-Nginx dummy: strict callers must only ever be answered by a real conf.
+if (! function_exists('nppp_nginx_conf_hit_remember')) {
+    function nppp_nginx_conf_hit_remember(array $paths): void {
+        $path = (string) reset($paths);
+        if ($path === '' || strpos(basename($path), 'dummy-nginx.conf') !== false) {
+            return;
+        }
+        set_transient(nppp_nginx_conf_hit_key(), $path, 5 * MINUTE_IN_SECONDS);
+    }
+}
+
 // Nginx detector used by Setup.
 if (! function_exists('nppp_precheck_nginx_detected')) {
     function nppp_precheck_nginx_detected(bool $honor_assume = true, bool $skip_signal_probe = false): bool {
@@ -239,8 +274,13 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
             if (function_exists('nppp_initialize_wp_filesystem')) {
                 $fs = nppp_initialize_wp_filesystem();
                 if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
+                    // Known-good conf still readable: answer with a stat, no `nginx -V` fork.
+                    if (nppp_nginx_conf_hit_verified($fs)) {
+                        return true;
+                    }
                     $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
                     if (!empty($paths)) {
+                        nppp_nginx_conf_hit_remember($paths);
                         return true;
                     }
                 }
@@ -266,8 +306,12 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
             if (function_exists('nppp_initialize_wp_filesystem')) {
                 $fs = nppp_initialize_wp_filesystem();
                 if ($fs && function_exists('nppp_get_nginx_conf_paths')) {
+                    if (nppp_nginx_conf_hit_verified($fs)) {
+                        return true;
+                    }
                     $paths = nppp_get_nginx_conf_paths($fs, $honor_assume);
                     if (!empty($paths)) {
+                        nppp_nginx_conf_hit_remember($paths);
                         return true;
                     }
                 }
@@ -298,12 +342,11 @@ if (! function_exists('nppp_precheck_nginx_detected')) {
         // (honor_assume=false, skip_signal_probe=false) that needs the
         // real signal for its UI row.
         if (!$signal_hit && function_exists('shell_exec')) {
-            $test_output = shell_exec('echo "Test"');
-            if (trim((string) $test_output) === "Test") {
-                $nginx_bin = trim((string) shell_exec('command -v nginx 2>/dev/null'));
-                if (!empty($nginx_bin)) {
-                    $signal_hit = true;
-                }
+            // `command -v` alone answers this. A blocked shell_exec returns null, which is an
+            // empty path and no hit, the same end result the former `echo "Test"` pre-check had.
+            $nginx_bin = trim((string) shell_exec('command -v nginx 2>/dev/null'));
+            if (!empty($nginx_bin)) {
+                $signal_hit = true;
             }
         }
 
@@ -1494,7 +1537,10 @@ if (! function_exists('nppp_detect_vary_issue')) {
         $vary_gzip     = false;
         $vary_identity = false;
 
-        if (function_exists('wp_remote_head') && function_exists('home_url') && function_exists('add_query_arg')) {
+        // With zlib.output_compression on, the verdict is already decided: rc1 is true and rc2
+        // is false whatever the headers say (see below), and the probe results are not exposed
+        // anywhere else. Skip both blocking loopback HEADs (up to 3s each).
+        if (!$zlib_on && function_exists('wp_remote_head') && function_exists('home_url') && function_exists('add_query_arg')) {
             $token    = substr(dechex(hrtime(true)), -10);
             $bust_url = add_query_arg(['s' => 'nppp-vary-' . $token, '_nppp' => $token], home_url('/'));
 
