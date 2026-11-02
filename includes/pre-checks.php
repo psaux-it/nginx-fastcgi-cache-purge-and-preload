@@ -997,8 +997,11 @@ function nppp_requirements_first_failure(): ?string {
         return 'shell_funcs';
     }
 
-    // Verify shell_exec is not silently blocked
-    if (trim((string) shell_exec('echo "Test"')) !== 'Test') {
+    // Verify shell_exec is not silently blocked. The single-shell toolset probe is
+    // that check: its sentinel only comes back when shell_exec really ran a script.
+    // The result is cached for 60s together with the toolset state, so this costs
+    // no extra fork.
+    if (nppp_shell_toolset_state() === null) {
         return 'shell_exec';
     }
 
