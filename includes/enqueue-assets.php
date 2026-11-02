@@ -243,24 +243,34 @@ function nppp_is_dockerized() {
         // List of commands to check
         $commands_to_check = ['ps', 'grep', 'awk', 'sort', 'uniq', 'sed', 'nohup', 'wget'];
 
-        // Initialize the missing commands array
-        $missing_commands = [];
+        if (!function_exists('shell_exec')) {
+            // No shell at all: every command is unusable.
+            $missing_commands = $commands_to_check;
+        } else {
+            // One shell for the whole list instead of one fork per command.
+            // The sentinel proves the script really ran, so a failed spawn can never be
+            // mistaken for "every command is missing". The command names above are
+            // hardcoded, so nothing here needs escaping.
+            $sentinel = '__NPPP_CMD_CHECK_OK__';
+            $script   = 'for c in ' . implode(' ', $commands_to_check)
+                      . '; do command -v "$c" >/dev/null 2>&1 || echo "$c"; done; echo ' . $sentinel;
+            $output   = shell_exec($script);
+            $lines    = array_map('trim', explode("\n", (string) $output));
 
-        // Loop through each command and check if it exists
-        foreach ($commands_to_check as $command) {
-            // Execute 'command -v' to check if the command exists in the shell
-            $result = function_exists( 'shell_exec' ) ? shell_exec( "command -v {$command}" ) : null;
-
-            // If the result is empty, the command doesn't exist
-            if (empty($result)) {
-                $missing_commands[] = $command;
+            if (!in_array($sentinel, $lines, true)) {
+                // Could not measure. Unknown is not "missing": do not cache and do not
+                // report anything, the next request measures again.
+                return [];
             }
+
+            // Every line the loop printed is a command that was not found.
+            $missing_commands = array_values(array_intersect($commands_to_check, $lines));
         }
 
-        // Cache for 5 second.
-        // Critical shell commands must reflect the real system state on every request.
-        // A long transient here would leave the plugin in wrong state.
-        set_transient($transient_key, $missing_commands, HOUR_IN_SECONDS);
+        // Cache for 60 seconds: short enough to follow the real system state
+        // (a removed or newly installed command is noticed within a minute),
+        // long enough that the shell check does not run on every request.
+        set_transient($transient_key, $missing_commands, MINUTE_IN_SECONDS);
 
         // Keep wget compatibility cache in sync with command availability refresh.
         delete_transient('nppp_wget_compatibility_' . md5($static_key_base));
