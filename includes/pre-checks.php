@@ -153,6 +153,42 @@ if (! function_exists('nppp_get_cron_reliability_short_label')) {
     }
 }
 
+// Classify the raw `wget --version` text against what NPP needs (GNU Wget 1.x >= 1.16).
+// Pure function: no I/O, so the single-shell toolset probe and the standalone
+// fallback below can never disagree about what counts as compatible.
+if (! function_exists('nppp_classify_wget_version_output')) {
+    function nppp_classify_wget_version_output(string $version_output): array {
+        $first_line = trim((string) strtok($version_output, "\n"));
+
+        if (stripos($first_line, 'GNU Wget2') !== false || stripos($version_output, 'GNU Wget2') !== false) {
+            return ['ok' => false, 'reason' => 'wget2'];
+        }
+
+        if (stripos($version_output, 'busybox') !== false || stripos($version_output, 'toybox') !== false) {
+            return ['ok' => false, 'reason' => 'busybox_toybox'];
+        }
+
+        if (stripos($first_line, 'GNU Wget') === false) {
+            return ['ok' => false, 'reason' => 'non_gnu'];
+        }
+
+        $version = '';
+        if (preg_match('/GNU\s+Wget\s+([0-9]+(?:\.[0-9]+){1,2})/i', $first_line, $matches)) {
+            $version = $matches[1];
+        }
+
+        if ($version === '') {
+            return ['ok' => false, 'reason' => 'unknown_version'];
+        }
+
+        if (version_compare($version, '1.16', '<')) {
+            return ['ok' => false, 'reason' => 'unsupported_version'];
+        }
+
+        return ['ok' => true, 'reason' => 'ok'];
+    }
+}
+
 // Detect wget compatibility required by NPP.
 if (! function_exists('nppp_get_wget_compatibility')) {
     function nppp_get_wget_compatibility(): array {
@@ -169,73 +205,25 @@ if (! function_exists('nppp_get_wget_compatibility')) {
             return $cached;
         }
 
+        // Preferred: the single-shell toolset probe measures wget together with the
+        // core commands and fills this transient as a side effect (zero extra forks).
+        if (function_exists('nppp_is_dockerized')) {
+            nppp_is_dockerized();
+            $cached = get_transient($transient_key);
+            if (is_array($cached) && array_key_exists('ok', $cached) && array_key_exists('reason', $cached)) {
+                return $cached;
+            }
+        }
+
+        // Fallback (probe could not measure): the original standalone check.
         $binary = trim((string) shell_exec('command -v wget 2>/dev/null'));
         if ($binary === '') {
-            $cached = [
-                'ok' => false,
-                'reason' => 'missing',
-            ];
+            $cached = ['ok' => false, 'reason' => 'missing'];
             set_transient($transient_key, $cached, 300);
             return $cached;
         }
 
-        $version_output = (string) shell_exec('wget --version 2>&1');
-        $first_line     = trim((string) strtok($version_output, "\n"));
-
-        if (stripos($first_line, 'GNU Wget2') !== false || stripos($version_output, 'GNU Wget2') !== false) {
-            $cached = [
-                'ok' => false,
-                'reason' => 'wget2',
-            ];
-            set_transient($transient_key, $cached, 300);
-            return $cached;
-        }
-
-        if (stripos($version_output, 'busybox') !== false || stripos($version_output, 'toybox') !== false) {
-            $cached = [
-                'ok' => false,
-                'reason' => 'busybox_toybox',
-            ];
-            set_transient($transient_key, $cached, 300);
-            return $cached;
-        }
-
-        if (stripos($first_line, 'GNU Wget') === false) {
-            $cached = [
-                'ok' => false,
-                'reason' => 'non_gnu',
-            ];
-            set_transient($transient_key, $cached, 300);
-            return $cached;
-        }
-
-        $version = '';
-        if (preg_match('/GNU\s+Wget\s+([0-9]+(?:\.[0-9]+){1,2})/i', $first_line, $matches)) {
-            $version = $matches[1];
-        }
-
-        if ($version === '') {
-            $cached = [
-                'ok' => false,
-                'reason' => 'unknown_version',
-            ];
-            set_transient($transient_key, $cached, 300);
-            return $cached;
-        }
-
-        if (version_compare($version, '1.16', '<')) {
-            $cached = [
-                'ok' => false,
-                'reason' => 'unsupported_version',
-            ];
-            set_transient($transient_key, $cached, 300);
-            return $cached;
-        }
-
-        $cached = [
-            'ok' => true,
-            'reason' => 'ok',
-        ];
+        $cached = nppp_classify_wget_version_output((string) shell_exec('wget --version 2>&1'));
         set_transient($transient_key, $cached, 300);
 
         return $cached;
