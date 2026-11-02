@@ -95,6 +95,7 @@ function nppp_clear_plugin_cache($silent = false) {
         'nppp_cache_key_regex_probe',
         'nppp_http_probe_' . md5($static_key_base),
         'nppp_setup_strict_detect_' . md5($static_key_base),
+        'nppp_nginx_conf_hit_' . md5($static_key_base),
         'nppp_requirements_met_' . md5($static_key_base),
         'nppp_f2b_rl',
         'nppp_f2b_worker_env',
