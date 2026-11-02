@@ -552,6 +552,16 @@ function nppp_dashboard_widget() {
                 }
             }
 
+            // Varnish / Vinyl Cache: Varnish-only mode (Nginx has no cache of its own), same "Mode:" note as HTTP Purge
+            if ($key === 'varnish_sync' && $state === 'on' && function_exists('nppp_varnish_only_mode') && nppp_varnish_only_mode()) {
+                $note = '<span class="nppp-setting-note">' . sprintf(
+                    /* translators: %s: Varnish mode (Varnish-only) */
+                    esc_html__('Mode: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+                    '<strong class="nppp-setting-val">' . esc_html__('Varnish-only', 'fastcgi-cache-purge-and-preload-nginx') . '</strong>'
+                ) . '</span>';
+                $tip = __('Varnish-only mode: Nginx has no cache of its own. Purge and Preload go through Varnish only.', 'fastcgi-cache-purge-and-preload-nginx');
+            }
+
             // Auto Preload: completion time of the last preload
             if ($key === 'auto_preload' && $last_preload_complete_date) {
                 $note = '<span class="nppp-setting-note">' . sprintf(
