@@ -466,7 +466,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'No Nginx cache (Nginx → Varnish → Apache / PHP-FPM)? Turn on Varnish-only mode below. NPP then purges and preloads through Varnish only. Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. If you use HTTP Purge, also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. If you use HTTP Purge, also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080 on the same host, or https://nginx:8443 in Docker). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>
@@ -478,7 +478,7 @@ function nppp_nginx_cache_settings_page() {
                             <td>
                                 <?php nppp_varnish_endpoints_callback(); ?>
                                 <p class="description">
-                                    <?php echo esc_html__( 'One address per line (up to 5), e.g. http://127.0.0.1:6081. The sync runs only while the switch above is ON and at least one address is set.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'One address per line (up to 5), as reachable from the PHP process: http://127.0.0.1:6081 when Varnish runs on the same host, or the container name in Docker (e.g. http://varnish:80). The sync runs only while the switch above is ON and at least one address is set.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                             </td>
                         </tr>

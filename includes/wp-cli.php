@@ -650,6 +650,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
      *     wp npp settings set nppp_http_purge_queue_status_path ""
      *     wp npp settings set nppp_varnish_sync_enabled yes
      *     wp npp settings set nppp_varnish_endpoints "http://127.0.0.1:6081"
+     *     wp npp settings set nppp_varnish_endpoints "http://varnish:80"
      *     wp npp settings set nppp_varnish_header "X-Control-Key: your-secret"
      *     wp npp settings set nppp_varnish_endpoints ""
      *     wp npp settings set nppp_varnish_only_enabled yes

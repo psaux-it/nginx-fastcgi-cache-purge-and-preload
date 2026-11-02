@@ -923,7 +923,7 @@ function nppp_varnish_only_enabled_callback(): void {
 function nppp_varnish_endpoints_callback(): void {
     $options = get_option( 'nginx_cache_settings', [] );
     $value   = ( is_array( $options ) && isset( $options['nppp_varnish_endpoints'] ) && is_string( $options['nppp_varnish_endpoints'] ) ) ? $options['nppp_varnish_endpoints'] : '';
-    echo "<textarea id='nppp_varnish_endpoints' name='nginx_cache_settings[nppp_varnish_endpoints]' rows='3' cols='50' class='large-text' placeholder='http://127.0.0.1:6081' spellcheck='false' autocomplete='off'>" . esc_textarea( $value ) . "</textarea>";
+    echo "<textarea id='nppp_varnish_endpoints' name='nginx_cache_settings[nppp_varnish_endpoints]' rows='3' cols='50' class='large-text' placeholder='http://varnish:80' spellcheck='false' autocomplete='off'>" . esc_textarea( $value ) . "</textarea>";
 }
 
 // Callback function for Varnish / Vinyl Cache Sync control header (optional)

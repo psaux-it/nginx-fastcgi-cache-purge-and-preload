@@ -68,7 +68,7 @@ if ( ! function_exists( 'nppp_varnish_parse_endpoints' ) ) {
      *
      * Rules: http/https only (a missing scheme becomes http://), host required, no user info,
      * no path / query / fragment, valid port. Loopback and private addresses ARE allowed
-     * (Varnish normally listens on localhost). Duplicates are dropped; at most 5 endpoints.
+     * (Varnish listens on localhost on a single host; in Docker use its container name). Duplicates are dropped; at most 5 endpoints.
      *
      * Valid tokens are always returned. Every problem appends a machine code to $errors, so a
      * strict caller (sanitize) can reject, while the runtime reader can simply use what is valid.
