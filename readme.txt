@@ -353,6 +353,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Changed: The "nppp_purged_urls" action now fires before the auto-preload of a single purge instead of after it (as "nppp_purged_all" already does for Purge All), so outer cache layers are clean before the preload crawl requests the page.
 * Perf: Optimized ripgrep prefiltering and canonical key generation (`canon_key`) in FP3/FP4 scans to prevent multi-spelling regex slowdowns on percent-encoded slugs.
 * Perf: The Advanced tab now opens 2.3x–2.7x faster on large caches (DataTables is initialised while the table is hidden, then revealed once).
+* Perf: Environment checks now run in a single shell call, cutting the shell processes spawned per minute under continuous admin traffic from 5 to 2.
 * Tested: Tested with Nginx (1.31.6), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0) and aaPanel (8.0.6).
 
 = 2.1.8 (2026-09-25) =
