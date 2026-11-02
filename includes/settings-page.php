@@ -445,8 +445,25 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description">
                                     <?php echo esc_html__( 'Independent of "Auto Purge". The sync runs on single-URL purges, Purge All and Preload All.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
+                                <?php
+                                $nppp_vo_active  = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode();
+                                $nppp_vo_request = function_exists( 'nppp_varnish_only_optin' ) && nppp_varnish_only_optin();
+                                if ( $nppp_vo_active ) : ?>
                                 <p class="description">
-                                    <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address below, before any preload starts, so both layers stay aligned. A Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <strong><?php echo esc_html__( 'Varnish-only mode is ACTIVE.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                    <?php echo esc_html__( 'Nginx has no cache here, so Varnish / Vinyl Cache is the only layer NPP purges. Its result is the purge result: a failure is shown as a notice (and as a banner in wp-admin until the next successful purge). "Nginx Cache Directory" is only the scratch space of Preload; it must be a real, empty directory PHP can write to.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <?php elseif ( $nppp_vo_request ) : ?>
+                                <p class="description">
+                                    <strong><?php echo esc_html__( 'Varnish-only mode is requested but NOT active.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
+                                    <?php echo esc_html__( 'It needs this switch ON and at least one valid address below. Until then NPP runs in the stock Nginx-cache mode.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <?php endif; ?>
+                                <p class="description">
+                                    <?php echo esc_html__( 'For setups where Varnish / Vinyl Cache sits IN FRONT of Nginx (Nginx TLS → Varnish → Nginx cache). When the Nginx cache is purged, NPP sends HTTP PURGE to every address below, before any preload starts, so both layers stay aligned. With an Nginx cache, a Varnish failure never changes the Nginx purge result; it is only logged.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                </p>
+                                <p class="description">
+                                    <?php echo esc_html__( 'No Nginx cache (Nginx → Varnish → Apache / PHP-FPM)? Add define( \'NPPP_VARNISH_ONLY\', true ); to wp-config.php. NPP then purges and preloads through Varnish only. Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'Requires a VCL that accepts PURGE (ACL) and handles X-Purge-Method: regex for Purge All. If you use HTTP Purge, also set HTTP Purge → Purge Custom Base URL to your backend Nginx (e.g. http://127.0.0.1:8080). Setup: Help > Varnish / Vinyl Cache Sync.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>

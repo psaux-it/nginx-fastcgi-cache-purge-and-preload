@@ -324,27 +324,47 @@ if ( ! function_exists( 'nppp_varnish_endpoints' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_varnish_only_optin' ) ) {
+    /**
+     * Has the site owner asked for Varnish-only mode (constant or filter)?
+     *
+     * This is only the REQUEST. Whether the mode is really active also depends on the Varnish sync
+     * settings, see nppp_varnish_only_mode().
+     *
+     * The constant is read as a boolean the way WordPress people write it: true, 1, '1', 'true',
+     * 'yes', 'on' enable it; false, 0, '0', 'false', 'no', 'off', '' and anything else do not.
+     * A plain truthiness test would turn define( 'NPPP_VARNISH_ONLY', 'false' ) into ON.
+     */
+    function nppp_varnish_only_optin(): bool {
+        $on = false;
+
+        if ( defined( 'NPPP_VARNISH_ONLY' ) ) {
+            $on = ( filter_var( NPPP_VARNISH_ONLY, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE ) === true );
+        }
+
+        return (bool) apply_filters( 'nppp_varnish_only', $on );
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_only_mode' ) ) {
     /**
      * Varnish-only mode: nginx has NO cache of its own (visitor -> nginx:443 -> Varnish -> origin).
      *
      * There is no inner layer, so the "nginx first, Varnish second" order rule has nothing to order:
      * a purge reduces to the Varnish PURGE / ban that the nppp_purged_* hooks already send, and the
-     * nginx cache directory is neither required nor touched.
+     * nginx cache directory is neither required nor touched by a purge.
      *
      * Strictly opt-in, so no existing install changes behaviour:
      *   define( 'NPPP_VARNISH_ONLY', true );              // wp-config.php
      *   add_filter( 'nppp_varnish_only', '__return_true' );
      * and only while Varnish sync is ON with at least one valid endpoint. With sync OFF (or no
      * endpoint) the mode is never active, so a half-configured site keeps the stock nginx path
-     * and its error messages instead of silently doing nothing.
+     * and its error messages instead of silently doing nothing (nppp_varnish_only_inactive_notice()
+     * tells the admin about that state).
      */
     function nppp_varnish_only_mode(): bool {
-        $on = defined( 'NPPP_VARNISH_ONLY' ) && NPPP_VARNISH_ONLY;
-        $on = (bool) apply_filters( 'nppp_varnish_only', $on );
-
         // nppp_varnish_endpoints() is already empty while the sync switch is OFF.
-        return $on && nppp_varnish_endpoints() !== array();
+        return nppp_varnish_only_optin() && nppp_varnish_endpoints() !== array();
     }
 }
 
@@ -552,7 +572,30 @@ if ( ! function_exists( 'nppp_varnish_only_admin_notice' ) ) {
             ( ! empty( $f['detail'] ) && is_string( $f['detail'] ) ) ? ': ' . $f['detail'] : ''
         );
 
-        echo '<div class="notice notice-error"><p>' . esc_html( $txt ) . '</p></div>';
+        // notice-nppp: the NPP settings page hides every admin notice without this class
+        // (nppp_manage_admin_notices()), and that page is where the admin needs to see this.
+        echo '<div class="notice notice-error notice-nppp"><p>' . esc_html( $txt ) . '</p></div>';
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_only_inactive_notice' ) ) {
+    /**
+     * Varnish-only mode was requested (constant / filter) but is NOT active.
+     *
+     * The mode needs Varnish sync ON and at least one valid endpoint. Until then NPP runs the stock
+     * Nginx-cache path and reports a missing cache path, which looks like a plugin bug. Say why.
+     */
+    function nppp_varnish_only_inactive_notice(): void {
+        if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+        if ( ! nppp_varnish_only_optin() || nppp_varnish_only_mode() ) {
+            return;
+        }
+
+        $txt = __( 'NPP Varnish-only mode is requested (NPPP_VARNISH_ONLY) but NOT active: turn ON "Varnish / Vinyl Cache Sync" in NPP Settings and add at least one valid endpoint. Until then NPP runs in the stock Nginx-cache mode and purges do not reach Varnish.', 'fastcgi-cache-purge-and-preload-nginx' );
+
+        echo '<div class="notice notice-warning notice-nppp"><p>' . esc_html( $txt ) . '</p></div>';
     }
 }
 
@@ -1333,3 +1376,4 @@ add_action( 'nppp_purged_urls', 'nppp_varnish_purge_urls', 10, 4 );
 add_action( 'nppp_purged_all', 'nppp_varnish_purge_all', 10, 1 );
 add_action( 'nppp_preload_all_started', 'nppp_varnish_purge_all', 10, 0 );
 add_action( 'admin_notices', 'nppp_varnish_only_admin_notice' );
+add_action( 'admin_notices', 'nppp_varnish_only_inactive_notice' );

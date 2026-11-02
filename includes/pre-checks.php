@@ -1291,8 +1291,16 @@ function nppp_pre_checks() {
         return;
     }
 
+    // Varnish-only mode: nginx has no cache, so there is nothing to scan, count or regex-probe. The
+    // directory in "Nginx Cache Directory" is only the scratch space of the preload crawler.
+    $nppp_vo = function_exists('nppp_varnish_only_mode') && nppp_varnish_only_mode();
+
     // Check if cache directory exists
     if (!$wp_filesystem->is_dir($nginx_cache_path)) {
+        if ($nppp_vo) {
+            nppp_display_pre_check_warning(__('GLOBAL ERROR PATH: Varnish-only mode is active. Purging does not need an Nginx cache, but Preload needs a real directory as scratch space. Set "Nginx Cache Directory" to an existing, empty directory that PHP can read and write (for example /var/cache/npp-varnish-only), then use Status > Clear Plugin Cache.', 'fastcgi-cache-purge-and-preload-nginx'));
+            return;
+        }
         nppp_display_pre_check_warning(__('GLOBAL ERROR PATH: The specified Nginx cache directory is default one or does not exist anymore. Please check your Nginx cache directory.', 'fastcgi-cache-purge-and-preload-nginx'));
         return;
     }
@@ -1303,7 +1311,17 @@ function nppp_pre_checks() {
 
     // Check permissions are sufficient
     if ($nppp_permissions_check_result === 'false') {
+        if ($nppp_vo) {
+            nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Varnish-only mode is active, but PHP cannot write to the directory set as "Nginx Cache Directory". Preload uses it as scratch space. Make it writable for the PHP-FPM user. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
+            return;
+        }
         nppp_display_pre_check_warning(__('GLOBAL ERROR PERMISSION: Insufficient permissions for Nginx cache directory. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx'));
+        return;
+    }
+
+    // Varnish-only mode: the directory is usable, and an "empty cache" or cache-key-regex warning
+    // about it would be permanent and wrong (the files it looks for can never appear there).
+    if ($nppp_vo) {
         return;
     }
 

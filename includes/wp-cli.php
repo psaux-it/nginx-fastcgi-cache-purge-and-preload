@@ -115,6 +115,15 @@ class NPPP_CLI_Command extends WP_CLI_Command {
         $tmp_path   = rtrim( $cache_path, '/' ) . '/tmp';
 
         if ( $dry_run ) {
+            if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() ) {
+                // Varnish-only mode: no Nginx cache is touched, only Varnish / Vinyl Cache is purged.
+                WP_CLI::line( $url !== ''
+                    /* translators: %s: URL being dry-run purged */
+                    ? sprintf( __( '[dry-run] Varnish-only mode, no Nginx cache is touched. Would send PURGE for single URL: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $url )
+                    : __( '[dry-run] Varnish-only mode, no Nginx cache is touched. Would send a host-wide ban (Purge All) to Varnish / Vinyl Cache.', 'fastcgi-cache-purge-and-preload-nginx' )
+                );
+                return;
+            }
             WP_CLI::line( $url !== ''
                 /* translators: %s: URL being dry-run purged */
                 ? sprintf( __( '[dry-run] Would purge single URL: %s', 'fastcgi-cache-purge-and-preload-nginx' ), $url )

@@ -1161,15 +1161,20 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
     // Display decoded URL to user
     $current_page_url_decoded = rawurldecode($current_page_url);
 
+    // Varnish-only mode: the directory is not an Nginx cache here, it is the crawler's scratch space.
+    $nppp_vo_perm = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode();
+    /* translators: %s: Current page URL being preloaded */
+    $nppp_perm_msg = $nppp_vo_perm
+        ? sprintf( __( 'ERROR PERMISSION: Preload failed for page %s. In Varnish-only mode the directory set as Nginx Cache Directory is preload scratch space and must exist and be readable and writable by PHP. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded )
+        : sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded );
+
     // Check for any permisson issue softly
     if (!$wp_filesystem->is_readable($nginx_cache_path) || !$wp_filesystem->is_writable($nginx_cache_path)) {
-        /* translators: %s: Current page URL being preloaded */
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+        nppp_display_admin_notice('error', $nppp_perm_msg);
         return;
     // Ask cached Recusive status for permission issues deeply
     } elseif (nppp_check_permissions_recursive_with_cache() !== 'true') {
-        /* translators: %s: Current page URL being preloaded */
-        nppp_display_admin_notice('error', sprintf( __( 'ERROR PERMISSION: Nginx cache preload failed for page %s due to permission issue. Refer to the "Help" tab for guidance.', 'fastcgi-cache-purge-and-preload-nginx' ), $current_page_url_decoded ));
+        nppp_display_admin_notice('error', $nppp_perm_msg);
         return;
     }
 

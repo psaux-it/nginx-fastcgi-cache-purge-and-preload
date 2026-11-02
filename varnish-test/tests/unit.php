@@ -890,4 +890,113 @@ if ( in_array( $S, [ 'varnishonly', 'varnishonly2', 'varnishonly3' ], true ) ) {
     }   // varnishonly3
 }
 
+/* ================================================================================================================ */
+/* Varnish-only hardening: opt-in constant (own process each: a constant can not be undefined), notices, pre-checks, texts */
+if ( in_array( $S, [ 'varnishonly4', 'varnishonly5', 'varnishonly6', 'varnishonly7' ], true ) ) {
+    $d  = getenv( 'NPPP_INCLUDES' ) ?: dirname( __DIR__, 2 ) . '/includes';
+    $vo = function ( string $eps = 'http://hd1.test:6081', string $sync = 'yes' ) {
+        vt_reset(); vt_home( 'http://hd.test' ); vt_set( [ 'nppp_varnish_sync_enabled' => $sync, 'nppp_varnish_endpoints' => $eps ] );
+    };
+    $GLOBALS['H_ADMIN'] = true;
+    foreach ( [
+        'current_user_can' => function ( $c ) { return ! empty( $GLOBALS['H_ADMIN'] ); },
+        'human_time_diff'  => function ( $a, $b = 0 ) { return '1 min'; },
+        'wp_kses_post'     => function ( $x ) { return $x; },
+        'sanitize_key'     => function ( $x ) { return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', (string) $x ) ); },
+        'wp_unslash'       => function ( $x ) { return $x; },
+        '__return_true'    => function () { return true; },
+        '__return_false'   => function () { return false; },
+    ] as $f => $impl ) {
+        if ( ! function_exists( $f ) ) { $GLOBALS['H_IMPL'][ $f ] = $impl; eval( "function $f( ...\$a ) { return (\$GLOBALS['H_IMPL']['$f'])( ...\$a ); }" ); }
+    }
+    $html = function ( callable $fn ): string { ob_start(); $fn(); return (string) ob_get_clean(); };
+
+    if ( $S === 'varnishonly4' ) {   // constant = true
+        define( 'NPPP_VARNISH_ONLY', true );
+        $vo();
+        chk( nppp_varnish_only_optin() === true && nppp_varnish_only_mode() === true, 'H1 constant true + sync ON + endpoint => mode ON (no filter needed)' );
+        chk( $html( 'nppp_varnish_only_inactive_notice' ) === '', 'H2 no "requested but inactive" warning while the mode is really active' );
+        $vo( 'http://hd1.test:6081', 'no' );
+        chk( nppp_varnish_only_optin() === true && nppp_varnish_only_mode() === false, 'H1 constant true but sync OFF => requested, not active' );
+        $o = $html( 'nppp_varnish_only_inactive_notice' );
+        chk( strpos( $o, 'notice-nppp' ) !== false && strpos( $o, 'NOT active' ) !== false, 'H2 requested-but-inactive mode raises a visible warning (notice-nppp)', $o );
+        $vo( '', 'yes' );
+        chk( nppp_varnish_only_mode() === false && strpos( $html( 'nppp_varnish_only_inactive_notice' ), 'NOT active' ) !== false, 'H2 sync ON but no endpoint => same warning' );
+        $GLOBALS['H_ADMIN'] = false;
+        chk( $html( 'nppp_varnish_only_inactive_notice' ) === '', 'H2 the warning is for administrators only' );
+        $GLOBALS['H_ADMIN'] = true;
+        $vo(); add_filter( 'nppp_varnish_only', '__return_false' );
+        chk( nppp_varnish_only_optin() === false && nppp_varnish_only_mode() === false, 'H1 the nppp_varnish_only filter can still veto the constant' );
+        chk( isset( $GLOBALS['VT_BASE_ACTIONS']['admin_notices'][10] ) && in_array( 'nppp_varnish_only_inactive_notice', array_map( fn( $x ) => $x[0], $GLOBALS['VT_BASE_ACTIONS']['admin_notices'][10] ), true ), 'H2 the plugin registers the inactive-mode warning on admin_notices' );
+    }
+
+    if ( $S === 'varnishonly5' ) {   // constant = 'false' (string): must NOT enable the mode
+        define( 'NPPP_VARNISH_ONLY', 'false' );
+        $vo();
+        chk( nppp_varnish_only_optin() === false && nppp_varnish_only_mode() === false, 'H3 define( NPPP_VARNISH_ONLY, "false" ) does NOT enable the mode' );
+        chk( $html( 'nppp_varnish_only_inactive_notice' ) === '', 'H3 no "requested but inactive" warning for a false constant' );
+        add_filter( 'nppp_varnish_only', '__return_true' );
+        chk( nppp_varnish_only_mode() === true, 'H3 the filter can still opt in when the constant says false' );
+    }
+
+    if ( $S === 'varnishonly6' ) {   // constant = 'yes' (string) + failure banner visible on the NPP settings page
+        define( 'NPPP_VARNISH_ONLY', 'yes' );
+        $vo();
+        chk( nppp_varnish_only_mode() === true, 'H4 constant "yes" enables the mode' );
+        nppp_state_set( 'varnish_vo_failure', [ 'at' => time(), 'status' => 'failed', 'scope' => 'all', 'detail' => 'unreachable: 1' ], 600 );
+        $o = $html( 'nppp_varnish_only_admin_notice' );
+        chk( strpos( $o, 'notice-error' ) !== false && strpos( $o, 'notice-nppp' ) !== false, 'H5 failure banner carries notice-nppp (the settings page hides every other notice)', $o );
+        chk( strpos( $o, 'unreachable: 1' ) !== false, 'H5 banner shows the failure detail', $o );
+        $GLOBALS['H_ADMIN'] = false;
+        chk( $html( 'nppp_varnish_only_admin_notice' ) === '', 'H5 banner hidden for non-admins' );
+        // the CSS rule that hides notices on the NPP pages, read from the plugin: this is why the class is required
+        $en = file_get_contents( $d . '/enqueue-assets.php' );
+        chk( strpos( $en, '.notice.notice-nppp' ) !== false && strpos( $en, 'display: none !important' ) !== false, 'H5 enqueue-assets.php still hides notices without notice-nppp (so the class above is required)' );
+    }
+
+    if ( $S === 'varnishonly7' ) {   // real nppp_pre_checks() cut out of pre-checks.php, stubbed collaborators; texts
+        $src = file_get_contents( $d . '/pre-checks.php' );
+        foreach ( [ 'nppp_pre_checks', 'nppp_display_pre_check_warning' ] as $fn ) {
+            chk( preg_match( '/^function ' . $fn . '\(.*?^\}\n/ms', $src, $m ) === 1, "H6 found $fn() in pre-checks.php" );
+            eval( $m[0] );
+        }
+        $GLOBALS['H'] = [ 'dir' => false, 'perm' => 'true' ];
+        class H_FS { function is_dir( $p ) { return $GLOBALS['H']['dir']; } function exists( $p ) { return false; } }
+        function nppp_open_basedir_compat_check() { return [ 'active' => false, 'compatible' => true, 'missing' => [] ]; }
+        function nppp_initialize_wp_filesystem() { return new H_FS(); }
+        function nppp_pre_checks_critical() { return true; }
+        function nppp_check_permissions_recursive_with_cache() { return $GLOBALS['H']['perm']; }
+        $run = function ( bool $vo_on, bool $dir, string $perm ) use ( $vo, $html ) {
+            $vo(); $GLOBALS['H'] = [ 'dir' => $dir, 'perm' => $perm ];
+            if ( $vo_on ) { add_filter( 'nppp_varnish_only', '__return_true' ); }
+            nppp_pre_checks();
+            return $html( function () { do_action( 'admin_notices' ); } );
+        };
+        $o = $run( true, false, 'true' );
+        chk( strpos( $o, 'Varnish-only mode is active' ) !== false && strpos( $o, 'scratch space' ) !== false && strpos( $o, 'default one or does not exist' ) === false, 'H6 mode ON, directory missing: explains the scratch directory instead of "default one or does not exist"', $o );
+        chk( strpos( $o, 'notice-nppp' ) !== false, 'H6 the pre-check notice is visible on the settings page (notice-nppp)', $o );
+        $o = $run( true, true, 'true' );
+        chk( trim( $o ) === '', 'H7 mode ON, real writable directory: NO notice at all (no permanent "Nginx cache is empty" warning)', $o );
+        $o = $run( true, true, 'false' );
+        chk( strpos( $o, 'Varnish-only mode is active' ) !== false && strpos( $o, 'cannot write' ) !== false, 'H8 mode ON, directory not writable: mode-specific permission error', $o );
+        $o = $run( false, false, 'true' );
+        chk( strpos( $o, 'default one or does not exist' ) !== false && strpos( $o, 'Varnish-only' ) === false, 'H9 stock mode keeps the original "does not exist" message', $o );
+        $o = $run( false, true, 'false' );
+        chk( strpos( $o, 'Insufficient permissions for Nginx cache directory' ) !== false && strpos( $o, 'Varnish-only' ) === false, 'H9 stock mode keeps the original permission message', $o );
+        $pre = substr( $src, strpos( $src, 'function nppp_pre_checks()' ) );
+        chk( strpos( $pre, 'if ($nppp_vo) {' ) !== false && strrpos( substr( $pre, 0, strpos( $pre, 'GLOBAL WARNING CACHE' ) ), 'if ($nppp_vo) {' ) !== false, 'H7 the mode returns before the "cache is empty" warning and the regex probe' );
+
+        // wording that used to be wrong in the mode
+        $help = file_get_contents( $d . '/help.php' ); $page = file_get_contents( $d . '/settings-page.php' ); $cli = file_get_contents( $d . '/wp-cli.php' ); $pl = file_get_contents( $d . '/preload.php' );
+        chk( strpos( $help, 'Varnish as the only cache (NPP needs the Nginx cache directory)' ) === false, 'H10 Help no longer says Varnish-only is unsupported' );
+        chk( strpos( $help, "define( 'NPPP_VARNISH_ONLY', true );" ) !== false, 'H10 Help documents the opt-in line' );
+        chk( strpos( $page, "define( \\'NPPP_VARNISH_ONLY\\', true );" ) !== false && strpos( $page, 'Varnish-only mode is ACTIVE' ) !== false && strpos( $page, 'requested but NOT active' ) !== false, 'H10 Settings page documents the constant and shows ACTIVE / requested-but-inactive' );
+        chk( strpos( $page, 'A Varnish failure never changes the Nginx purge result' ) === false, 'H10 Settings page no longer claims, unqualified, that Varnish failures are only logged' );
+        chk( substr_count( $cli, 'Varnish-only mode, no Nginx cache is touched' ) === 2, 'H11 wp npp purge --dry-run is mode-aware (single URL and Purge All)' );
+        chk( substr_count( $pl, 'In Varnish-only mode the directory set as Nginx Cache Directory is preload scratch space' ) === 1, 'H12 single-preload permission errors are mode-aware' );
+        chk( substr_count( $pl, '$nppp_perm_msg' ) === 3, 'H12 both permission checks of the single preload use the mode-aware message' );
+        chk( strpos( file_get_contents( dirname( $d ) . '/readme.txt' ), 'NPPP_VARNISH_ONLY' ) !== false, 'H13 readme changelog mentions the mode' );
+    }
+}
+
 exit( vt_summary() );
