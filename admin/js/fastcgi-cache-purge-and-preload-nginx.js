@@ -46,9 +46,20 @@ $(document).ready(function() {
         $preloader.addClass('active').fadeIn(50);
     }
 
+    // Put the overlay back to its stock look (spinning fill, "NPP", generic message)
+    // after a determinate progress run (see npppPreloader.progress below).
+    function resetPreloaderProgress() {
+        const $text = $preloader.find('.nppp-loader-text');
+        const $msg  = $preloader.find('.nppp-loader-message');
+        if ($text.data('npppDefault') === undefined) { return; }
+        $preloader.find('.nppp-loader-fill').css({ 'height': '', 'transform': '', 'transition': '' });
+        $text.removeClass('nppp-loader-text--progress').text($text.data('npppDefault'));
+        $msg.text($msg.data('npppDefault'));
+    }
+
     // Function to hide the preloader overlay
     function hidePreloader() {
-        $preloader.removeClass('active').fadeOut(50);
+        $preloader.removeClass('active').fadeOut(50, resetPreloaderProgress);
 
         // Reset the `.nppp-loader-fill` animation duration back
         $('.nppp-loader-fill').css({
@@ -62,6 +73,32 @@ $(document).ready(function() {
             'transition': 'opacity 0.3s ease, visibility 0.3s ease'
         });
     }
+
+    // Small public bridge so other admin scripts (e.g. nppp-vo-advanced.js "Check all")
+    // can reuse this overlay with a real, determinate progress instead of the endless fill.
+    // progress(done, total, message): circle fills to done/total, shows the percentage inside
+    // and the given message below. hide() restores the stock overlay.
+    window.npppPreloader = {
+        show: showPreloader,
+        hide: hidePreloader,
+        progress: function (done, total, message) {
+            const $text = $preloader.find('.nppp-loader-text');
+            const $msg  = $preloader.find('.nppp-loader-message');
+            if ($text.data('npppDefault') === undefined) {
+                $text.data('npppDefault', $text.text());
+                $msg.data('npppDefault', $msg.text());
+            }
+            const ratio = total > 0 ? Math.min(1, Math.max(0, done / total)) : 0;
+            $preloader.find('.nppp-loader-fill').css({
+                'animation': 'none',
+                'height': '100%',
+                'transform': 'scaleY(' + ratio + ')',
+                'transition': 'transform 0.4s ease'
+            });
+            $text.addClass('nppp-loader-text--progress').text(Math.round(ratio * 100) + '%');
+            if (message) { $msg.text(message); }
+        }
+    };
 
     // Flag to prevent the duplicate call to npppActivateTab()
     let isTabChangeFromHash = false;

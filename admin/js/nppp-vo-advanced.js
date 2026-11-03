@@ -510,6 +510,14 @@
         var total = urls.length;
         notice(text('checkedOf').replace('%1$s', '0').replace('%2$s', String(total)));
 
+        // Same overlay the tabs use, but with a real progress: "Checked n of n URLs…"
+        var PL = window.npppPreloader;
+        function overlay(done) {
+            if (!PL) { return; }
+            PL.progress(done, total, text('checkedOf').replace('%1$s', String(done)).replace('%2$s', String(total)));
+        }
+        if (PL) { PL.show(); overlay(0); }
+
         // Marking thousands of rows takes a moment: let the browser draw the spinner and the counter first.
         var gen = generation;
         afterPaint(function () {
@@ -517,6 +525,7 @@
                 // the table was reloaded meanwhile: nothing to check any more
                 if (fullRun === token) { fullRun = 0; }
                 $btn.prop('disabled', false).removeClass('nppp-premium-refresh-spinning');
+                if (PL) { PL.hide(); }
                 return;
             }
 
@@ -525,16 +534,18 @@
             commit(pending);
 
             lookup(urls, true, function (done) {
+                overlay(done);
                 if (done < total) {
                     notice(text('checkedOf').replace('%1$s', String(done)).replace('%2$s', String(total)));
                 }
             }, true).done(function (status) {
                 if (status === 'aborted') { return; }
-                if (status === 'ok') { notice(text('checkedAll'), false, 3000); } else { notice(text(status) || text('error'), true); }
+                if (status === 'ok') { notice(''); } else { notice(text(status) || text('error'), true); }
                 updateMissButton();
             }).always(function () {
                 if (fullRun === token) { fullRun = 0; }
                 $btn.prop('disabled', false).removeClass('nppp-premium-refresh-spinning');
+                if (PL) { PL.hide(); }
             });
         });
     });
