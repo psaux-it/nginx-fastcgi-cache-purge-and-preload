@@ -146,6 +146,9 @@ function nppp_dashboard_widget() {
     // Fetch the NPP plugin settings from the database
     $settings = get_option('nginx_cache_settings', []);
 
+    // Varnish-only mode: Nginx has no cache of its own, so the Nginx-only parts of this widget are replaced or locked.
+    $nppp_vo = function_exists('nppp_varnish_only_mode') && nppp_varnish_only_mode();
+
     // URL Normalization
     $pctnorm_mode   = isset($settings['nginx_cache_pctnorm_mode']) ? $settings['nginx_cache_pctnorm_mode'] : 'off';
     $safexec_cached = get_transient('nppp_safexec_ok');
@@ -347,6 +350,17 @@ function nppp_dashboard_widget() {
         ],
     ];
 
+    // Varnish-only mode: HTTP Purge (the Nginx purge endpoint) and RG Purge (the Nginx cache directory scan) act on an
+    // Nginx cache that does not exist there. Same locked "na" tile as an unavailable option, so the layout is unchanged.
+    // Bypass Path Restriction stays as it is: it still decides which directory may be saved as the scratch directory.
+    if ($nppp_vo) {
+        foreach (['http_purge', 'rg_purge'] as $nppp_vo_na_key) {
+            $statuses[$nppp_vo_na_key]['unavailable'] = true;
+            $statuses[$nppp_vo_na_key]['vo_na']       = true;
+            $statuses[$nppp_vo_na_key]['status']      = __('Not used in Varnish-only mode', 'fastcgi-cache-purge-and-preload-nginx');
+        }
+    }
+
     // Output the widget content with buttons
     echo '<div id="nppp-widget-placeholder" style="border: 1px solid #e5e5e5;">';
 
@@ -410,7 +424,26 @@ function nppp_dashboard_widget() {
         $nppp_snapshot_path   = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
         $nppp_snapshot_exists = file_exists( $nppp_snapshot_path );
 
-        if ( ! $nppp_snapshot_exists ) {
+        // Varnish-only mode: the Nginx cache directory is an empty scratch directory, so scanning it (and the
+        // nppp_last_known_hits it would feed) says nothing about the site. The gauge shows the stored live check of
+        // the Status tab instead: same record, same figures, no request while the page renders.
+        $nppp_vo_gauge = ( $nppp_vo && function_exists( 'nppp_varnish_vo_widget_gauge' ) ) ? nppp_varnish_vo_widget_gauge() : null;
+
+        if ( $nppp_vo_gauge !== null ) {
+            $nppp_widget_scan_at = $nppp_vo_gauge['scanned_at'] > 0 ? $nppp_vo_gauge['scanned_at'] : false;
+            if ( ! $nppp_vo_gauge['na'] ) {
+                $nppp_ratio_pct       = (float) $nppp_vo_gauge['ratio'];
+                $nppp_ratio_hits      = (int)   $nppp_vo_gauge['hits'];
+                $nppp_ratio_misses    = (int)   $nppp_vo_gauge['misses'];
+                $nppp_ratio_total     = (int)   $nppp_vo_gauge['total'];
+                $nppp_ratio_na        = false;
+                $nppp_ratio_na_reason = '';
+            } else {
+                // Without a crawl snapshot there is nothing to sample, whatever the last check said.
+                $nppp_ratio_na_reason = $nppp_snapshot_exists ? $nppp_vo_gauge['na_reason'] : 'empty';
+            }
+
+        } elseif ( ! $nppp_snapshot_exists ) {
             // No snapshot at all — user needs to run Preload All first.
             $nppp_ratio_na_reason = 'no_snapshot';
 
@@ -442,6 +475,12 @@ function nppp_dashboard_widget() {
            . ' data-na="'        . esc_attr( $nppp_ratio_na ? '1' : '0' ) . '"'
            . ' data-na-reason="' . esc_attr( $nppp_ratio_na_reason ) . '"'
            . ' data-scanned-at="'. esc_attr( $nppp_widget_scan_at ? (string) $nppp_widget_scan_at : '' ) . '"'
+           . ( $nppp_vo_gauge !== null
+               ? ' data-vo="1" data-set="' . esc_attr( (string) (int) $nppp_vo_gauge['set'] ) . '"'
+                 . ' data-all="' . ( $nppp_vo_gauge['all'] ? '1' : '0' ) . '"'
+                 . ' data-unknown="' . esc_attr( (string) (int) $nppp_vo_gauge['unknown'] ) . '"'
+                 . ' data-purged="' . esc_attr( $nppp_vo_gauge['purged'] ) . '"'
+               : '' )
            . '>';
             // SVG circular gauge  (r = 28 → circumference = 2πr ≈ 175.93)
             echo '<div class="nppp-ratio-gauge" aria-label="' . esc_attr__( 'Cache coverage ratio gauge', 'fastcgi-cache-purge-and-preload-nginx' ) . '">';
@@ -456,7 +495,9 @@ function nppp_dashboard_widget() {
                 // initialize the hits option if it hasn't been written yet.
                 if ( $nppp_snapshot_exists ) {
                     echo '<button type="button" class="nppp-ratio-refresh"'
-                       . ' title="'      . esc_attr__( 'Refresh cache coverage ratio', 'fastcgi-cache-purge-and-preload-nginx' ) . '"'
+                       . ' title="'      . ( $nppp_vo_gauge !== null
+                                               ? esc_attr__( 'Check Varnish now: live lookup of the last Preload All URLs', 'fastcgi-cache-purge-and-preload-nginx' )
+                                               : esc_attr__( 'Refresh cache coverage ratio', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '"'
                        . ' aria-label="' . esc_attr__( 'Refresh',                 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
                        . '<span class="dashicons dashicons-update"></span>'
                        . '</button>';
@@ -472,8 +513,11 @@ function nppp_dashboard_widget() {
         // Traffic hit ratio reported by Nginx (ngx_cache_purge v4 status endpoint); empty when unavailable.
         // Painted from the stored samples so the page never waits for the status endpoint;
         // nppp-dashboard-widget.js loads the live figures right after (nppp_traffic_refresh).
+        // Varnish-only mode: Nginx reports nothing there, the same slot shows the purge success of the last 24 hours.
         echo '<div id="nppp-traffic-row">'
-           . ( function_exists( 'nppp_http_purge_traffic_stats_stored' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats_stored() ) : '' )
+           . ( $nppp_vo
+               ? nppp_render_vo_purge_row()
+               : ( function_exists( 'nppp_http_purge_traffic_stats_stored' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats_stored() ) : '' ) )
            . '</div>';
 
         // Build one tile per option. States: on (green), off (red),
@@ -512,6 +556,11 @@ function nppp_dashboard_widget() {
             // Secondary line (already escaped) and tooltip of the tile
             $note = '';
             $tip  = '';
+
+            // Locked because Varnish-only mode does not use it
+            if (!empty($status_info['vo_na'])) {
+                $tip = $status;
+            }
 
             // HTTP Purge: mode Nginx was last seen answering in
             if ($key === 'http_purge' && $state === 'on') {
@@ -999,6 +1048,80 @@ function nppp_render_traffic_row( ?array $t ): string {
          . $head . '<div class="nppp-traffic-split">' . $left . $right . '</div></div>';
 }
 
+/**
+ * Escaped HTML of the "Purge success, 24 h" card: the Varnish-only counterpart of the "Traffic hit ratio" card (same
+ * box, same slot, same colours).
+ *
+ * Nginx counts real HIT/MISS traffic. The PURGE contract with Varnish / Vinyl Cache has no such counter (varnishstat
+ * needs the admin port or a VCL / vmod endpoint, which NPP deliberately does not use), so no traffic hit ratio is
+ * shown. What NPP does know is every Purge All, Preload All ban and single URL purge it sent in the last 24 hours and
+ * whether Varnish accepted it: the same figures as the "Purge success, 24 h" box of the Status tab.
+ */
+function nppp_render_vo_purge_row(): string {
+    if ( ! function_exists( 'nppp_varnish_activity' ) ) {
+        return '';
+    }
+
+    $events = nppp_varnish_activity();
+    $total  = count( $events );
+    $tip    = esc_attr__( 'Purge runs NPP sent to Varnish / Vinyl Cache in the last 24 hours (Purge All, the ban before Preload All, single URL purges). A run counts as accepted when Varnish accepted every request of it. This is not the HIT ratio of your visitors: Varnish does not report that over the purge interface.', 'fastcgi-cache-purge-and-preload-nginx' );
+    $head   = '<div class="nppp-traffic-head"><span class="dashicons dashicons-yes-alt"></span>'
+            . '<span class="nppp-traffic-title">' . esc_html__( 'Purge success, 24 h', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>'
+            . '<span class="nppp-traffic-rule"></span>'
+            . '<span class="nppp-traffic-info" tabindex="0" role="img" aria-label="' . $tip . '" data-tip="' . $tip . '">i</span>'
+            . '</div>';
+
+    if ( $total === 0 ) {
+        return '<div class="nppp-traffic-box nppp-traffic-idle">' . $head
+             . '<span class="nppp-traffic-sub">' . esc_html__( 'No purges in the last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+    }
+
+    $good = 0;
+    foreach ( $events as $e ) {
+        if ( $e['status'] === 'ok' ) {
+            $good++;
+        }
+    }
+    $bad = $total - $good;
+    $pct = $good / $total * 100;
+
+    // Same verdict as the Status tab: all accepted = good, 90% and up = fair, below = low.
+    $level = ( $bad === 0 ) ? 'good' : ( $pct >= 90 ? 'fair' : 'low' );
+
+    $pct_text = function_exists( 'nppp_varnish_vo_pct' ) ? rtrim( nppp_varnish_vo_pct( $pct ), '%' ) : number_format_i18n( round( $pct, 1 ), 1 );
+
+    $left = '<div class="nppp-traffic-left">'
+          . '<strong class="nppp-traffic-pct">' . esc_html( $pct_text ) . '<small>%</small></strong>'
+          . '<span class="nppp-traffic-counts">'
+          . '<span class="nppp-traffic-hit">&#x2714; ' . sprintf(
+              /* translators: %s: number of accepted purge runs. */
+              esc_html__( '%s accepted', 'fastcgi-cache-purge-and-preload-nginx' ),
+              esc_html( number_format_i18n( $good ) )
+          ) . '</span>'
+          . '<span class="nppp-traffic-miss">&#x2718; ' . sprintf(
+              /* translators: %s: number of purge runs that failed or only partly succeeded. */
+              esc_html__( '%s failed', 'fastcgi-cache-purge-and-preload-nginx' ),
+              esc_html( number_format_i18n( $bad ) )
+          ) . '</span>'
+          . '</span></div>';
+
+    // Newest run, as on the Status tab: "last: Preload All, ban accepted · 2 mins ago".
+    $last  = end( $events );
+    $right = '';
+    if ( is_array( $last ) && function_exists( 'nppp_varnish_vo_event_text' ) ) {
+        $text  = nppp_varnish_vo_event_text( $last );
+        $right = '<div class="nppp-traffic-right"><span class="nppp-traffic-sub">' . esc_html( sprintf(
+            /* translators: 1: the newest purge, e.g. "Preload All, ban accepted", 2: time since it, e.g. "2 mins ago" */
+            __( 'last: %1$s · %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $text['what'] . ', ' . $text['res'],
+            sprintf( __( '%s ago', 'fastcgi-cache-purge-and-preload-nginx' ), human_time_diff( (int) $last['at'], time() ) )
+        ) ) . '</span></div>';
+    }
+
+    return '<div class="nppp-traffic-box nppp-traffic-' . $level . '">'
+         . $head . '<div class="nppp-traffic-split">' . $left . $right . '</div></div>';
+}
+
 // AJAX handler — refresh cache coverage ratio on demand from the dashboard widget.
 function nppp_refresh_cache_ratio_callback() {
     // Capability check
@@ -1010,6 +1133,21 @@ function nppp_refresh_cache_ratio_callback() {
     if ( empty( $_POST['_wpnonce'] ) ||
          ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_refresh_cache_ratio' ) ) {
         wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    // Varnish-only mode: there is no Nginx cache to scan. Run the same live check as the Status tab's "Check now"
+    // (same lock, same stored record) and answer with the gauge figures it produced. A refused or failed check
+    // answers with its reason, which the widget shows instead of staying silent.
+    if ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() && function_exists( 'nppp_varnish_vo_run_check' ) ) {
+        $run = nppp_varnish_vo_run_check();
+        if ( ! $run['ok'] ) {
+            wp_send_json_error( $run['message'] );
+        }
+
+        $gauge                 = nppp_varnish_vo_widget_gauge();
+        $gauge['vo']           = true;
+        $gauge['traffic_html'] = nppp_render_vo_purge_row();
+        wp_send_json_success( $gauge );
     }
 
     // Allow long-running scans on large caches

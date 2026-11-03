@@ -77,8 +77,20 @@ function nppp_send_mail_now(
     $cache_hits   = '–';
     $cache_misses = '–';
 
-    // Use the pre-computed hit count from the caller when available
-    if ( $precomputed_hits !== null && is_int( $precomputed_hits ) && $precomputed_hits >= 0 ) {
+    // Varnish-only mode: Nginx has no cache, so the directory scan below (and the hit count it would persist for the
+    // dashboard) would report 0. Ask Varnish instead; the figures are the ones the Status tab and the widget show.
+    $nppp_vo_mail = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode();
+    if ( $nppp_vo_mail ) {
+        $vo_cov = function_exists( 'nppp_varnish_vo_mail_coverage' )
+            ? nppp_varnish_vo_mail_coverage( (int) $wp_filesystem->mtime( nppp_get_runtime_file( 'nppp-wget-snapshot.log' ) ) )
+            : null;
+        if ( is_array( $vo_cov ) ) {
+            $cache_ratio  = number_format( $vo_cov['ratio'], 1 ) . '%';
+            $cache_hits   = number_format( $vo_cov['hits'] );
+            $cache_misses = number_format( $vo_cov['misses'] );
+        }
+        $real_hits_resolved = null;
+    } elseif ( $precomputed_hits !== null && is_int( $precomputed_hits ) && $precomputed_hits >= 0 ) {
         $real_hits_resolved = $precomputed_hits;
     } elseif ( function_exists( 'nppp_get_in_cache_page_count' ) ) {
         $real_hits_resolved = nppp_get_in_cache_page_count();
@@ -102,9 +114,9 @@ function nppp_send_mail_now(
         update_option( 'nppp_last_hits_scanned_at', time(),     false );
     }
 
-    // METRIC: Cache size on disk
+    // METRIC: Cache size on disk (Varnish-only mode: the directory is scratch space, its size is not a cache size)
     $cache_size = '–';
-    if ( function_exists( 'nppp_get_cache_disk_size' ) && function_exists( 'nppp_format_cache_size' ) ) {
+    if ( ! $nppp_vo_mail && function_exists( 'nppp_get_cache_disk_size' ) && function_exists( 'nppp_format_cache_size' ) ) {
         $disk = nppp_get_cache_disk_size( $nginx_cache_path );
         if ( is_array( $disk ) && isset( $disk['used'] ) && $disk['used'] > 0 ) {
             $cache_size = nppp_format_cache_size( (int) $disk['used'] );

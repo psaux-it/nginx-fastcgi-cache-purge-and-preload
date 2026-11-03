@@ -1764,54 +1764,23 @@ function nppp_varnish_vo_event_text( array $e ): array {
 }
 
 /**
- * Everything the card shows, read once from stored state (no request is sent), so the summary, the tiles and the
- * accordions always agree with each other.
+ * Coverage of the Varnish-only card, resolved from the stored checks: the single place that decides which
+ * measurement the figures come from and turns its counts into "cached / known / percentage", so the Status card,
+ * the dashboard widget, the report mail and `wp npp status` can never show different numbers.
  *
- * probe: ok | off | parked | none | denied | unreachable | noanswer
- * cov.kind: data | none | running | empty | unavailable
+ * Source: the newest measurement wins (a Check all of the Advanced tab replaces the Check now sample, see below).
+ * Cached = HIT + STALE (Varnish holds the object). Known = every URL with a definite answer (HIT, STALE, MISS,
+ * PASS): UNKNOWN is left out of the percentage, and "not cached" is known - cached, never derived from the size of
+ * the crawl list when only a sample of it was asked.
+ *
+ * kind: data | none | running | empty | unavailable
+ *
+ * @param array|null $chk nppp_varnish_vo_check_state().
+ * @return array{kind:string,counts:array<string,int>,sampled:int,known:int,cached:int,pct:?float,set:int,full:bool,at:int,ep:int,purged:int}
  */
-function nppp_varnish_vo_snapshot(): array {
-    // Endpoints. The lookup uses the first one that is not parked (see nppp_varnish_probe_batch()).
-    $eps       = nppp_varnish_vo_endpoint_states();
-    $total     = count( $eps );
-    $ready     = 0;
-    $attention = 0;
-    $first     = null;
-    foreach ( $eps as $ep ) {
-        if ( ! $ep['parked'] ) {
-            $ready++;
-            if ( $first === null ) {
-                $first = $ep;
-            }
-        }
-        if ( $ep['state'] === 'warn' ) {
-            $attention++;
-        }
-    }
-
-    // Probe: does the VCL answer the lookup? A remembered "no" (one hour, set by any lookup) needs no request to show.
-    $chk    = nppp_varnish_vo_check_state();
+function nppp_varnish_vo_cov_resolve( ?array $chk ): array {
     $status = (string) ( $chk['status'] ?? '' );
-    $off    = ( $first !== null ) ? ( nppp_varnish_state_map( 'varnish_probe_off' )[ nppp_varnish_endpoint_id( $first['endpoint'] ) ] ?? 0 ) : 0;
-    if ( $off > 0 || $status === 'unsupported' ) {
-        $probe = 'off';
-    } elseif ( $first === null && $total > 0 ) {
-        $probe = 'parked';
-    } elseif ( $chk === null ) {
-        $probe = 'none';
-    } elseif ( $status === 'ok' ) {
-        $probe = 'ok';
-    } elseif ( $status === 'denied' ) {
-        $probe = 'denied';
-    } elseif ( $status === 'unreachable' ) {
-        $probe = 'unreachable';
-    } else {
-        $probe = 'noanswer';
-    }
-
-    // Home page and coverage of the sample of the last Preload All.
-    $home = ( is_array( $chk['home'] ?? null ) ) ? $chk['home'] : null;
-    $cov  = ( is_array( $chk['cov'] ?? null ) ) ? $chk['cov'] : null;
+    $cov    = ( is_array( $chk['cov'] ?? null ) ) ? $chk['cov'] : null;
 
     // Coverage source: the newest measurement wins. A Check all of the Advanced tab (every URL of the crawl list)
     // that is not older than the last Check now replaces that check's sample, as long as the lookup works.
@@ -1866,6 +1835,71 @@ function nppp_varnish_vo_snapshot(): array {
         $kind = 'data';
     }
 
+    return array(
+        'kind'    => $kind,
+        'counts'  => $counts,
+        'sampled' => $sampled,
+        'known'   => $known,
+        'cached'  => $cached,
+        'pct'     => ( $kind === 'data' ) ? $cached / $known * 100 : null,
+        'set'     => (int) ( $cov['set'] ?? 0 ),
+        'full'    => $cov_full,   // true: every URL of the crawl list was asked (Check all), false: a sample (Check now)
+        'at'      => $cov_at,     // when the counts were made
+        'ep'      => $cov_ep,     // endpoint the counts were asked on (0 = unknown)
+        'purged'  => ( $kind === 'data' ) ? nppp_varnish_vo_purges_since( $cov_from ) : 0,   // purge runs after the counts were made
+    );
+}
+
+/**
+ * Everything the card shows, read once from stored state (no request is sent), so the summary, the tiles and the
+ * accordions always agree with each other.
+ *
+ * probe: ok | off | parked | none | denied | unreachable | noanswer
+ * cov.kind: data | none | running | empty | unavailable
+ */
+function nppp_varnish_vo_snapshot(): array {
+    // Endpoints. The lookup uses the first one that is not parked (see nppp_varnish_probe_batch()).
+    $eps       = nppp_varnish_vo_endpoint_states();
+    $total     = count( $eps );
+    $ready     = 0;
+    $attention = 0;
+    $first     = null;
+    foreach ( $eps as $ep ) {
+        if ( ! $ep['parked'] ) {
+            $ready++;
+            if ( $first === null ) {
+                $first = $ep;
+            }
+        }
+        if ( $ep['state'] === 'warn' ) {
+            $attention++;
+        }
+    }
+
+    // Probe: does the VCL answer the lookup? A remembered "no" (one hour, set by any lookup) needs no request to show.
+    $chk    = nppp_varnish_vo_check_state();
+    $status = (string) ( $chk['status'] ?? '' );
+    $off    = ( $first !== null ) ? ( nppp_varnish_state_map( 'varnish_probe_off' )[ nppp_varnish_endpoint_id( $first['endpoint'] ) ] ?? 0 ) : 0;
+    if ( $off > 0 || $status === 'unsupported' ) {
+        $probe = 'off';
+    } elseif ( $first === null && $total > 0 ) {
+        $probe = 'parked';
+    } elseif ( $chk === null ) {
+        $probe = 'none';
+    } elseif ( $status === 'ok' ) {
+        $probe = 'ok';
+    } elseif ( $status === 'denied' ) {
+        $probe = 'denied';
+    } elseif ( $status === 'unreachable' ) {
+        $probe = 'unreachable';
+    } else {
+        $probe = 'noanswer';
+    }
+
+    // Home page and coverage (Check all of the Advanced tab, else the sample of the last Check now).
+    $home = ( is_array( $chk['home'] ?? null ) ) ? $chk['home'] : null;
+    $cov  = nppp_varnish_vo_cov_resolve( $chk );
+
     // Purge runs of the last 24 hours.
     $events = nppp_varnish_activity();
     $a_tot  = count( $events );
@@ -1899,19 +1933,7 @@ function nppp_varnish_vo_snapshot(): array {
         'chk'    => $chk,
         'probe'  => $probe,
         'home'   => $home,
-        'cov'    => array(
-            'kind'    => $kind,
-            'counts'  => $counts,
-            'sampled' => $sampled,
-            'known'   => $known,
-            'cached'  => $cached,
-            'pct'     => ( $kind === 'data' ) ? $cached / $known * 100 : null,
-            'set'     => (int) ( $cov['set'] ?? 0 ),
-            'full'    => $cov_full,   // true: every URL of the crawl list was asked (Check all), false: a sample (Check now)
-            'at'      => $cov_at,     // when the counts were made
-            'ep'      => $cov_ep,     // endpoint the counts were asked on (0 = unknown)
-            'purged'  => ( $kind === 'data' ) ? nppp_varnish_vo_purges_since( $cov_from ) : 0,   // purge runs after the counts were made
-        ),
+        'cov'    => $cov,
         'act'    => array(
             'events' => $events,
             'total'  => $a_tot,
@@ -2697,27 +2719,26 @@ function nppp_varnish_vo_reconcile_full( $wp_filesystem ): void {
 }
 
 /**
- * AJAX: Check now on the Status tab card (Varnish-only mode).
+ * The live check of Varnish-only mode (Status tab "Check now" and the dashboard widget's refresh button).
  *
  * Read-only lookups against the first endpoint that is not parked: one for the home page (timed), then up to
- * 50 for a sample of the last Preload All. The result is stored (state "varnish_vo_check") and the answer is
- * the whole refreshed card (summary, measure boxes and accordions change together), so rendering the tab never
- * waits on Varnish.
+ * 50 for a sample of the last Preload All. The result is stored (state "varnish_vo_check"), so every surface reads
+ * the same record and shows the same figures. All callers take the same lock (nppp_vo_check_lock): one check at a
+ * time, whoever asked.
+ *
+ * No JSON is sent from in here (wp_send_json_*() ends the request with die, which skips a finally block): the
+ * caller answers with the returned message.
+ *
+ * @return array{ok:bool,message:string} message is the translated reason when ok is false.
  */
-function nppp_vo_status_check_callback() {
-    if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_vo_status_nonce' ) ) {
-        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
-    }
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( __( 'You do not have permission to access this action.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
-    }
+function nppp_varnish_vo_run_check(): array {
     if ( ! function_exists( 'nppp_varnish_only_mode' ) || ! nppp_varnish_only_mode() || ! function_exists( 'nppp_varnish_probe_batch' ) ) {
-        wp_send_json_error( __( 'Varnish-only mode is not active.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        return array( 'ok' => false, 'message' => __( 'Varnish-only mode is not active.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 
     // One check at a time: a double click (or two admins) must not double the lookups sent to Varnish.
     if ( get_transient( 'nppp_vo_check_lock' ) ) {
-        wp_send_json_error( __( 'A check is already running. Try again in a few seconds.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        return array( 'ok' => false, 'message' => __( 'A check is already running. Try again in a few seconds.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
     set_transient( 'nppp_vo_check_lock', 1, 30 );
 
@@ -2787,15 +2808,108 @@ function nppp_vo_status_check_callback() {
     } catch ( \Throwable $e ) {
         $failed = true;
     } finally {
-        // wp_send_json_*() ends the request with die, which skips a finally block: answer only after it.
         delete_transient( 'nppp_vo_check_lock' );
     }
 
     if ( $failed ) {
-        wp_send_json_error( __( 'The live check failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        return array( 'ok' => false, 'message' => __( 'The live check failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+
+    return array( 'ok' => true, 'message' => '' );
+}
+
+/**
+ * AJAX: Check now on the Status tab card (Varnish-only mode).
+ *
+ * Runs the shared live check (nppp_varnish_vo_run_check()) and answers with the whole refreshed card (summary,
+ * measure boxes and accordions change together), so rendering the tab never waits on Varnish.
+ */
+function nppp_vo_status_check_callback() {
+    if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_vo_status_nonce' ) ) {
+        wp_send_json_error( __( 'Nonce verification failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    }
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( __( 'You do not have permission to access this action.', 'fastcgi-cache-purge-and-preload-nginx' ), 403 );
+    }
+
+    $run = nppp_varnish_vo_run_check();
+    if ( ! $run['ok'] ) {
+        wp_send_json_error( $run['message'] );
     }
 
     wp_send_json_success( array( 'card' => nppp_varnish_vo_root() ) );
+}
+
+/**
+ * What the dashboard widget's coverage gauge shows in Varnish-only mode, from the stored checks (no request).
+ *
+ * Same figures and thresholds as the Status card (nppp_varnish_vo_cov_resolve()): cached = HIT + STALE of the URLs
+ * with a definite answer, "not cached" = the rest of those. A Check all covers every URL of the crawl list; a Check
+ * now only a sample of it, which is an estimate and says how many URLs it rests on. The ratio is never "not cached =
+ * list size - cached".
+ *
+ * @return array{na:bool,na_reason:string,ratio:float,hits:int,misses:int,total:int,unknown:int,set:int,all:bool,purged:string,scanned_at:int}
+ *         na_reason: vo_none | running | empty | unavailable (only when na is true). purged: "N purge runs after this
+ *         check" or ''.
+ */
+function nppp_varnish_vo_widget_gauge(): array {
+    $cov = nppp_varnish_vo_cov_resolve( nppp_varnish_vo_check_state() );
+    $max = function_exists( 'nppp_varnish_probe_max_urls' ) ? nppp_varnish_probe_max_urls() : 50;
+
+    $out = array(
+        'na'         => true,
+        'na_reason'  => 'unavailable',
+        'ratio'      => 0.0,
+        'hits'       => 0,
+        'misses'     => 0,
+        'total'      => 0,
+        'unknown'    => 0,
+        'set'        => (int) $cov['set'],
+        'all'        => ( $cov['full'] || ( $cov['set'] > 0 && $cov['set'] <= $max ) ),
+        'purged'     => '',
+        'scanned_at' => (int) $cov['at'],
+    );
+
+    if ( $cov['kind'] !== 'data' ) {
+        $out['na_reason'] = ( $cov['kind'] === 'none' ) ? 'vo_none' : $cov['kind'];
+        return $out;
+    }
+
+    $out['na']        = false;
+    $out['na_reason'] = '';
+    $out['ratio']     = round( (float) $cov['pct'], 1 );
+    if ( $cov['pct'] < 100 && $out['ratio'] >= 100 ) {
+        $out['ratio'] = 99.9;   // same rule as nppp_varnish_vo_pct(): 2655 of 2656 must not read as 100 %
+    }
+    $out['hits']      = (int) $cov['cached'];
+    $out['misses']    = (int) ( $cov['known'] - $cov['cached'] );
+    $out['total']     = (int) $cov['known'];
+    $out['unknown']   = (int) $cov['counts']['unknown'];
+    $out['purged']    = nppp_varnish_vo_purged_text( (int) $cov['purged'] );
+
+    return $out;
+}
+
+/**
+ * Coverage figures for the Preload report mail in Varnish-only mode (the Nginx cache directory is an empty scratch
+ * directory there, so the Nginx scan would report 0 cached).
+ *
+ * Uses the stored figures when they were made after the crawl finished; otherwise runs the shared live check once
+ * (same lock and record as the Status tab, at most two batches of 10 s, read-only lookups). The mail is only built
+ * when it is going to be sent, so this costs nothing for sites without mail. When the check cannot run or Varnish
+ * does not answer, the caller shows dashes: no number is better than a wrong one.
+ *
+ * @param int $since Unix time the figures must not be older than (end of the crawl); 0 accepts any stored check.
+ * @return array|null nppp_varnish_vo_widget_gauge() data when it holds figures, null otherwise.
+ */
+function nppp_varnish_vo_mail_coverage( int $since = 0 ): ?array {
+    $g = nppp_varnish_vo_widget_gauge();
+    if ( $g['na'] || $g['scanned_at'] < $since ) {
+        nppp_varnish_vo_run_check();
+        $g = nppp_varnish_vo_widget_gauge();
+    }
+
+    return ( $g['na'] || $g['scanned_at'] < $since ) ? null : $g;
 }
 
 function nppp_my_status_html() {

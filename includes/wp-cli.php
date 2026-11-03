@@ -363,7 +363,20 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 : '' ) )
             : __( 'N/A — run a Preload to populate', 'fastcgi-cache-purge-and-preload-nginx' );
 
-        $ratio_raw   = nppp_get_cache_ratio( $page_count !== false ? $page_count : 'N/A' );
+        $nppp_vo_cli = function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() && function_exists( 'nppp_varnish_vo_widget_gauge' );
+        if ( $nppp_vo_cli ) {
+            // Varnish-only mode: the Nginx cache directory is scratch space, so its count and size say nothing. Show the
+            // stored live check (the one of the Status tab and the dashboard widget); run `Check now` there to refresh it.
+            $vo_g = nppp_varnish_vo_widget_gauge();
+            $page_count_label = __( 'N/A — Varnish-only mode', 'fastcgi-cache-purge-and-preload-nginx' );
+            if ( $vo_g['na'] ) {
+                $ratio_raw = __( 'N/A — not checked yet or Varnish did not answer (Status tab, Check now)', 'fastcgi-cache-purge-and-preload-nginx' );
+            } else {
+                $ratio_raw = [ 'ratio' => $vo_g['ratio'], 'hits' => $vo_g['hits'], 'misses' => $vo_g['misses'], 'total' => $vo_g['total'] ];
+            }
+        } else {
+            $ratio_raw = nppp_get_cache_ratio( $page_count !== false ? $page_count : 'N/A' );
+        }
         $ratio_label = is_array( $ratio_raw )
             ? number_format( $ratio_raw['ratio'], 1 ) . '%'
               /* translators: %d: Number of cached pages */
@@ -374,7 +387,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
               . ' / ' . sprintf( __( '%d total', 'fastcgi-cache-purge-and-preload-nginx' ), $ratio_raw['total'] ) . ')'
             : (string) $ratio_raw;
 
-        $disk = nppp_get_cache_disk_size( $cache_path );
+        $disk = $nppp_vo_cli ? null : nppp_get_cache_disk_size( $cache_path );
         if ( $disk === null ) {
             $disk_label = __( 'N/A', 'fastcgi-cache-purge-and-preload-nginx' );
         } elseif ( $disk['dedicated'] ) {

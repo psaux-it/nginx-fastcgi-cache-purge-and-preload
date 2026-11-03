@@ -128,11 +128,28 @@
             var CIRCUMFERENCE = 232.48; // 2 * π * 37
             var __ = wp.i18n.__;
             var _n = wp.i18n._n;
+            var sprintf = wp.i18n.sprintf;
+
+            // Varnish-only mode (set from the strip's data-vo below): the gauge shows the live check of the Status
+            // tab, so it uses that card's thresholds (90 / 50) instead of the Nginx ones (70 / 40).
+            var voMode = false;
 
             function ratioColor(pct) {
-                if (pct >= 70) { return '#3CB371'; }
-                if (pct >= 40) { return '#f0a500'; }
+                if (pct >= (voMode ? 90 : 70)) { return '#3CB371'; }
+                if (pct >= (voMode ? 50 : 40)) { return '#f0a500'; }
                 return '#d9534f';
+            }
+
+            // Text of the N/A state. The Varnish-only reasons are vo_none, running and unavailable; "empty" and the
+            // Nginx reasons without a message of their own end in the snapshot hint.
+            function naMessage(reason) {
+                if (reason === 'path_not_found') { return __( 'Cache path not found. Check Nginx cache path setting.',  'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (reason === 'undetermined')   { return __( 'Cache unreadable. Check cache directory permissions.',   'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (reason === 'regex_error')    { return __( 'Cache key regex error. Check Advanced Options.',         'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (reason === 'vo_none')        { return __( 'Click \u21BB to check Varnish now.',                    'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (reason === 'running')        { return __( 'Preload All is running; coverage is checked once it has finished.', 'fastcgi-cache-purge-and-preload-nginx' ); }
+                if (reason === 'unavailable')    { return __( 'Varnish did not answer the lookup. See the Status tab.', 'fastcgi-cache-purge-and-preload-nginx' ); }
+                return __( 'Run a full Preload to generate a snapshot.', 'fastcgi-cache-purge-and-preload-nginx' );
             }
 
             function humanizeAge(unixTs) {
@@ -172,7 +189,9 @@
             }
 
             // Shared renderer — called on page load and after every AJAX refresh.
-            function animateGauge($strip, pct, hits, misses, total, scannedAt) {
+            // vo: null (Nginx), or { all, set, unknown } in Varnish-only mode, where the figures rest on a sample of the
+            // last Preload All and say so instead of claiming the size of the whole crawl list.
+            function animateGauge($strip, pct, hits, misses, total, scannedAt, vo) {
                 var color     = ratioColor(pct);
                 var offset    = CIRCUMFERENCE - (pct / 100) * CIRCUMFERENCE;
                 var $progress = $strip.find('.nppp-gauge-progress');
@@ -206,12 +225,28 @@
                 var ageHtml = '';
 
                 if (scannedAt) {
+                    var totalText;
+                    if (vo) {
+                        totalText = vo.all
+                            ? sprintf( __( 'all %s URLs checked', 'fastcgi-cache-purge-and-preload-nginx' ), Number(total).toLocaleString() )
+                            : sprintf( __( 'sample %1$s of %2$s URLs', 'fastcgi-cache-purge-and-preload-nginx' ), Number(total).toLocaleString(), Number(vo.set).toLocaleString() );
+                        if (vo.unknown > 0) {
+                            totalText += ' \u00B7 ' + sprintf( __( '%s no answer', 'fastcgi-cache-purge-and-preload-nginx' ), Number(vo.unknown).toLocaleString() );
+                        }
+                        // A purge after the check removed pages the counts still list as cached (server text, as on the Status card).
+                        if (vo.purged) {
+                            totalText += ' \u00B7 ' + $('<span>').text(vo.purged).html();
+                        }
+                    } else {
+                        totalText = total + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' );
+                    }
+
                     ageHtml = '<div class="nppp-ratio-age-row">' +
                         '<span class="nppp-ratio-age" title="' + __( 'Last refreshed', 'fastcgi-cache-purge-and-preload-nginx' ) + '">' +
                         '&#x23F1; ' + humanizeAge(scannedAt) +
                         '</span>' +
                         '<span class="nppp-ratio-sep"> &nbsp;&middot;&nbsp; </span>' +
-                        '<span class="nppp-ratio-total">' + total + ' ' + __( 'total', 'fastcgi-cache-purge-and-preload-nginx' ) + '</span>' +
+                        '<span class="nppp-ratio-total">' + totalText + '</span>' +
                     '</div>';
                 }
 
@@ -229,12 +264,24 @@
             var isNa     = $strip.data('na') === '1' || $strip.data('na') === 1;
             var naReason = $strip.data('na-reason') || '';
 
+            voMode = $strip.data('vo') === '1' || $strip.data('vo') === 1;
+
+            // Varnish-only mode: what the figures rest on, from the data attributes (initial render)
+            function voInfoFromData() {
+                return {
+                    all:     $strip.data('all') === '1' || $strip.data('all') === 1,
+                    set:     parseInt($strip.data('set'),     10) || 0,
+                    unknown: parseInt($strip.data('unknown'), 10) || 0,
+                    purged:  String($strip.attr('data-purged') || '')
+                };
+            }
+
             // Initial page-load render
             if (isNa) {
                 $pct.text('N/A').css('font-size', '11px');
                 var naMsg = (naReason === 'not_initialized')
                     ? __( 'Click \u21BB to scan and initialize..', 'fastcgi-cache-purge-and-preload-nginx' )
-                    : __( 'Run a full Preload to generate a snapshot.',      'fastcgi-cache-purge-and-preload-nginx' );
+                    : naMessage(naReason);
                 $detail.html('<span class="nppp-ratio-na">' + naMsg + '</span>');
                 $progress.attr('stroke', '#ccc');
             } else {
@@ -244,9 +291,17 @@
                     parseInt($strip.data('hits'),       10),
                     parseInt($strip.data('misses'),     10),
                     parseInt($strip.data('total'),      10),
-                    parseInt($strip.data('scanned-at'), 10)
+                    parseInt($strip.data('scanned-at'), 10),
+                    voMode ? voInfoFromData() : null
                 );
                 checkStaleness($strip, parseInt($strip.data('scanned-at'), 10));
+            }
+
+            // Varnish-only mode: the live check can be refused (another check is running) or fail. Say so below the
+            // figures, which stay as they were. Text only, never markup.
+            function showError(msg) {
+                $strip.find('.nppp-ratio-err').remove();
+                $('#nppp-ratio-detail').append($('<span class="nppp-ratio-err" role="alert"></span>').text(msg));
             }
 
             // Refresh button — triggers a live re-scan via AJAX without page reload.
@@ -265,33 +320,45 @@
                 $.ajax({
                     url:    nppp_widget_data.ajaxurl,
                     method: 'POST',
+                    // Varnish-only mode runs a live lookup (up to two batches of 10 s on the server); the Nginx scan has no limit.
+                    timeout: voMode ? 60000 : 0,
                     data: {
                         action:   'nppp_refresh_cache_ratio',
                         _wpnonce:  nppp_widget_data.ratio_refresh_nonce
                     },
                     success: function (response) {
-                        if (!response || !response.success) { return; }
+                        if (!response || !response.success) {
+                            if (voMode) {
+                                showError(response && typeof response.data === 'string' && response.data !== ''
+                                    ? response.data
+                                    : __( 'The live check failed.', 'fastcgi-cache-purge-and-preload-nginx' ));
+                            }
+                            return;
+                        }
                         var d = response.data;
 
                         // Server-escaped markup (nppp_render_traffic_row); '' hides the row.
                         if (typeof d.traffic_html === 'string') { $('#nppp-traffic-row').html(d.traffic_html); }
 
+                        $strip.find('.nppp-ratio-err').remove();
+
                         if (d.na) {
-                            var naMsg;
-                            if      (d.na_reason === 'path_not_found') { naMsg = __( 'Cache path not found. Check Nginx cache path setting.',  'fastcgi-cache-purge-and-preload-nginx' ); }
-                            else if (d.na_reason === 'undetermined')   { naMsg = __( 'Cache unreadable. Check cache directory permissions.',   'fastcgi-cache-purge-and-preload-nginx' ); }
-                            else if (d.na_reason === 'regex_error')    { naMsg = __( 'Cache key regex error. Check Advanced Options.',         'fastcgi-cache-purge-and-preload-nginx' ); }
-                            else                                       { naMsg = __( 'Run a full Preload to generate a snapshot.',             'fastcgi-cache-purge-and-preload-nginx' ); }
+                            var naMsg = naMessage(d.na_reason);
                             $strip.find('.nppp-gauge-pct').text('N/A').css('font-size', '11px');
                             $strip.find('#nppp-ratio-detail').html('<span class="nppp-ratio-na">' + naMsg + '</span>');
                             $strip.find('.nppp-gauge-progress').attr('stroke', '#ccc');
                             $strip.css({ 'border-left-color': '#ddd', 'border-bottom-color': '#ddd' });
                         } else {
-                            animateGauge($strip, d.ratio, d.hits, d.misses, d.total, d.scanned_at);
+                            animateGauge($strip, d.ratio, d.hits, d.misses, d.total, d.scanned_at,
+                                voMode ? { all: !!d.all, set: d.set, unknown: d.unknown, purged: d.purged || '' } : null);
                             checkStaleness($strip, d.scanned_at);
                         }
                     },
-                    // Silent fail — existing gauge data stays intact on network error
+                    // Nginx mode: silent fail, existing gauge data stays intact on network error.
+                    // Varnish-only mode: say it, the figures stay as they were.
+                    error: function () {
+                        if (voMode) { showError(__( 'The live check failed.', 'fastcgi-cache-purge-and-preload-nginx' )); }
+                    },
                     complete: function () {
                         $btn.removeClass('nppp-refreshing');
                         $strip.removeClass('nppp-ratio-loading');

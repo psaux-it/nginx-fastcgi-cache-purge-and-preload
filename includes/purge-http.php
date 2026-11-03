@@ -790,6 +790,15 @@ function nppp_http_purge_traffic_status_hint(): ?array {
 }
 
 /**
+ * Does Nginx's own traffic counter say anything about this site? Not in Varnish-only mode: Nginx has no cache of its
+ * own there, so a HTTP Purge setting left ON from before must not make the dashboard report HIT/MISS figures of a
+ * cache that is not in use (and must not keep a sampler running against it).
+ */
+function nppp_http_purge_traffic_applicable(): bool {
+    return ! ( function_exists( 'nppp_varnish_only_mode' ) && nppp_varnish_only_mode() );
+}
+
+/**
  * Traffic hit ratio of Nginx itself (ngx_cache_purge v4 status endpoint), or null when it
  * is not available. Complements, never replaces, the disk based Cache Coverage:
  * coverage = how much of the site is warm; this = how much real traffic was served warm.
@@ -803,7 +812,7 @@ function nppp_http_purge_traffic_status_hint(): ?array {
  * @return array|null See nppp_http_purge_traffic_summarize().
  */
 function nppp_http_purge_traffic_stats( bool $fresh = false, bool $force_sample = false ): ?array {
-    if ( ! nppp_http_purge_enabled() ) {
+    if ( ! nppp_http_purge_enabled() || ! nppp_http_purge_traffic_applicable() ) {
         return null;
     }
     $url = nppp_http_purge_queue_status_url();
@@ -876,7 +885,7 @@ function nppp_http_purge_traffic_boundary(): int {
  * @return array|null See nppp_http_purge_traffic_summarize().
  */
 function nppp_http_purge_traffic_stats_stored(): ?array {
-    if ( ! nppp_http_purge_enabled() || nppp_http_purge_queue_status_url() === '' ) {
+    if ( ! nppp_http_purge_enabled() || ! nppp_http_purge_traffic_applicable() || nppp_http_purge_queue_status_url() === '' ) {
         return null;
     }
 
@@ -901,7 +910,7 @@ function nppp_http_purge_traffic_stats_stored(): ?array {
  * Should the background sampler run? Same conditions as nppp_http_purge_traffic_stats().
  */
 function nppp_http_purge_traffic_sampling_wanted(): bool {
-    return nppp_http_purge_enabled() && nppp_http_purge_queue_status_url() !== '';
+    return nppp_http_purge_enabled() && nppp_http_purge_traffic_applicable() && nppp_http_purge_queue_status_url() !== '';
 }
 
 /**

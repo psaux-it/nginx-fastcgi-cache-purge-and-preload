@@ -310,6 +310,13 @@
     font-size: 12.5px;
 }
 
+/* Varnish-only mode: the live check was refused or failed; the figures above stay as they were. */
+.nppp-ratio-err {
+    color: #b8312f;
+    font-size: 12px;
+    font-weight: 600;
+}
+
 .nppp-ratio-age {
     display: inline-flex;
     align-items: center;
