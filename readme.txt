@@ -328,7 +328,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 = 2.1.9 (2026-11-01) =
 
 * NEW: Dashboard "Nginx Cache Traffic Hit Ratio" — Displays real visitor HIT/MISS ratios from Nginx (ngx_cache_purge v4) with a 24-hour trend excluding "Preload All" runs.
-* NEW: "Varnish Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends HTTP Purge to the configured Varnish Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
+* NEW: "Varnish Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends a PURGE request to the configured Varnish Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
 * NEW: "Varnish-Only Mode" — For setups where Nginx has no cache and Varnish is the only cache layer (Nginx → Varnish → Apache / PHP-FPM). Purge, Purge All and Preload go through Varnish only.
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
 * Fixed: Deactivation no longer deletes the Fail2Ban worker's lock files, and clears worker state only once the worker is confirmed stopped, preventing a second worker after reactivation.
