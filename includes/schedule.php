@@ -511,14 +511,15 @@ function nppp_create_scheduled_event_preload_status_callback() {
     nppp_preload_cycle_start_delete();
 
     if ($mobile_enabled && $cycle_start && !empty($last_preload_time)) {
-        // Use wget's own FINISHED timestamp as end — immune to cron delay
-        $end_time = DateTime::createFromFormat(
-            'Y-m-d H:i:s',
-            $last_preload_time,
-            new DateTimeZone(wp_timezone_string())
-        );
-        if ($end_time) {
-            $total_seconds = $end_time->getTimestamp() - intval($cycle_start);
+        // End of the crawl as a real epoch: the snapshot was written the moment it completed. wget's FINISHED line
+        // is the server's own clock, not the WordPress timezone: read as one it skews the total by the difference
+        // between the two (and the max() below turns a negative skew into "0m 0s").
+        $end_ts = (int) $wp_filesystem->mtime($snapshot_path);
+        if ($end_ts <= 0) {
+            $end_ts = time();
+        }
+        if ($end_ts > 0) {
+            $total_seconds = $end_ts - intval($cycle_start);
             $total_seconds = max(0, $total_seconds);
             $hours   = intdiv($total_seconds, 3600);
             $minutes = intdiv($total_seconds % 3600, 60);
