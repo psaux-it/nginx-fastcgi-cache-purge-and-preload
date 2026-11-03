@@ -2102,6 +2102,181 @@ button.nppp-preload-btn[disabled] {
     margin-top: 4px;
 }
 
+/* Varnish row (System Checks, Varnish-only mode) — same markup and palette as the HTTP Purge row */
+#nppp-status-tab #npppVarnishVo {
+    font-size: 14px;
+}
+#npppVarnishVo.nppp-hp-ok   { color: #008000; }
+#npppVarnishVo.nppp-hp-warn,
+#npppVarnishVo.nppp-hp-wait { color: #b45f06; }
+#npppVarnishVo.nppp-hp-bad  { color: #c9302c; }
+#npppVarnishVo.nppp-hp-off  { color: #72777c; }
+#npppVarnishVo.nppp-hp-ok   .dashicons { color: #008000; }
+#npppVarnishVo.nppp-hp-warn .dashicons,
+#npppVarnishVo.nppp-hp-wait .dashicons { color: #e69500; }
+#npppVarnishVo.nppp-hp-bad  .dashicons { color: #ff0000; }
+#npppVarnishVo.nppp-hp-off  .dashicons { color: #72777c; }
+
+/* Detail lines under the verdict, one per line: they line up with the text, not the icon */
+#npppVarnishVo .nppp-hp-meta {
+    display: block;
+    margin: 2px 0 0 24px;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: normal;
+    color: #50575e;
+}
+#npppVarnishVo .nppp-hp-text + .nppp-hp-meta {
+    margin-top: 4px;
+}
+
+/* Varnish-only mode card (Status tab, right panel). Same palette as the left panel's rows; every rule is scoped to #nppp-nginx-info. */
+#nppp-nginx-info .nppp-vo-st {
+    font-size: 14px;
+}
+#nppp-nginx-info .nppp-vo-text {
+    font-weight: bold;
+}
+#nppp-nginx-info .nppp-vo-ok   { color: #008000; }
+#nppp-nginx-info .nppp-vo-warn,
+#nppp-nginx-info .nppp-vo-wait { color: #b45f06; }
+#nppp-nginx-info .nppp-vo-bad  { color: #c9302c; }
+#nppp-nginx-info .nppp-vo-off  { color: #72777c; }
+#nppp-nginx-info .nppp-vo-ok   .dashicons { color: #008000; }
+#nppp-nginx-info .nppp-vo-warn .dashicons,
+#nppp-nginx-info .nppp-vo-wait .dashicons,
+#nppp-nginx-info .dashicons.nppp-vo-wait { color: #e69500; }
+#nppp-nginx-info .nppp-vo-bad  .dashicons { color: #ff0000; }
+#nppp-nginx-info .nppp-vo-off  .dashicons,
+#nppp-nginx-info .dashicons.nppp-vo-off  { color: #72777c; }
+
+/* Detail lines under a verdict: they line up with the text, not the icon */
+#nppp-nginx-info .nppp-vo-meta {
+    display: block;
+    margin: 2px 0 0 24px;
+    font-size: 12px;
+    line-height: 1.4;
+    font-weight: normal;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-text + .nppp-vo-meta {
+    margin-top: 4px;
+}
+
+#nppp-nginx-info .nppp-vo-mono {
+    font-family: Consolas, Monaco, monospace;
+    font-size: 12px;
+    font-weight: normal;
+    word-break: break-all;
+}
+#nppp-nginx-info .nppp-vo-idx {
+    font-weight: bold;
+}
+#nppp-nginx-info .nppp-vo-sub {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: normal;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-chip {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    color: #005a9e;
+    background-color: #eef4fa;
+    border-radius: 3px;
+}
+#nppp-nginx-info .nppp-vo-okc  { color: #008000; }
+#nppp-nginx-info .nppp-vo-badc { color: #c9302c; }
+
+/* Coverage: percentage, stacked bar, legend, then "Checked ... · Check now" */
+#nppp-nginx-info .nppp-vo-covtext {
+    display: block;
+    font-size: 13px;
+}
+#nppp-nginx-info .nppp-vo-bar {
+    display: flex;
+    height: 10px;
+    margin: 6px 0 4px;
+    overflow: hidden;
+    background-color: #dcdcde;
+    border-radius: 5px;
+}
+#nppp-nginx-info .nppp-vo-seg {
+    display: block;
+    height: 100%;
+}
+#nppp-nginx-info .nppp-vo-seg-hit     { background-color: #2b9a2b; }
+#nppp-nginx-info .nppp-vo-seg-stale   { background-color: #f0c36d; }
+#nppp-nginx-info .nppp-vo-seg-miss    { background-color: #e69500; }
+#nppp-nginx-info .nppp-vo-seg-pass    { background-color: #c9302c; }
+#nppp-nginx-info .nppp-vo-seg-unknown { background-color: #a7aaad; }
+#nppp-nginx-info .nppp-vo-legend {
+    display: block;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-leg {
+    display: inline-block;
+    margin-right: 10px;
+    white-space: nowrap;
+}
+#nppp-nginx-info .nppp-vo-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 4px;
+    border-radius: 50%;
+}
+#nppp-nginx-info .nppp-vo-foot {
+    margin-left: 0;
+}
+#nppp-nginx-info .nppp-vo-link {
+    padding: 0;
+    font: inherit;
+    color: #2271b1;
+    text-decoration: underline;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+#nppp-nginx-info .nppp-vo-link:hover,
+#nppp-nginx-info .nppp-vo-link:focus {
+    color: #135e96;
+}
+#nppp-nginx-info .nppp-vo-link[disabled] {
+    color: #72777c;
+    cursor: default;
+    text-decoration: none;
+}
+#nppp-nginx-info #nppp-vo-live[aria-busy="true"] {
+    opacity: 0.7;
+}
+
+/* Purge activity: one line per event, time first */
+#nppp-nginx-info .nppp-vo-ev {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+    line-height: 1.7;
+}
+#nppp-nginx-info .nppp-vo-evtime {
+    flex: 0 0 76px;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-ev .nppp-vo-dot {
+    flex: 0 0 auto;
+    margin-right: 0;
+}
+
 /* Style for the settings tab group separator */
 .nppp-separator {
     border: none;

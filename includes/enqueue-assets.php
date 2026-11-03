@@ -107,6 +107,17 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
         ),
     ));
 
+    // Status tab card in Varnish-only mode: the "Check now" button of the Live cache check. Inert unless the
+    // button exists (the tab is loaded by AJAX and the mode can be switched without a page reload).
+    wp_enqueue_script('nppp-vo-status-js', plugins_url('../admin/js/nppp-vo-status.js', __FILE__), array('jquery', 'nppp_admin-js'), '2.1.9', true);
+    wp_localize_script('nppp-vo-status-js', 'nppp_vo_status_data', array(
+        'nonce' => wp_create_nonce('nppp_vo_status_nonce'),
+        'i18n'  => array(
+            'checking' => __( 'Checking…', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'error'    => __( 'The live check failed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        ),
+    ));
+
     // Create a nonce for clearing nginx cache logs
     $clear_nginx_cache_logs_nonce = wp_create_nonce('nppp-clear-nginx-cache-logs');
     // Create a nonce for updating send mail option

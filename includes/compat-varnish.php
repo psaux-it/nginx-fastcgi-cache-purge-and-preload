@@ -378,6 +378,11 @@ if ( ! function_exists( 'nppp_varnish_only_reset_state' ) ) {
         nppp_state_delete( 'varnish_breaker' );
         nppp_state_delete( 'varnish_warn' );
         nppp_state_delete( 'varnish_vo_failure' );
+        nppp_state_delete( 'varnish_vo_last_ok' );
+        // Status tab card: the 24 h purge log, the per-endpoint PURGE timings and the last live cache check.
+        nppp_state_delete( 'varnish_vo_activity' );
+        nppp_state_delete( 'varnish_vo_ep' );
+        nppp_state_delete( 'varnish_vo_check' );
     }
 }
 
@@ -507,6 +512,164 @@ if ( ! function_exists( 'nppp_varnish_unexpected_suffix' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_varnish_ep_note' ) ) {
+    /**
+     * Remembers the outcome of the latest PURGE request per endpoint (request-local).
+     *
+     * nppp_varnish_send() can run dozens of times in one purge (one request per related URL), so it only
+     * notes the outcome here; nppp_varnish_ep_flush() writes it ONCE per run, from nppp_varnish_only_report().
+     * The Status tab reads it to show "last PURGE answered in 14 ms" per endpoint.
+     *
+     * @param int|null $ms Round-trip time in milliseconds, null when no answer came back.
+     */
+    function nppp_varnish_ep_note( string $endpoint, string $kind, int $status, ?int $ms, string $reason ): void {
+        if ( ! isset( $GLOBALS['NPPP_VARNISH_EP'] ) || ! is_array( $GLOBALS['NPPP_VARNISH_EP'] ) ) {
+            $GLOBALS['NPPP_VARNISH_EP'] = array();
+        }
+        $GLOBALS['NPPP_VARNISH_EP'][ nppp_varnish_endpoint_id( $endpoint ) ] = array(
+            'at'     => time(),
+            'kind'   => $kind,
+            'status' => $status,
+            'ms'     => $ms,
+            'reason' => $reason,
+        );
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_ep_flush' ) ) {
+    /**
+     * Persists the noted endpoint outcomes (one state write per purge run) and starts a new run.
+     * Rows of endpoints that are no longer configured are dropped here, so the map never outgrows the settings.
+     */
+    function nppp_varnish_ep_flush(): void {
+        $noted = ( isset( $GLOBALS['NPPP_VARNISH_EP'] ) && is_array( $GLOBALS['NPPP_VARNISH_EP'] ) ) ? $GLOBALS['NPPP_VARNISH_EP'] : array();
+        $GLOBALS['NPPP_VARNISH_EP'] = array();
+
+        if ( empty( $noted ) || ! function_exists( 'nppp_state_set' ) || ! function_exists( 'nppp_state_get' ) ) {
+            return;
+        }
+
+        $keep = array();
+        foreach ( nppp_varnish_endpoints() as $endpoint ) {
+            $keep[ nppp_varnish_endpoint_id( $endpoint ) ] = true;
+        }
+
+        $map = nppp_state_get( 'varnish_vo_ep' );
+        $map = is_array( $map ) ? $map : array();
+        $map = array_merge( $map, $noted );
+        $map = array_intersect_key( $map, $keep );
+
+        if ( ! empty( $map ) ) {
+            nppp_state_set( 'varnish_vo_ep', $map, 30 * DAY_IN_SECONDS );
+        }
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_ep_last' ) ) {
+    /**
+     * Latest noted PURGE outcome of one endpoint, or null when none is known.
+     *
+     * @return array{at:int,kind:string,status:int,ms:?int,reason:string}|null
+     */
+    function nppp_varnish_ep_last( string $endpoint ): ?array {
+        $map = function_exists( 'nppp_state_get' ) ? nppp_state_get( 'varnish_vo_ep' ) : null;
+        $row = ( is_array( $map ) && isset( $map[ nppp_varnish_endpoint_id( $endpoint ) ] ) ) ? $map[ nppp_varnish_endpoint_id( $endpoint ) ] : null;
+
+        if ( ! is_array( $row ) || empty( $row['at'] ) || empty( $row['kind'] ) || ! is_string( $row['kind'] ) ) {
+            return null;
+        }
+
+        return array(
+            'at'     => (int) $row['at'],
+            'kind'   => $row['kind'],
+            'status' => (int) ( $row['status'] ?? 0 ),
+            'ms'     => isset( $row['ms'] ) ? (int) $row['ms'] : null,
+            'reason' => is_string( $row['reason'] ?? null ) ? $row['reason'] : '',
+        );
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_activity_window' ) ) {
+    /** How far back the Status tab's purge activity looks. */
+    function nppp_varnish_activity_window(): int {
+        return DAY_IN_SECONDS;
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_activity_max' ) ) {
+    /** Hard cap of stored events: a site that purges on every save must not grow one option row without limit. */
+    function nppp_varnish_activity_max(): int {
+        return 200;
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_activity' ) ) {
+    /**
+     * Purge runs of the last 24 hours, oldest first.
+     *
+     * @return array<int,array{at:int,scope:string,src:string,status:string,detail:string,kinds:string[]}>
+     */
+    function nppp_varnish_activity(): array {
+        $rows = function_exists( 'nppp_state_get' ) ? nppp_state_get( 'varnish_vo_activity' ) : null;
+        if ( ! is_array( $rows ) ) {
+            return array();
+        }
+
+        $since = time() - nppp_varnish_activity_window();
+        $out   = array();
+        foreach ( $rows as $row ) {
+            if ( ! is_array( $row ) || empty( $row['at'] ) || (int) $row['at'] < $since || ! in_array( $row['status'] ?? '', array( 'ok', 'partial', 'failed' ), true ) ) {
+                continue;
+            }
+            $out[] = array(
+                'at'     => (int) $row['at'],
+                'scope'  => ( ( $row['scope'] ?? '' ) === 'all' ) ? 'all' : 'urls',
+                'src'    => ( ( $row['src'] ?? '' ) === 'preload' ) ? 'preload' : '',
+                'status' => (string) $row['status'],
+                'detail' => is_string( $row['detail'] ?? null ) ? $row['detail'] : '',
+                'kinds'  => is_array( $row['kinds'] ?? null ) ? array_values( array_filter( $row['kinds'], 'is_string' ) ) : array(),
+            );
+        }
+
+        return $out;
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_activity_add' ) ) {
+    /**
+     * Appends one finished purge run to the rolling 24 h log.
+     *
+     * Read-modify-write on one option row: two purges that finish in the same instant can lose one
+     * entry (last write wins). That is accepted for a trend display; the counters are not a ledger.
+     *
+     * @param array $counts Request counters of the run (nppp_varnish_run_take()).
+     */
+    function nppp_varnish_activity_add( string $scope, bool $preload_ban, array $summary, array $counts ): void {
+        if ( ! function_exists( 'nppp_state_set' ) || ! in_array( $summary['status'] ?? '', array( 'ok', 'partial', 'failed' ), true ) ) {
+            return;
+        }
+
+        $kinds = array();
+        foreach ( array( 'unreachable', 'denied', 'fail', 'parked', 'budget' ) as $k ) {
+            if ( (int) ( $counts[ $k ] ?? 0 ) > 0 ) {
+                $kinds[] = $k;
+            }
+        }
+
+        $rows   = nppp_varnish_activity();
+        $rows[] = array(
+            'at'     => time(),
+            'scope'  => $scope === 'all' ? 'all' : 'urls',
+            'src'    => $preload_ban ? 'preload' : '',
+            'status' => (string) $summary['status'],
+            'detail' => (string) ( $summary['detail'] ?? '' ),
+            'kinds'  => $kinds,
+        );
+
+        nppp_state_set( 'varnish_vo_activity', array_slice( $rows, -nppp_varnish_activity_max() ), nppp_varnish_activity_window() + HOUR_IN_SECONDS );
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
     /**
      * Varnish-only mode: tells the operator what the Varnish purge of this action really did.
@@ -531,6 +694,10 @@ if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
             return;
         }
         $detail = $s['detail'] !== '' ? ' (' . $s['detail'] . ')' : '';
+
+        // Status tab: per-endpoint PURGE timings and the 24 h log (one state write each per run).
+        nppp_varnish_ep_flush();
+        nppp_varnish_activity_add( $scope, $quiet_none, $s, $counts );
 
         switch ( $s['status'] ) {
             case 'ok':
@@ -571,6 +738,8 @@ if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
         if ( function_exists( 'nppp_state_set' ) ) {
             if ( $s['status'] === 'ok' ) {
                 nppp_state_delete( 'varnish_vo_failure' );
+                // Shown on the Status tab ("last successful purge"); the failure row alone can not tell "no failure" from "never purged".
+                nppp_state_set( 'varnish_vo_last_ok', array( 'at' => time(), 'scope' => $scope ), 30 * DAY_IN_SECONDS );
             } elseif ( $s['status'] !== 'none' ) {   // 'none' = nothing was attempted: neither a failure nor a recovery
                 nppp_state_set(
                     'varnish_vo_failure',
@@ -962,6 +1131,7 @@ if ( ! function_exists( 'nppp_varnish_send' ) ) {
          */
         $sslverify = (bool) apply_filters( 'nppp_varnish_sslverify', false, $endpoint );
 
+        $started = microtime( true );
         add_action( 'http_api_curl', 'nppp_varnish_curl_connect_timeout', 10, 3 );
         try {
             $response = wp_remote_request( $endpoint . $path_query, array(
@@ -981,9 +1151,12 @@ if ( ! function_exists( 'nppp_varnish_send' ) ) {
             remove_action( 'http_api_curl', 'nppp_varnish_curl_connect_timeout', 10 );
         }
 
+        $ms = (int) round( ( microtime( true ) - $started ) * 1000 );
+
         if ( is_wp_error( $response ) ) {
             $out['kind']   = 'unreachable';
             $out['reason'] = nppp_varnish_log_reason( implode( ' | ', (array) $response->get_error_messages() ) );
+            nppp_varnish_ep_note( $endpoint, $out['kind'], 0, null, $out['reason'] );
             return $out;
         }
 
@@ -999,6 +1172,8 @@ if ( ! function_exists( 'nppp_varnish_send' ) ) {
             // ACL / control key / no PURGE handler in vcl_recv (Varnish 8+ answers 501 to unknown methods).
             $out['kind'] = 'denied';
         }
+
+        nppp_varnish_ep_note( $endpoint, $out['kind'], $status, $ms, '' );
 
         return $out;
     }
