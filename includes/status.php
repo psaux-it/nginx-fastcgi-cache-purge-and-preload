@@ -1508,7 +1508,7 @@ function nppp_varnish_vo_last_preload(): ?array {
             $mtime  = (int) $wp_filesystem->mtime( $snapshot );
             $cached = get_transient( 'nppp_vo_preload_meta' );
 
-            if ( is_array( $cached ) && isset( $cached['mtime'], $cached['finished'], $cached['files'], $cached['elapsed'] ) && (int) $cached['mtime'] === $mtime ) {
+            if ( is_array( $cached ) && isset( $cached['mtime'], $cached['finished'], $cached['elapsed'] ) && array_key_exists( 'files', $cached ) && (int) $cached['mtime'] === $mtime ) {
                 $finished = (string) $cached['finished'];
                 $files    = ( $cached['files'] === null ) ? null : (int) $cached['files'];
                 $elapsed  = (string) $cached['elapsed'];
@@ -1895,7 +1895,7 @@ function nppp_varnish_vo_health( array $s ): array {
     // Varnish answered the lookup: what does it say, and did anything go wrong lately?
     $home_state = is_array( $s['home'] ) ? (string) ( $s['home']['state'] ?? 'UNKNOWN' ) : '';
     $problem    = '';
-    if ( in_array( $home_state, array( 'MISS', 'PASS', 'STALE' ), true ) ) {
+    if ( in_array( $home_state, array( 'MISS', 'PASS' ), true ) ) {
         $problem = __( 'Varnish is answering, but the home page is not cached', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif ( $cov['pct'] !== null && $cov['pct'] < 90 ) {
         $problem = __( 'Varnish is answering, but coverage is low', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -1924,6 +1924,11 @@ function nppp_varnish_vo_health( array $s ): array {
         $when = nppp_varnish_vo_ago( (int) $act['newest']['at'] );
         /* translators: %s: time since, e.g. "2 mins ago" */
         $parts[] = sprintf( ( $act['newest']['status'] === 'ok' ) ? __( 'last purge accepted %s', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'last purge failed %s', 'fastcgi-cache-purge-and-preload-nginx' ), $when );
+    }
+
+   if ( is_array( $s['chk'] ) && ! empty( $s['chk']['at'] ) ) {
+        /* translators: %s: time since the live check, e.g. "2 mins ago" */
+        $parts[] = sprintf( __( 'checked %s', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_ago( (int) $s['chk']['at'] ) );
     }
 
     return array(
