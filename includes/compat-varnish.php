@@ -399,6 +399,9 @@ if ( ! function_exists( 'nppp_varnish_only_reset_state' ) ) {
         nppp_state_delete( 'varnish_vo_activity' );
         nppp_state_delete( 'varnish_vo_ep' );
         nppp_state_delete( 'varnish_vo_check' );
+        nppp_state_delete( 'varnish_vo_full' );
+        nppp_state_delete( 'varnish_vo_full_run' );
+        nppp_state_delete( 'varnish_vo_purged' );
     }
 }
 
@@ -686,6 +689,53 @@ if ( ! function_exists( 'nppp_varnish_activity_add' ) ) {
     }
 }
 
+if ( ! function_exists( 'nppp_varnish_purge_mark' ) ) {
+    /**
+     * Tells the Status tab card that a purge reached Varnish.
+     *
+     * The card shows a stored cache check (Check now / Check all). A purge removes pages after that check was made,
+     * so the stored counts no longer match Varnish:
+     * - Purge All (host-wide ban): the stored Check all result is wrong by definition and is dropped, together with
+     *   a Check all that is still running (its chunks would mix answers from before and after the ban). The card
+     *   then falls back to the Check now sample.
+     * - Every purge run that went through is remembered by its time, so the card can say "N purge runs after this
+     *   check". The newest 200 are kept for the 7 days a stored check lives, so a purge storm can not grow the row.
+     *
+     * Only runs that took effect count: a purge that failed or sent nothing changed nothing in Varnish.
+     * Side channel of nppp_varnish_only_report(): it can never change what is reported.
+     *
+     * @param string $scope  'all' (Purge All / Preload All ban) or 'urls' (single purge).
+     * @param string $status Result of the run: 'ok' | 'partial' | 'failed' | 'none'.
+     */
+    function nppp_varnish_purge_mark( string $scope, string $status ): void {
+        if ( ! function_exists( 'nppp_state_set' ) || ! in_array( $status, array( 'ok', 'partial' ), true ) ) {
+            return;
+        }
+
+        try {
+            if ( $scope === 'all' ) {
+                nppp_state_delete( 'varnish_vo_full' );
+                nppp_state_delete( 'varnish_vo_full_run' );
+            }
+
+            $now  = time();
+            $keep = $now - 7 * DAY_IN_SECONDS;
+            $old  = nppp_state_get( 'varnish_vo_purged' );
+            $rows = array();
+            foreach ( ( is_array( $old ) ? $old : array() ) as $ts ) {
+                if ( is_int( $ts ) && $ts >= $keep ) {
+                    $rows[] = $ts;
+                }
+            }
+            $rows[] = $now;
+
+            nppp_state_set( 'varnish_vo_purged', array_slice( $rows, -nppp_varnish_activity_max() ), 7 * DAY_IN_SECONDS + HOUR_IN_SECONDS );
+        } catch ( \Throwable $e ) {
+            return;
+        }
+    }
+}
+
 if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
     /**
      * Varnish-only mode: tells the operator what the Varnish purge of this action really did.
@@ -714,6 +764,7 @@ if ( ! function_exists( 'nppp_varnish_only_report' ) ) {
         // Status tab: per-endpoint PURGE timings and the 24 h log (one state write each per run).
         nppp_varnish_ep_flush();
         nppp_varnish_activity_add( $scope, $quiet_none, $s, $counts );
+        nppp_varnish_purge_mark( $scope, (string) $s['status'] );
 
         switch ( $s['status'] ) {
             case 'ok':

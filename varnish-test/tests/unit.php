@@ -15,6 +15,7 @@
  *           source                                                                     (static checks on the plugin sources)
  *           varnishonly                                                                (Varnish-only mode: nginx has no cache)
  *           voprobe                                                                    (read-only lookup of the Advanced tab: includes/varnish-probe.php)
+ *           vopurge                                                                    (Status tab card: what a purge does to a stored cache check)
  *
  * chk()   = must hold.   known() = documented limit of the plugin; passes while it still holds and FAILS when the
  * behaviour changes, so a fixed gap (or a regression hiding one) can not go unnoticed.
@@ -1172,6 +1173,63 @@ if ( $S === 'voprobe' ) {   // includes/varnish-probe.php: the read-only lookup 
     chk( strpos( $blk, 'client.ip !~ purge' ) !== false && strpos( $blk, 'change-me-long-random-secret' ) !== false && strpos( $blk, 'return (hash);' ) !== false, 'Example VCL: the probe uses the PURGE ACL and the same secret, then only looks up (return (hash))' );
     chk( substr_count( $vcl, 'change-me-long-random-secret' ) === 2, 'Example VCL: the secret appears exactly twice (PURGE + probe), the lab / docs replace both' );
     chk( strpos( $vcl, 'return (fetch)' ) === false && strpos( $vcl, 'return (pass)' ) === false, 'Example VCL: no probe path fetches or passes' );
+}
+
+/* ================================================================================================================ */
+if ( $S === 'vopurge' ) {   // Status tab card (Varnish-only mode): what a purge does to a stored cache check
+    $vo = function ( string $host ) use ( $OK ) {
+        vt_reset(); vt_home( 'http://vp.test' );
+        vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => 'http://' . $host . ':6081' ] );
+        add_filter( 'nppp_varnish_only', fn() => true );
+        vt_script( '#^PURGE http://' . preg_quote( $host, '#' ) . '#', $OK );
+    };
+    $full = function () {
+        nppp_state_set( 'varnish_vo_full', [ 'at' => time() - 60, 'from' => time() - 90, 'set' => 10, 'ep' => 1, 'counts' => [ 'hit' => 7, 'stale' => 0, 'miss' => 3, 'pass' => 0, 'unknown' => 0 ] ], 600 );
+        nppp_state_set( 'varnish_vo_check', [ 'at' => time() - 120, 'status' => 'ok', 'ep' => 1, 'cov' => [ 'skipped' => 'status' ] ], 600 );
+    };
+    $marks = fn() => $GLOBALS['VT']['options']['nppp_st_varnish_vo_purged']['v'] ?? null;
+    // the order of includes/purge.php: the hook sends the PURGE requests, then the Varnish-only report is made
+    $single = function () { do_action( 'nppp_purged_urls', [ 'http://vp.test/a/', 'http://vp.test/b/' ], 'http://vp.test/a/', 0, false ); nppp_varnish_only_report( 'urls', false, 'http://vp.test/a/' ); };
+
+    // single purge: remembered once per RUN (not per URL); the stored Check all result stays
+    $vo( 'vp1.test' ); $full();
+    $single();
+    chk( is_array( $marks() ) && count( $marks() ) === 1 && is_int( $marks()[0] ), 'single purge: one purge run is remembered, not one per URL', json_encode( $marks() ) );
+    chk( nppp_state_get( 'varnish_vo_full' ) !== null && nppp_state_get( 'varnish_vo_check' ) !== null, 'single purge: the stored Check all result and the Check now row stay' );
+    $single();
+    chk( count( $marks() ) === 2, 'second single purge: two purge runs remembered' );
+    chk( ( $GLOBALS['VT']['autoload']['nppp_st_varnish_vo_purged'] ?? null ) === false, 'the purge marks are not autoloaded' );
+
+    // a purge Varnish refused changed nothing: not remembered
+    $vo( 'vp2.test' ); $full(); vt_script( '#^PURGE http://vp2\.test#', [ 'code' => 500, 'body' => 'no' ] );
+    $single();
+    chk( $marks() === null && nppp_state_get( 'varnish_vo_full' ) !== null, 'a refused purge is not remembered and keeps the stored result' );
+
+    // direct: statuses, pruning, cap, malformed row
+    $vo( 'vp3.test' );
+    nppp_varnish_purge_mark( 'urls', 'failed' ); nppp_varnish_purge_mark( 'all', 'none' );
+    chk( $marks() === null, 'failed / none runs are ignored' );
+    $now = time(); $rows = []; for ( $i = 0; $i < 250; $i++ ) { $rows[] = $now - 100 + ( $i % 90 ); } $rows[] = $now - 8 * DAY_IN_SECONDS; $rows[] = 'junk'; $rows[] = 1.5; $rows[] = null;
+    nppp_state_set( 'varnish_vo_purged', $rows, 600 );
+    nppp_varnish_purge_mark( 'urls', 'partial' );
+    $p = $marks();
+    chk( count( $p ) === nppp_varnish_activity_max() && $p === array_values( array_filter( $p, 'is_int' ) ) && end( $p ) >= $now, 'capped like the activity log; junk and rows older than 7 days dropped; newest last', (string) count( $p ) );
+    nppp_state_set( 'varnish_vo_purged', 'garbage', 600 ); nppp_varnish_purge_mark( 'urls', 'ok' );
+    chk( count( $marks() ) === 1, 'a malformed row is replaced, not fatal' );
+
+    // Purge All: the stored Check all result (and a running one) is wrong by definition after a host-wide ban
+    $vo( 'vp4.test' ); $full(); nppp_state_set( 'varnish_vo_full_run', [ 'run' => 'x' ], 600 );
+    do_action( 'nppp_purged_all', false ); nppp_varnish_only_report( 'all', false );
+    chk( nppp_state_get( 'varnish_vo_full' ) === null && nppp_state_get( 'varnish_vo_full_run' ) === null, 'Purge All drops the stored Check all result and a running Check all' );
+    chk( nppp_state_get( 'varnish_vo_check' ) !== null, 'Purge All keeps the Check now row (probe state, home page)' );
+    chk( is_array( $marks() ) && count( $marks() ) === 1, 'Purge All is remembered as a purge run too' );
+
+    // resets
+    $vo( 'vp5.test' ); $full(); nppp_varnish_purge_mark( 'urls', 'ok' ); nppp_state_set( 'varnish_vo_full_run', [ 'run' => 'x' ], 600 );
+    nppp_varnish_only_reset_state();
+    chk( nppp_state_get( 'varnish_vo_check' ) === null && nppp_state_get( 'varnish_vo_full' ) === null && nppp_state_get( 'varnish_vo_full_run' ) === null && $marks() === null, 'mode switch / settings save clears the check, the Check all result, the run and the purge marks' );
+    $st = file_get_contents( ( getenv( 'NPPP_INCLUDES' ) ?: dirname( __DIR__, 2 ) . '/includes' ) . '/status.php' );
+    chk( preg_match( "/nppp_state_delete\( 'varnish_vo_check' \);\s+nppp_state_delete\( 'varnish_vo_full' \);\s+nppp_state_delete\( 'varnish_vo_full_run' \);\s+nppp_gen_mode_flag_delete/", $st ) === 1, 'Clear Plugin Cache drops the check, the Check all result and a running Check all' );
 }
 
 exit( vt_summary() );

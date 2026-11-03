@@ -117,6 +117,8 @@ function nppp_clear_plugin_cache($silent = false) {
     nppp_state_delete( 'varnish_warn' );
     // Status tab card (Varnish-only mode): the stored live check is a cached probe. The purge log and the endpoint timings are history and stay.
     nppp_state_delete( 'varnish_vo_check' );
+    nppp_state_delete( 'varnish_vo_full' );
+    nppp_state_delete( 'varnish_vo_full_run' );
     nppp_gen_mode_flag_delete();
 
     // Re-arm the Vary: Accept-Encoding probe and its notice row so the
@@ -1685,6 +1687,58 @@ function nppp_varnish_vo_check_state(): ?array {
 }
 
 /**
+ * Last "Check all" of the Advanced tab (stored by nppp_vo_full_record()), or null when none was run.
+ *
+ * counts hold Varnish's answer for every URL of the crawl list, set is the size of that list. A Purge All
+ * removes it (nppp_varnish_purge_mark()): after a host-wide ban the counts are wrong by definition.
+ */
+function nppp_varnish_vo_full_state(): ?array {
+    $f = function_exists( 'nppp_state_get' ) ? nppp_state_get( 'varnish_vo_full' ) : null;
+
+    return ( is_array( $f ) && ! empty( $f['at'] ) && ! empty( $f['set'] ) && is_array( $f['counts'] ?? null ) ) ? $f : null;
+}
+
+/**
+ * How many purge runs reached Varnish at or after $since (log kept by nppp_varnish_purge_mark()).
+ *
+ * A stored check does not move when a purge removes pages after it was made; this number tells the card so.
+ * At the cap of the log the true number may be higher (see nppp_varnish_vo_purged_text()).
+ */
+function nppp_varnish_vo_purges_since( int $since ): int {
+    $rows = ( $since > 0 && function_exists( 'nppp_state_get' ) ) ? nppp_state_get( 'varnish_vo_purged' ) : null;
+    if ( ! is_array( $rows ) ) {
+        return 0;
+    }
+
+    $n = 0;
+    foreach ( $rows as $ts ) {
+        if ( is_int( $ts ) && $ts >= $since ) {
+            $n++;
+        }
+    }
+
+    return $n;
+}
+
+/**
+ * Text of the "purges since the check" note of the coverage box, or '' when there is none.
+ */
+function nppp_varnish_vo_purged_text( int $n ): string {
+    if ( $n < 1 ) {
+        return '';
+    }
+
+    $cap = nppp_varnish_activity_max();
+    $num = ( $n >= $cap ) ? number_format_i18n( $cap ) . '+' : number_format_i18n( $n );
+
+    return sprintf(
+        /* translators: %s: number of purge runs, e.g. "3" */
+        _n( '%s purge run after this check', '%s purge runs after this check', $n, 'fastcgi-cache-purge-and-preload-nginx' ),
+        $num
+    );
+}
+
+/**
  * Wording of one purge run: "Preload All" + "ban accepted", and the colour of its dot.
  *
  * @param array $e One row of nppp_varnish_activity().
@@ -1755,6 +1809,26 @@ function nppp_varnish_vo_snapshot(): array {
     // Home page and coverage of the sample of the last Preload All.
     $home = ( is_array( $chk['home'] ?? null ) ) ? $chk['home'] : null;
     $cov  = ( is_array( $chk['cov'] ?? null ) ) ? $chk['cov'] : null;
+
+    // Coverage source: the newest measurement wins. A Check all of the Advanced tab (every URL of the crawl list)
+    // that is not older than the last Check now replaces that check's sample, as long as the lookup works.
+    // cov_from is where "purges since this check" starts: the moment the measurement began, not when it ended.
+    $cov_at   = (int) ( $chk['at'] ?? 0 );
+    $cov_from = $cov_at;
+    $cov_ep   = (int) ( $chk['ep'] ?? 0 );
+    $cov_full = false;
+    $full     = nppp_varnish_vo_full_state();
+    if ( $full !== null && $status === 'ok' && (int) $full['at'] >= $cov_at ) {
+        $cov      = array_merge(
+            array( 'hit' => 0, 'stale' => 0, 'miss' => 0, 'pass' => 0, 'unknown' => 0 ),
+            $full['counts'],
+            array( 'set' => (int) $full['set'] )
+        );
+        $cov_at   = (int) $full['at'];
+        $cov_from = (int) ( $full['from'] ?? $full['at'] );
+        $cov_ep   = (int) ( $full['ep'] ?? 0 );
+        $cov_full = true;
+    }
     $n    = static function ( string $k ) use ( $cov ): int {
         return is_array( $cov ) ? (int) ( $cov[ $k ] ?? 0 ) : 0;
     };
@@ -1818,7 +1892,11 @@ function nppp_varnish_vo_snapshot(): array {
             'known'   => $known,
             'cached'  => $cached,
             'pct'     => ( $kind === 'data' ) ? $cached / $known * 100 : null,
-            'set'     => (int) ( $chk['cov']['set'] ?? 0 ),
+            'set'     => (int) ( $cov['set'] ?? 0 ),
+            'full'    => $cov_full,   // true: every URL of the crawl list was asked (Check all), false: a sample (Check now)
+            'at'      => $cov_at,     // when the counts were made
+            'ep'      => $cov_ep,     // endpoint the counts were asked on (0 = unknown)
+            'purged'  => ( $kind === 'data' ) ? nppp_varnish_vo_purges_since( $cov_from ) : 0,   // purge runs after the counts were made
         ),
         'act'    => array(
             'events' => $events,
@@ -2031,18 +2109,48 @@ function nppp_varnish_vo_kpis( array $s ): string {
     if ( $cov['kind'] === 'data' ) {
         $state = ( $cov['pct'] >= 90 ) ? 'ok' : ( $cov['pct'] >= 50 ? 'warn' : 'bad' );
         $parts = nppp_varnish_vo_cov_bar( $cov, nppp_varnish_vo_pct( $cov['pct'] ) );
-        $one   = nppp_varnish_vo_tile(
-            __( 'Cache coverage', 'fastcgi-cache-purge-and-preload-nginx' ),
-            $state,
-            esc_html( nppp_varnish_vo_pct( $cov['pct'] ) ),
-            $parts['bar'],
-            esc_html( sprintf(
+        $ago = nppp_varnish_vo_ago( (int) $cov['at'] );
+        if ( $cov['full'] ) {
+            $label = __( 'Cache coverage', 'fastcgi-cache-purge-and-preload-nginx' );
+            $foot  = sprintf(
+                /* translators: 1: cached URLs, 2: URLs with a definite answer, 3: time since the check, e.g. "2 mins ago" */
+                __( '%1$d of %2$d URLs · all crawled URLs · checked %3$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $cov['cached'],
+                $cov['known'],
+                $ago
+            );
+        } elseif ( $cov['set'] > $cov['sampled'] ) {
+            // A sample says so, and says how big the list is that it was taken from.
+            $label = __( 'Cache coverage (sample)', 'fastcgi-cache-purge-and-preload-nginx' );
+            $foot  = sprintf(
+                /* translators: 1: cached URLs, 2: URLs with a definite answer, 3: URLs of the crawl list, 4: time since the check, e.g. "2 mins ago" */
+                __( '%1$d of %2$d sampled URLs · %3$s in crawl list · checked %4$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $cov['cached'],
+                $cov['known'],
+                number_format_i18n( $cov['set'] ),
+                $ago
+            );
+        } else {
+            $label = __( 'Cache coverage', 'fastcgi-cache-purge-and-preload-nginx' );
+            $foot  = sprintf(
                 /* translators: 1: cached URLs, 2: URLs with a definite answer, 3: time since the check, e.g. "2 mins ago" */
                 __( '%1$d of %2$d URLs · checked %3$s', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $cov['cached'],
                 $cov['known'],
-                nppp_varnish_vo_ago( (int) $s['chk']['at'] )
-            ) )
+                $ago
+            );
+        }
+        // A purge after the check removed pages the counts still list as cached: say so instead of looking current.
+        $purged = nppp_varnish_vo_purged_text( (int) $cov['purged'] );
+        if ( $purged !== '' ) {
+            $foot .= ' · ' . $purged;
+        }
+        $one   = nppp_varnish_vo_tile(
+            $label,
+            $state,
+            esc_html( nppp_varnish_vo_pct( $cov['pct'] ) ),
+            $parts['bar'],
+            esc_html( $foot )
         );
     } else {
         if ( $cov['kind'] === 'running' ) {
@@ -2289,17 +2397,21 @@ function nppp_varnish_vo_live_parts( array $s ): array {
         $cell .= '<span class="nppp-vo-meta nppp-vo-foot">' . esc_html( sprintf(
             /* translators: %s: time since the last check, e.g. "2 mins ago" */
             __( 'Checked %s', 'fastcgi-cache-purge-and-preload-nginx' ),
-            nppp_varnish_vo_ago( (int) $chk['at'] )
+            nppp_varnish_vo_ago( (int) $cov['at'] )
         ) ) . '</span>';
+        $purged = nppp_varnish_vo_purged_text( (int) $cov['purged'] );
+        if ( $purged !== '' ) {
+            $cell .= '<span class="nppp-vo-meta nppp-vo-foot">' . esc_html( $purged ) . '</span>';
+        }
     }
     $cell .= '</td>';
 
-    $sub = ( $cov['set'] > 0 && $cov['set'] <= nppp_varnish_probe_max_urls() )
+    $sub = ( $cov['full'] || ( $cov['set'] > 0 && $cov['set'] <= nppp_varnish_probe_max_urls() ) )
         ? __( 'every URL of last Preload All', 'fastcgi-cache-purge-and-preload-nginx' )
         : __( 'sample of last Preload All', 'fastcgi-cache-purge-and-preload-nginx' );
     if ( $s['total'] > 1 ) {
         /* translators: %d: endpoint number */
-        $sub .= ' · ' . sprintf( __( 'asked on endpoint #%d only', 'fastcgi-cache-purge-and-preload-nginx' ), (int) ( $chk['ep'] ?? ( $s['lat']['n'] ?? 1 ) ) );
+        $sub .= ' · ' . sprintf( __( 'asked on endpoint #%d only', 'fastcgi-cache-purge-and-preload-nginx' ), (int) ( $cov['ep'] ?: ( $s['lat']['n'] ?? 1 ) ) );
     }
     $rows .= nppp_varnish_vo_row( esc_html__( 'Coverage', 'fastcgi-cache-purge-and-preload-nginx' ) . '<span class="nppp-vo-sub">' . esc_html( $sub ) . '</span>', $cell );
 

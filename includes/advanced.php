@@ -1331,6 +1331,105 @@ function nppp_preload_miss_batch_callback() {
 }
 
 /**
+ * "Check all" bookkeeping (Varnish-only mode): adds the chunks of ONE Check all run up to the result that the
+ * Status tab card shows (state "varnish_vo_full").
+ *
+ * The page sends the chunks of a run one after the other with the same random run token and a 0-based chunk
+ * index. The counts are made here, from the answers of Varnish: nothing is taken from the page. The result is
+ * stored only when one uninterrupted run (chunks in order, probe status ok) answered as many URLs as the crawl
+ * list the server itself reads, so a partial run can never pose as a full check. A Purge All during the run
+ * drops the run (nppp_varnish_purge_mark()). Side channel: it never changes the answer of the lookup.
+ *
+ * @param string $run     Run token chosen by the page.
+ * @param int    $idx     0-based index of this chunk within the run.
+ * @param string $status  Status of the probe batch of this chunk.
+ * @param array  $results Result rows of this chunk, one per requested URL, each with a 'state' key.
+ */
+function nppp_vo_full_record( string $run, int $idx, string $status, array $results ): void {
+    if ( ! preg_match( '/^[A-Za-z0-9]{8,32}$/', $run ) ) {
+        return;
+    }
+
+    try {
+        // An answer that is not a probe answer ends the run (the page stops at the same point).
+        if ( $status !== 'ok' ) {
+            nppp_state_delete( 'varnish_vo_full_run' );
+            return;
+        }
+
+        if ( $idx === 0 ) {
+            $wp_filesystem = nppp_initialize_wp_filesystem();
+            // While a crawl runs the list is partial: it is not a baseline.
+            if ( $wp_filesystem === false || nppp_is_preload_running( $wp_filesystem ) ) {
+                nppp_state_delete( 'varnish_vo_full_run' );
+                return;
+            }
+            $set = count( nppp_parse_wget_log_urls( $wp_filesystem ) );
+            if ( $set < 1 ) {
+                nppp_state_delete( 'varnish_vo_full_run' );
+                return;
+            }
+
+            // Same endpoint choice as nppp_varnish_probe_batch().
+            $ep = 1;
+            foreach ( array_values( nppp_varnish_endpoints() ) as $i => $candidate ) {
+                if ( ! nppp_varnish_breaker_open( $candidate ) ) {
+                    $ep = $i + 1;
+                    break;
+                }
+            }
+
+            $row = array(
+                'run'    => $run,
+                'from'   => time(),
+                'next'   => 0,
+                'seen'   => 0,
+                'set'    => $set,
+                'ep'     => $ep,
+                'counts' => array( 'hit' => 0, 'stale' => 0, 'miss' => 0, 'pass' => 0, 'unknown' => 0 ),
+            );
+        } else {
+            $row = nppp_state_get( 'varnish_vo_full_run', true );
+            if ( ! is_array( $row ) || ( $row['run'] ?? '' ) !== $run || (int) ( $row['next'] ?? -1 ) !== $idx ) {
+                nppp_state_delete( 'varnish_vo_full_run' );
+                return;
+            }
+        }
+
+        $map = array( 'HIT' => 'hit', 'STALE' => 'stale', 'MISS' => 'miss', 'PASS' => 'pass' );
+        foreach ( $results as $r ) {
+            $st = ( is_array( $r ) && isset( $r['state'] ) ) ? (string) $r['state'] : 'UNKNOWN';
+            $row['counts'][ $map[ $st ] ?? 'unknown' ]++;
+        }
+        $row['seen'] = (int) $row['seen'] + count( $results );
+        $row['next'] = $idx + 1;
+
+        if ( $row['seen'] > (int) $row['set'] ) {
+            // More URLs than the list the server knows (the list changed meanwhile): not a full check.
+            nppp_state_delete( 'varnish_vo_full_run' );
+        } elseif ( $row['seen'] === (int) $row['set'] ) {
+            nppp_state_set(
+                'varnish_vo_full',
+                array(
+                    'at'     => time(),
+                    'from'   => (int) ( $row['from'] ?? time() ),   // purges after this moment are "since this check"
+                    'set'    => (int) $row['set'],
+                    'ep'     => (int) $row['ep'],
+                    'counts' => $row['counts'],
+                ),
+                7 * DAY_IN_SECONDS
+            );
+            nppp_state_delete( 'varnish_vo_full_run' );
+        } else {
+            nppp_state_set( 'varnish_vo_full_run', $row, 10 * MINUTE_IN_SECONDS );
+        }
+    } catch ( \Throwable $e ) {
+        // Bookkeeping only: the lookup itself has already been answered.
+        return;
+    }
+}
+
+/**
  * AJAX: live Varnish status of up to 50 table rows (Varnish-only mode, Advanced tab).
  *
  * Read-only: one lookup request per URL to the first configured Varnish endpoint, answered by the probe
@@ -1370,6 +1469,16 @@ function nppp_vo_probe_callback() {
             'age'    => isset( $item['age'] ) ? $item['age'] : null,
             'ttl'    => isset( $item['ttl'] ) ? $item['ttl'] : null,
             'reason' => isset( $item['reason'] ) ? (string) $item['reason'] : '',
+        );
+    }
+
+    // Check all: the chunks of one run add up to the result the Status tab card shows (see nppp_vo_full_record()).
+    if ( isset( $_POST['full_run'], $_POST['full_idx'] ) && is_scalar( $_POST['full_run'] ) && is_scalar( $_POST['full_idx'] ) ) {
+        nppp_vo_full_record(
+            sanitize_text_field( wp_unslash( (string) $_POST['full_run'] ) ),
+            absint( wp_unslash( (string) $_POST['full_idx'] ) ),
+            (string) $probe['status'],
+            $results
         );
     }
 

@@ -104,6 +104,8 @@ function nppp_enqueue_nginx_fastcgi_cache_purge_preload_assets() {
             /* translators: 1: checked URLs, 2: total URLs */
             'checkedOf'   => __( 'Checked %1$s of %2$s URLs…', 'fastcgi-cache-purge-and-preload-nginx' ),
             'checkedAll'  => __( 'Checked all URLs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            /* translators: 1: URLs with a known status, 2: URLs in the table */
+            'missPartial' => __( '%1$s of %2$s URLs checked so far. Press Check all for the full count.', 'fastcgi-cache-purge-and-preload-nginx' ),
         ),
     ));
 
