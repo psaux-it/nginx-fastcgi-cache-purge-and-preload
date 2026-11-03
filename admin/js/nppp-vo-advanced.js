@@ -174,6 +174,7 @@
 
     // Asks Varnish for the given URLs (chunks of 50, one after the other). onChunk(doneCount) is optional.
     // Resolves with the last server status ('ok' | 'unsupported' | ...), never rejects.
+    // Resolves with 'aborted' when the table was reloaded meanwhile: callers must not report it.
     function lookup(urls, force, onChunk) {
         var d = $.Deferred();
         var gen = generation;
@@ -185,7 +186,11 @@
         for (var i = 0; i < urls.length; i += CHUNK) { chunks.push(urls.slice(i, i + CHUNK)); }
 
         (function next() {
-            if (idx >= chunks.length || gen !== generation) {
+            if (gen !== generation) {
+                d.resolve('aborted');
+                return;
+            }
+            if (idx >= chunks.length) {
                 d.resolve(status);
                 return;
             }
@@ -232,6 +237,7 @@
     }
 
     function report(status) {
+        if (status === 'aborted') { return; }
         if (status === 'ok') {
             notice('');
         } else {
@@ -387,6 +393,7 @@
                 notice(text('checkedOf').replace('%1$s', String(done)).replace('%2$s', String(total)));
             }
         }).done(function (status) {
+            if (status === 'aborted') { return; }
             if (status === 'ok') { notice(text('checkedAll'), false, 3000); } else { notice(text(status) || text('error'), true); }
             updateMissButton();
         }).always(function () {
