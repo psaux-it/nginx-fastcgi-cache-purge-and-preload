@@ -514,8 +514,9 @@ function nppp_create_scheduled_event_preload_status_callback() {
         // End of the crawl as a real epoch: the snapshot was written the moment it completed. wget's FINISHED line
         // is the server's own clock, not the WordPress timezone: read as one it skews the total by the difference
         // between the two (and the max() below turns a negative skew into "0m 0s").
+        // A snapshot that could not be rewritten keeps an old mtime: never end before the cycle began.
         $end_ts = (int) $wp_filesystem->mtime($snapshot_path);
-        if ($end_ts <= 0) {
+        if ($end_ts <= 0 || $end_ts < intval($cycle_start)) {
             $end_ts = time();
         }
         if ($end_ts > 0) {
