@@ -1,5 +1,11 @@
 /**
- * Advanced tab in Varnish-only mode: live HIT / MISS from Varnish.
+ * Advanced tab scripts for Nginx Cache Purge Preload (Varnish-only mode)
+ * Description: Shows live HIT / MISS from Varnish in the Advanced tab table.
+ * Version: 2.1.8
+ * Author: Hasan CALISIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
  *
  * The table itself is built and driven by fastcgi-cache-purge-and-preload-nginx.js. This file does nothing
  * unless the table carries data-nppp-vo="1" (rendered by nppp_premium_html_vo()), and it never changes the
