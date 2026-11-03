@@ -1867,7 +1867,7 @@ function nppp_varnish_vo_health( array $s ): array {
         return array(
             'state' => 'bad',
             'title' => __( 'Varnish did not answer', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'sub'   => __( 'Varnish did not answer the lookup.', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'Check that Varnish is running and reachable from this server, then press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ),
         );
     }
     if ( $probe === 'off' ) {
@@ -1895,12 +1895,18 @@ function nppp_varnish_vo_health( array $s ): array {
     // Varnish answered the lookup: what does it say, and did anything go wrong lately?
     $home_state = is_array( $s['home'] ) ? (string) ( $s['home']['state'] ?? 'UNKNOWN' ) : '';
     $problem    = '';
+    $level      = 'warn';
     if ( in_array( $home_state, array( 'MISS', 'PASS' ), true ) ) {
         $problem = __( 'Varnish is answering, but the home page is not cached', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif ( $cov['pct'] !== null && $cov['pct'] < 90 ) {
         $problem = __( 'Varnish is answering, but coverage is low', 'fastcgi-cache-purge-and-preload-nginx' );
+        $level   = ( $cov['pct'] < 50 ) ? 'bad' : 'warn';   // same bands as the Cache coverage box
+    } elseif ( $cov['sampled'] > 0 && (int) $cov['counts']['unknown'] * 5 > $cov['sampled'] ) {
+        // The percentage only counts URLs with a definite answer: many silent URLs must not read as 100 %.
+        $problem = __( 'Varnish is answering, but some crawled URLs got no answer', 'fastcgi-cache-purge-and-preload-nginx' );
     } elseif ( $act['bad'] > 0 ) {
         $problem = __( 'Varnish is answering, but some purges failed', 'fastcgi-cache-purge-and-preload-nginx' );
+        $level   = ( $act['state'] === 'bad' ) ? 'bad' : 'warn';   // same bands as the Purge success box
     } elseif ( $s['ready'] < $s['total'] || $s['attn'] > 0 ) {
         $problem = __( 'Varnish is answering, but an endpoint needs attention', 'fastcgi-cache-purge-and-preload-nginx' );
     }
@@ -1932,7 +1938,7 @@ function nppp_varnish_vo_health( array $s ): array {
     }
 
     return array(
-        'state' => ( $problem === '' ) ? 'ok' : 'warn',
+        'state' => ( $problem === '' ) ? 'ok' : $level,
         'title' => ( $problem === '' ) ? __( 'Varnish is answering and caching', 'fastcgi-cache-purge-and-preload-nginx' ) : $problem,
         'sub'   => implode( ' · ', $parts ),
     );
