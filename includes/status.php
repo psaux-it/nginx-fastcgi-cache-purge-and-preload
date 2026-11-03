@@ -1817,8 +1817,19 @@ function nppp_varnish_vo_snapshot(): array {
     $cov_from = $cov_at;
     $cov_ep   = (int) ( $chk['ep'] ?? 0 );
     $cov_full = false;
-    $full     = nppp_varnish_vo_full_state();
-    if ( $full !== null && $status === 'ok' && (int) $full['at'] >= $cov_at ) {
+    $full      = nppp_varnish_vo_full_state();
+    $keep_full = false;
+    if ( $full !== null && $status === 'ok' && (int) $full['at'] < $cov_at ) {
+        // A newer Check now sample does not replace a Check all that is still valid: the sample agrees with it
+        // (no MISS / PASS / silent URL), no purge ran since, and it is not older than 30 min (keep it below the Varnish TTL).
+        $sample_bad = is_array( $cov ) && (
+            (int) ( $cov['miss'] ?? 0 ) + (int) ( $cov['pass'] ?? 0 ) + (int) ( $cov['unknown'] ?? 0 )
+        ) > 0;
+        $keep_full  = ! $sample_bad
+            && ( time() - (int) $full['at'] ) < 30 * MINUTE_IN_SECONDS
+            && nppp_varnish_vo_purges_since( (int) ( $full['from'] ?? $full['at'] ) ) === 0;
+    }
+    if ( $full !== null && $status === 'ok' && ( (int) $full['at'] >= $cov_at || $keep_full ) ) {
         $cov      = array_merge(
             array( 'hit' => 0, 'stale' => 0, 'miss' => 0, 'pass' => 0, 'unknown' => 0 ),
             $full['counts'],
@@ -1984,7 +1995,7 @@ function nppp_varnish_vo_health( array $s ): array {
     } elseif ( $cov['sampled'] > 0 && (int) $cov['counts']['unknown'] * 5 > $cov['sampled'] ) {
         // The percentage only counts URLs with a definite answer: many silent URLs must not read as 100 %.
         $problem = __( 'Varnish is answering, but some crawled URLs got no answer', 'fastcgi-cache-purge-and-preload-nginx' );
-    } elseif ( $act['bad'] > 0 ) {
+    } elseif ( $act['bad'] > 0 && is_array( $act['newest'] ) && $act['newest']['status'] !== 'ok' ) {
         $problem = __( 'Varnish is answering, but some purges failed', 'fastcgi-cache-purge-and-preload-nginx' );
         $level   = ( $act['state'] === 'bad' ) ? 'bad' : 'warn';   // same bands as the Purge success box
     } elseif ( $s['ready'] < $s['total'] || $s['attn'] > 0 ) {
