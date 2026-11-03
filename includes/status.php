@@ -1413,13 +1413,15 @@ function nppp_varnish_vo_cell( string $state, string $text, array $meta = array(
 }
 
 /**
- * One neutral value cell of the card: dashicon + a plain value (path, host, duration). Same icon + text rhythm as
- * nppp_varnish_vo_cell(), but it carries no verdict, so the icon is not green/orange/red.
+ * One value cell of the card: tick + a plain value (path, host, duration). It looks like an "ok" cell of
+ * nppp_varnish_vo_cell() (green icon, bold 14px text, see .nppp-vo-info in the stylesheet) but states a value, not a
+ * verdict.
  *
- * @param string   $icon  Dashicon class, e.g. dashicons-portfolio.
+ * @param string   $icon  Dashicon class, e.g. dashicons-yes.
  * @param string   $text  Value, plain text.
- * @param bool     $mono  Monospace (paths, hosts) instead of the bold label weight.
+ * @param bool     $mono  Adds nppp-vo-mono: long values (paths, hosts) wrap anywhere; the font stays the card's.
  * @param string[] $meta  Detail lines under the value, plain text.
+ * @param string   $title Tooltip of the cell, plain text.
  * @return string HTML, escaped.
  */
 function nppp_varnish_vo_value_cell( string $icon, string $text, bool $mono = false, array $meta = array(), string $title = '' ): string {
