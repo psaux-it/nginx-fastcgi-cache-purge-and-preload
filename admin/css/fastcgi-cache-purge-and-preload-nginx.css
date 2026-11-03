@@ -2130,7 +2130,13 @@ button.nppp-preload-btn[disabled] {
     margin-top: 4px;
 }
 
-/* Varnish-only mode card (Status tab, right panel). Same palette as the left panel's rows; every rule is scoped to #nppp-nginx-info. */
+/* Varnish-only mode card (Status tab, right panel): health summary, three measure boxes, four sections.
+   Same palette as the left panel's rows; every rule is scoped to #nppp-nginx-info. */
+#nppp-nginx-info .nppp-vo-root {
+    margin-top: 10px;
+}
+
+/* States: the verdict colours shared by the rows, the summary and the dots */
 #nppp-nginx-info .nppp-vo-st {
     font-size: 14px;
 }
@@ -2149,6 +2155,284 @@ button.nppp-preload-btn[disabled] {
 #nppp-nginx-info .nppp-vo-bad  .dashicons { color: #ff0000; }
 #nppp-nginx-info .nppp-vo-off  .dashicons,
 #nppp-nginx-info .dashicons.nppp-vo-off  { color: #72777c; }
+#nppp-nginx-info .nppp-vo-okc  { color: #008000; }
+#nppp-nginx-info .nppp-vo-badc { color: #c9302c; }
+
+/* Health summary: the answer to "is it working?" and the one button */
+#nppp-nginx-info .nppp-vo-hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+    padding: 16px 18px;
+    background-color: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-left-width: 4px;
+    border-left-color: #72aee6;
+    border-radius: 2px;
+}
+#nppp-nginx-info .nppp-vo-hero-ok   { background-color: #edf7ed; border-color: #b8dfb8; border-left-color: #2b9a2b; }
+#nppp-nginx-info .nppp-vo-hero-warn { background-color: #fcf9e8; border-color: #f0e2a8; border-left-color: #dba617; }
+#nppp-nginx-info .nppp-vo-hero-bad  { background-color: #fcf0f1; border-color: #f1b9bb; border-left-color: #d63638; }
+#nppp-nginx-info .nppp-vo-hero-icon {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background-color: #2271b1;
+    border-radius: 50%;
+}
+#nppp-nginx-info .nppp-vo-hero-ok   .nppp-vo-hero-icon { background-color: #008000; }
+#nppp-nginx-info .nppp-vo-hero-warn .nppp-vo-hero-icon { background-color: #b45f06; }
+#nppp-nginx-info .nppp-vo-hero-bad  .nppp-vo-hero-icon { background-color: #d63638; }
+#nppp-nginx-info .nppp-vo-hero-icon .dashicons {
+    width: 28px;
+    height: 28px;
+    font-size: 28px;
+    color: #fff;
+}
+#nppp-nginx-info .nppp-vo-hero-text {
+    flex: 1 1 220px;
+    min-width: 0;
+}
+#nppp-nginx-info .nppp-vo-hero-title {
+    display: block;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: #1d2327;
+}
+#nppp-nginx-info .nppp-vo-hero-sub {
+    display: block;
+    margin-top: 2px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-checkmsg {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #b32d2e;
+}
+#nppp-nginx-info .nppp-vo-checkmsg:empty {
+    display: none;
+}
+
+/* "Check now" */
+#nppp-nginx-info .nppp-vo-btn {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 4px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #2271b1;
+    background-color: #fff;
+    border: 1px solid #2271b1;
+    border-radius: 3px;
+    cursor: pointer;
+}
+#nppp-nginx-info .nppp-vo-btn:hover {
+    color: #135e96;
+    background-color: #f6f7f7;
+    border-color: #135e96;
+}
+#nppp-nginx-info .nppp-vo-btn:focus-visible {
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
+}
+#nppp-nginx-info .nppp-vo-btn[disabled] {
+    color: #72777c;
+    background-color: #f6f7f7;
+    border-color: #c3c4c7;
+    cursor: default;
+}
+#nppp-nginx-info .nppp-vo-btn .dashicons {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+}
+#nppp-nginx-info .nppp-vo-btn.is-busy .dashicons {
+    animation: nppp-vo-spin 1s linear infinite;
+}
+@keyframes nppp-vo-spin {
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #nppp-nginx-info .nppp-vo-btn.is-busy .dashicons {
+        animation: none;
+    }
+}
+#nppp-nginx-info .nppp-vo-root[aria-busy="true"] .nppp-vo-kpis,
+#nppp-nginx-info .nppp-vo-root[aria-busy="true"] .nppp-vo-accs {
+    opacity: 0.7;
+}
+
+/* Measure boxes: they wrap under each other when the column is narrow */
+#nppp-nginx-info .nppp-vo-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+#nppp-nginx-info .nppp-vo-kpi {
+    min-width: 0;
+    padding: 12px 14px;
+    background-color: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 2px;
+}
+#nppp-nginx-info .nppp-vo-kpi-label {
+    display: block;
+    font-size: 12.5px;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-kpi-value {
+    display: block;
+    margin-top: 4px;
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: #1d2327;
+    font-variant-numeric: tabular-nums;
+}
+#nppp-nginx-info .nppp-vo-kpi-ok   .nppp-vo-kpi-value { color: #008000; }
+#nppp-nginx-info .nppp-vo-kpi-warn .nppp-vo-kpi-value { color: #b45f06; }
+#nppp-nginx-info .nppp-vo-kpi-bad  .nppp-vo-kpi-value { color: #c9302c; }
+#nppp-nginx-info .nppp-vo-kpi-off  .nppp-vo-kpi-value { color: #72777c; }
+#nppp-nginx-info .nppp-vo-kpi-unit {
+    margin-left: 5px;
+    font-size: 13px;
+    font-weight: 400;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-kpi .nppp-vo-bar {
+    height: 6px;
+    margin: 8px 0;
+}
+#nppp-nginx-info .nppp-vo-kpi-foot {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #50575e;
+    overflow-wrap: anywhere;
+}
+#nppp-nginx-info .nppp-vo-bar + .nppp-vo-kpi-foot {
+    margin-top: 0;
+}
+#nppp-nginx-info .nppp-vo-kpi-state {
+    display: block;
+    margin-top: 2px;
+}
+
+/* Sections: native <details>, closed line = title + short result */
+#nppp-nginx-info .nppp-vo-accs {
+    margin-top: 10px;
+}
+#nppp-nginx-info .nppp-vo-acc {
+    background-color: #fff;
+    border: 1px solid #dcdcde;
+}
+#nppp-nginx-info .nppp-vo-acc + .nppp-vo-acc {
+    margin-top: -1px;
+}
+#nppp-nginx-info .nppp-vo-acc > summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    padding: 13px 14px;
+    font-size: 14px;
+    list-style: none;
+    cursor: pointer;
+}
+#nppp-nginx-info .nppp-vo-acc > summary::-webkit-details-marker {
+    display: none;
+}
+#nppp-nginx-info .nppp-vo-acc > summary::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    margin: 0 6px 0 2px;
+    border-right: 2px solid #50575e;
+    border-bottom: 2px solid #50575e;
+    transform: rotate(-45deg);
+    transition: transform 0.15s ease;
+}
+#nppp-nginx-info .nppp-vo-acc[open] > summary::before {
+    transform: rotate(45deg);
+}
+#nppp-nginx-info .nppp-vo-acc > summary:hover,
+#nppp-nginx-info .nppp-vo-acc[open] > summary {
+    background-color: #f6f7f7;
+}
+#nppp-nginx-info .nppp-vo-acc[open] > summary {
+    border-bottom: 1px solid #dcdcde;
+}
+#nppp-nginx-info .nppp-vo-acc > summary:focus-visible {
+    outline: 2px solid #2271b1;
+    outline-offset: -2px;
+}
+#nppp-nginx-info .nppp-vo-acc-title {
+    font-weight: 600;
+    color: #1d2327;
+}
+#nppp-nginx-info .nppp-vo-acc[open] .nppp-vo-acc-title {
+    color: #135e96;
+}
+#nppp-nginx-info .nppp-vo-acc-sum {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin-left: auto;
+    font-size: 13px;
+    color: #50575e;
+    text-align: right;
+}
+#nppp-nginx-info .nppp-vo-acc-sum .nppp-vo-dot,
+#nppp-nginx-info .nppp-vo-kpi-state .nppp-vo-dot {
+    margin-right: 0;
+}
+#nppp-nginx-info .nppp-vo-kpi-state .nppp-vo-dot {
+    margin-right: 6px;
+}
+#nppp-nginx-info .nppp-vo-dot-ok   { background-color: #2b9a2b; }
+#nppp-nginx-info .nppp-vo-dot-warn { background-color: #e69500; }
+#nppp-nginx-info .nppp-vo-dot-bad  { background-color: #c9302c; }
+#nppp-nginx-info .nppp-vo-dot-wait,
+#nppp-nginx-info .nppp-vo-dot-off  { background-color: #a7aaad; }
+
+/* Rows inside a section: the label column is short text, give the value column the room (table-layout is fixed) */
+#nppp-nginx-info .nppp-vo-acc-body td.action {
+    width: 36%;
+}
+#nppp-nginx-info .nppp-vo-acc-body td.status {
+    width: 64%;
+}
+#nppp-nginx-info .nppp-vo-acc-body td.action,
+#nppp-nginx-info .nppp-vo-acc-body td.status {
+    padding: 11px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    vertical-align: top;
+    border-bottom-color: #dcdcde;
+}
+#nppp-nginx-info .nppp-vo-acc-body tr:last-child td {
+    border-bottom: 0;
+}
+#nppp-nginx-info .nppp-vo-acc-body td.status .dashicons {
+    vertical-align: top;
+    margin-top: 0;
+}
 
 /* Detail lines under a verdict: they line up with the text, not the icon */
 #nppp-nginx-info .nppp-vo-meta {
@@ -2164,53 +2448,57 @@ button.nppp-preload-btn[disabled] {
 }
 
 #nppp-nginx-info .nppp-vo-mono {
-    font-family: Consolas, Monaco, monospace;
-    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, Monaco, "Liberation Mono", monospace;
+    font-size: 12.5px;
     font-weight: normal;
-    word-break: break-all;
+    overflow-wrap: anywhere;
 }
 #nppp-nginx-info .nppp-vo-idx {
     font-weight: bold;
 }
 #nppp-nginx-info .nppp-vo-sub {
     display: block;
-    margin-top: 2px;
+    margin-top: 3px;
     font-size: 12px;
+    line-height: 1.4;
     font-weight: normal;
     color: #50575e;
 }
 #nppp-nginx-info .nppp-vo-chip {
     display: inline-block;
     margin-left: 8px;
-    padding: 1px 6px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
+    padding: 1px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.6;
+    white-space: nowrap;
     vertical-align: middle;
-    color: #005a9e;
-    background-color: #eef4fa;
-    border-radius: 3px;
+    color: #50575e;
+    background-color: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 10px;
 }
-#nppp-nginx-info .nppp-vo-okc  { color: #008000; }
-#nppp-nginx-info .nppp-vo-badc { color: #c9302c; }
 
-/* Coverage: percentage, stacked bar, legend, then "Checked ... · Check now" */
+/* Coverage: percentage, stacked bar, legend, then "Checked ..." */
 #nppp-nginx-info .nppp-vo-covtext {
     display: block;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: 600;
 }
 #nppp-nginx-info .nppp-vo-bar {
     display: flex;
-    height: 10px;
-    margin: 6px 0 4px;
+    height: 8px;
+    margin: 8px 0 6px;
     overflow: hidden;
     background-color: #dcdcde;
-    border-radius: 5px;
+    border-radius: 4px;
 }
 #nppp-nginx-info .nppp-vo-seg {
     display: block;
     height: 100%;
+}
+#nppp-nginx-info .nppp-vo-seg + .nppp-vo-seg {
+    box-shadow: -1px 0 0 #fff;
 }
 #nppp-nginx-info .nppp-vo-seg-hit     { background-color: #2b9a2b; }
 #nppp-nginx-info .nppp-vo-seg-stale   { background-color: #f0c36d; }
@@ -2238,43 +2526,54 @@ button.nppp-preload-btn[disabled] {
 #nppp-nginx-info .nppp-vo-foot {
     margin-left: 0;
 }
-#nppp-nginx-info .nppp-vo-link {
-    padding: 0;
-    font: inherit;
-    color: #2271b1;
-    text-decoration: underline;
-    background: none;
-    border: 0;
-    cursor: pointer;
-}
-#nppp-nginx-info .nppp-vo-link:hover,
-#nppp-nginx-info .nppp-vo-link:focus {
-    color: #135e96;
-}
-#nppp-nginx-info .nppp-vo-link[disabled] {
-    color: #72777c;
-    cursor: default;
-    text-decoration: none;
-}
-#nppp-nginx-info #nppp-vo-live[aria-busy="true"] {
-    opacity: 0.7;
-}
 
 /* Purge activity: one line per event, time first */
+#nppp-nginx-info .nppp-vo-evlist {
+    padding: 10px 14px 4px;
+}
 #nppp-nginx-info .nppp-vo-ev {
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    font-size: 12px;
-    line-height: 1.7;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.8;
 }
 #nppp-nginx-info .nppp-vo-evtime {
-    flex: 0 0 76px;
+    flex: 0 0 auto;
+    min-width: 9em;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
     color: #50575e;
 }
 #nppp-nginx-info .nppp-vo-ev .nppp-vo-dot {
     flex: 0 0 auto;
     margin-right: 0;
+}
+#nppp-nginx-info .nppp-vo-note {
+    padding: 4px 14px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-note.nppp-vo-badc {
+    color: #c9302c;
+}
+
+/* Narrow screens: a little more room for labels, values wrap at word boundaries */
+@media (max-width: 782px) {
+    #nppp-nginx-info .nppp-vo-acc-body td.action {
+        width: 40%;
+    }
+    #nppp-nginx-info .nppp-vo-acc-body td.status {
+        width: 60%;
+    }
+    #nppp-nginx-info .nppp-vo-acc-body td.action,
+    #nppp-nginx-info .nppp-vo-acc-body td.status {
+        padding: 10px 10px;
+    }
+    #nppp-nginx-info .nppp-vo-evtime {
+        min-width: 0;
+    }
 }
 
 /* Style for the settings tab group separator */

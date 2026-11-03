@@ -1423,31 +1423,38 @@ function nppp_varnish_vo_row( string $label_html, string $cell_html ): string {
 }
 
 /**
- * One blue-banner section of the card.
+ * One accordion of the card: a native <details>, so it opens, closes and takes the keyboard without any script.
  *
- * @param string $id        Element id ('' for none). The live check section is replaced by AJAX through its id.
- * @param string $head_left Column title of the first column.
- * @param string $rows      <tr> rows.
+ * @param string $id      Stable id. The Check now script keeps the sections the person opened or closed by it.
+ * @param string $state   ok | warn | bad | wait | off. Colours the dot of the summary line; the script never
+ *                        closes a section whose state is warn or bad (data-state).
+ * @param string $summary Short result on the right of the closed line, plain text.
+ * @param string $body    Inner HTML, already escaped.
  */
-function nppp_varnish_vo_section( string $id, string $title, string $head_left, string $rows ): string {
-    ob_start();
-    ?>
-    <section class="nginx-status nppp-vo-section"<?php echo $id !== '' ? ' id="' . esc_attr( $id ) . '"' : ''; ?>>
-        <h2><?php echo esc_html( $title ); ?></h2>
-        <table>
-            <thead>
-                <tr>
-                    <th class="check-header"><span class="dashicons dashicons-admin-generic"></span> <?php echo esc_html( $head_left ); ?></th>
-                    <th class="status-header"><span class="dashicons dashicons-info"></span> <?php esc_html_e( 'Status', 'fastcgi-cache-purge-and-preload-nginx' ); ?></th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php echo $rows; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- every row is built from escaped parts by nppp_varnish_vo_row() / nppp_varnish_vo_cell() ?>
-            </tbody>
-        </table>
-    </section>
-    <?php
-    return (string) ob_get_clean();
+function nppp_varnish_vo_acc( string $id, string $title, string $state, string $summary, string $body, bool $open ): string {
+    return '<details class="nppp-vo-acc" id="' . esc_attr( $id ) . '" data-state="' . esc_attr( $state ) . '"' . ( $open ? ' open' : '' ) . '>'
+        . '<summary><span class="nppp-vo-acc-title">' . esc_html( $title ) . '</span>'
+        . '<span class="nppp-vo-acc-sum"><span class="nppp-vo-dot nppp-vo-dot-' . esc_attr( $state ) . '" aria-hidden="true"></span>' . esc_html( $summary ) . '</span></summary>'
+        . '<div class="nppp-vo-acc-body">' . $body . '</div>'
+        . '</details>';
+}
+
+/**
+ * Label / status rows inside an accordion, in the table markup the Nginx panel uses.
+ *
+ * @param string $rows <tr> rows from nppp_varnish_vo_row().
+ */
+function nppp_varnish_vo_table( string $rows ): string {
+    return '<div class="nginx-status"><table><tbody>' . $rows . '</tbody></table></div>';
+}
+
+/**
+ * Percentage for the card: "100%" when whole, "92.5%" otherwise.
+ */
+function nppp_varnish_vo_pct( float $pct ): string {
+    $r = round( $pct, 1 );
+
+    return number_format_i18n( $r, ( $r == floor( $r ) ) ? 0 : 1 ) . '%';
 }
 
 /**
@@ -1512,19 +1519,21 @@ function nppp_varnish_vo_last_preload(): ?array {
 }
 
 /**
- * Rows of the ENDPOINTS section. Built from stored state only: no request is sent.
+ * The endpoints of the card with the verdict of each one. Built from stored state only: no request is sent.
+ *
+ * @return array<int,array{n:int,endpoint:string,state:string,text:string,title:string,meta:string[],parked:bool,last:?array}>
  */
-function nppp_varnish_vo_endpoint_rows(): string {
-    $endpoints = nppp_varnish_endpoints();
-    $breaker   = nppp_varnish_state_map( 'varnish_breaker' );
-    $rows      = '';
+function nppp_varnish_vo_endpoint_states(): array {
+    $breaker = nppp_varnish_state_map( 'varnish_breaker' );
+    $out     = array();
 
-    foreach ( array_values( $endpoints ) as $i => $endpoint ) {
-        $id   = nppp_varnish_endpoint_id( $endpoint );
-        $last = nppp_varnish_ep_last( $endpoint );
-        $meta = array();
+    foreach ( array_values( nppp_varnish_endpoints() ) as $i => $endpoint ) {
+        $id     = nppp_varnish_endpoint_id( $endpoint );
+        $last   = nppp_varnish_ep_last( $endpoint );
+        $meta   = array();
+        $parked = nppp_varnish_breaker_open( $endpoint );
 
-        if ( nppp_varnish_breaker_open( $endpoint ) ) {
+        if ( $parked ) {
             $state = 'bad';
             $text  = __( 'Parked', 'fastcgi-cache-purge-and-preload-nginx' );
             $title = __( 'The endpoint failed recently and is skipped for a few seconds. Purges are retried automatically once the park window ends.', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -1564,9 +1573,33 @@ function nppp_varnish_vo_endpoint_rows(): string {
             }
         }
 
+        $out[] = array(
+            'n'        => $i + 1,
+            'endpoint' => (string) $endpoint,
+            'state'    => $state,
+            'text'     => $text,
+            'title'    => $title,
+            'meta'     => $meta,
+            'parked'   => $parked,
+            'last'     => $last,
+        );
+    }
+
+    return $out;
+}
+
+/**
+ * Rows of the Endpoints accordion.
+ *
+ * @param array $states nppp_varnish_vo_endpoint_states().
+ */
+function nppp_varnish_vo_endpoint_rows( array $states ): string {
+    $rows = '';
+
+    foreach ( $states as $ep ) {
         $rows .= nppp_varnish_vo_row(
-            '<span class="nppp-vo-idx">#' . ( $i + 1 ) . '</span> <span class="nppp-vo-mono">' . esc_html( $endpoint ) . '</span>',
-            nppp_varnish_vo_cell( $state, $text, $meta, $title )
+            '<span class="nppp-vo-idx">#' . (int) $ep['n'] . '</span> <span class="nppp-vo-mono">' . esc_html( $ep['endpoint'] ) . '</span>',
+            nppp_varnish_vo_cell( $ep['state'], $ep['text'], $ep['meta'], $ep['title'] )
         );
     }
 
@@ -1609,258 +1642,422 @@ function nppp_varnish_vo_check_state(): ?array {
 }
 
 /**
- * LIVE CACHE CHECK section. Rendered from the stored result of the last check; it never sends a request.
- * The Check now button fills it (nppp_vo_status_check_callback()) and the AJAX answer is this same markup.
+ * Wording of one purge run: "Preload All" + "ban accepted", and the colour of its dot.
+ *
+ * @param array $e One row of nppp_varnish_activity().
+ * @return array{what:string,res:string,dot:string}
  */
-function nppp_varnish_vo_live_section(): string {
-    $chk       = nppp_varnish_vo_check_state();
-    $endpoints = array_values( nppp_varnish_endpoints() );
-    $status    = $chk['status'] ?? '';
+function nppp_varnish_vo_event_text( array $e ): array {
+    $what = ( $e['src'] === 'preload' ) ? __( 'Preload All', 'fastcgi-cache-purge-and-preload-nginx' )
+        : ( $e['scope'] === 'all' ? __( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'Single URL', 'fastcgi-cache-purge-and-preload-nginx' ) );
 
-    // The endpoint the lookup uses: the first one that is not parked (see nppp_varnish_probe_batch()).
-    $first = '';
-    $idx   = 0;
-    foreach ( $endpoints as $i => $candidate ) {
-        if ( ! nppp_varnish_breaker_open( $candidate ) ) {
-            $first = $candidate;
-            $idx   = $i;
-            break;
+    if ( $e['status'] === 'ok' ) {
+        $res = ( $e['src'] === 'preload' ) ? __( 'ban accepted', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'accepted', 'fastcgi-cache-purge-and-preload-nginx' );
+        $dot = 'nppp-vo-seg-hit';
+    } else {
+        $res  = ( $e['status'] === 'partial' ) ? __( 'partly failed', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'failed', 'fastcgi-cache-purge-and-preload-nginx' );
+        $res .= ( $e['detail'] !== '' ) ? ' (' . $e['detail'] . ')' : '';
+        $dot  = ( $e['status'] === 'partial' ) ? 'nppp-vo-seg-miss' : 'nppp-vo-seg-pass';
+    }
+
+    return array( 'what' => $what, 'res' => $res, 'dot' => $dot );
+}
+
+/**
+ * Everything the card shows, read once from stored state (no request is sent), so the summary, the tiles and the
+ * accordions always agree with each other.
+ *
+ * probe: ok | off | parked | none | denied | unreachable | noanswer
+ * cov.kind: data | none | running | empty | unavailable
+ */
+function nppp_varnish_vo_snapshot(): array {
+    // Endpoints. The lookup uses the first one that is not parked (see nppp_varnish_probe_batch()).
+    $eps       = nppp_varnish_vo_endpoint_states();
+    $total     = count( $eps );
+    $ready     = 0;
+    $attention = 0;
+    $first     = null;
+    foreach ( $eps as $ep ) {
+        if ( ! $ep['parked'] ) {
+            $ready++;
+            if ( $first === null ) {
+                $first = $ep;
+            }
+        }
+        if ( $ep['state'] === 'warn' ) {
+            $attention++;
         }
     }
-    $multi = count( $endpoints ) > 1;
 
-    // 1. Does the VCL answer the lookup? A remembered "no" (one hour, set by any lookup) needs no request to show.
-    $off = ( $first !== '' ) ? ( nppp_varnish_state_map( 'varnish_probe_off' )[ nppp_varnish_endpoint_id( $first ) ] ?? 0 ) : 0;
+    // Probe: does the VCL answer the lookup? A remembered "no" (one hour, set by any lookup) needs no request to show.
+    $chk    = nppp_varnish_vo_check_state();
+    $status = (string) ( $chk['status'] ?? '' );
+    $off    = ( $first !== null ) ? ( nppp_varnish_state_map( 'varnish_probe_off' )[ nppp_varnish_endpoint_id( $first['endpoint'] ) ] ?? 0 ) : 0;
     if ( $off > 0 || $status === 'unsupported' ) {
-        $probe = nppp_varnish_vo_cell( 'warn', __( 'Not answering', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'The VCL has no probe block: add it from the Example VCL (Help tab), then press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
-    } elseif ( $first === '' && $endpoints !== array() ) {
-        $probe = nppp_varnish_vo_cell( 'wait', __( 'Endpoint parked', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Every endpoint is parked after a failure; try again in a few seconds.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+        $probe = 'off';
+    } elseif ( $first === null && $total > 0 ) {
+        $probe = 'parked';
     } elseif ( $chk === null ) {
-        $probe = nppp_varnish_vo_cell( 'wait', __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+        $probe = 'none';
     } elseif ( $status === 'ok' ) {
-        $probe = nppp_varnish_vo_cell( 'ok', __( 'Answering', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        $probe = 'ok';
     } elseif ( $status === 'denied' ) {
-        $probe = nppp_varnish_vo_cell( 'bad', __( 'Refused', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Check the VCL purge ACL, the control header and the probe block (Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+        $probe = 'denied';
     } elseif ( $status === 'unreachable' ) {
-        $probe = nppp_varnish_vo_cell( 'bad', __( 'Unreachable', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Varnish did not answer the lookup.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+        $probe = 'unreachable';
     } else {
-        $probe = nppp_varnish_vo_cell( 'wait', __( 'No answer', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'The lookup could not be completed.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+        $probe = 'noanswer';
     }
-    $rows = nppp_varnish_vo_row( esc_html__( 'Probe block in VCL', 'fastcgi-cache-purge-and-preload-nginx' ), $probe );
 
-    // 2. The home page, asked with the same lookup.
+    // Home page and coverage of the sample of the last Preload All.
     $home = ( is_array( $chk['home'] ?? null ) ) ? $chk['home'] : null;
-    if ( $home === null ) {
-        $home_cell = nppp_varnish_vo_cell( 'wait', __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ) );
-    } else {
-        $state = (string) ( $home['state'] ?? 'UNKNOWN' );
-        $meta  = array();
-        if ( $state === 'HIT' || $state === 'STALE' ) {
-            $parts = array();
-            if ( isset( $home['age'] ) && is_numeric( $home['age'] ) ) {
-                /* translators: %s: duration such as "4m 12s" */
-                $parts[] = sprintf( __( 'age %s', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_duration( $home['age'] ) );
-            }
-            if ( $state === 'STALE' ) {
-                $parts[] = __( 'past its TTL, served stale while refreshed', 'fastcgi-cache-purge-and-preload-nginx' );
-            } elseif ( isset( $home['ttl'] ) && is_numeric( $home['ttl'] ) ) {
-                /* translators: %s: duration such as "5m 48s" */
-                $parts[] = sprintf( __( 'TTL left %s', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_duration( $home['ttl'] ) );
-            }
-        } elseif ( $state === 'MISS' ) {
-            $parts = array( __( 'not cached (or not cacheable)', 'fastcgi-cache-purge-and-preload-nginx' ) );
-        } elseif ( $state === 'PASS' ) {
-            $parts = array( __( 'passed to the origin (hit-for-pass)', 'fastcgi-cache-purge-and-preload-nginx' ) );
-        } else {
-            $parts = array( (string) ( $home['reason'] ?? '' ) );
-        }
-        if ( in_array( $state, array( 'HIT', 'STALE', 'MISS', 'PASS' ), true ) && isset( $home['ms'] ) ) {
-            /* translators: %d: milliseconds */
-            $parts[] = sprintf( __( 'lookup %d ms', 'fastcgi-cache-purge-and-preload-nginx' ), (int) $home['ms'] );
-        }
-        $meta[] = implode( ' · ', array_filter( $parts, 'strlen' ) );
-
-        if ( $state === 'HIT' ) {
-            $home_cell = nppp_varnish_vo_cell( 'ok', 'HIT', $meta );
-        } elseif ( $state === 'UNKNOWN' ) {
-            $home_cell = nppp_varnish_vo_cell( 'wait', __( 'Unknown', 'fastcgi-cache-purge-and-preload-nginx' ), $meta );
-        } else {
-            $home_cell = nppp_varnish_vo_cell( 'warn', $state, $meta );
-        }
-    }
-    $rows .= nppp_varnish_vo_row( esc_html__( 'Home page', 'fastcgi-cache-purge-and-preload-nginx' ) . ' <span class="nppp-vo-mono">/</span>', $home_cell );
-
-    // 3. Coverage of a sample of the last Preload All.
-    $cov = ( is_array( $chk['cov'] ?? null ) ) ? $chk['cov'] : null;
-    $n   = static function ( string $k ) use ( $cov ): int {
+    $cov  = ( is_array( $chk['cov'] ?? null ) ) ? $chk['cov'] : null;
+    $n    = static function ( string $k ) use ( $cov ): int {
         return is_array( $cov ) ? (int) ( $cov[ $k ] ?? 0 ) : 0;
     };
-    $sampled = $n( 'hit' ) + $n( 'stale' ) + $n( 'miss' ) + $n( 'pass' ) + $n( 'unknown' );
-    $known   = $n( 'hit' ) + $n( 'stale' ) + $n( 'miss' ) + $n( 'pass' );
-
-    $cell  = '<td class="status nppp-vo-st">';
-    if ( $chk === null ) {
-        $cell .= '<span class="dashicons dashicons-clock nppp-vo-wait" aria-hidden="true"></span> <span class="nppp-vo-text nppp-vo-wait">' . esc_html__( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
-    } elseif ( $cov === null || isset( $cov['skipped'] ) || $known === 0 ) {
-        $why = (string) ( $cov['skipped'] ?? '' );
-        if ( $why === 'running' ) {
-            $msg = __( 'Preload All is running; coverage is checked once it has finished.', 'fastcgi-cache-purge-and-preload-nginx' );
-        } elseif ( $why === 'empty' ) {
-            $msg = __( 'No completed crawl snapshot yet. Run Preload All once to build the URL list.', 'fastcgi-cache-purge-and-preload-nginx' );
-        } else {
-            $msg = __( 'Not available: Varnish did not answer the lookup (see the probe block above).', 'fastcgi-cache-purge-and-preload-nginx' );
-        }
-        $cell .= '<span class="dashicons dashicons-minus nppp-vo-off" aria-hidden="true"></span> <span class="nppp-vo-text nppp-vo-off">' . esc_html( $msg ) . '</span>';
-    } else {
-        $cached = $n( 'hit' ) + $n( 'stale' );
-        $pct    = number_format_i18n( round( $cached / $known * 100, 1 ), 1 ) . '%';
-        $cell  .= '<span class="nppp-vo-covtext">' . esc_html( sprintf(
-            /* translators: 1: percentage such as "92.0%", 2: cached URLs, 3: URLs with a definite answer */
-            _n( '%1$s (%2$d of %3$d URL cached)', '%1$s (%2$d of %3$d URLs cached)', $known, 'fastcgi-cache-purge-and-preload-nginx' ),
-            $pct,
-            $cached,
-            $known
-        ) ) . '</span>';
-
-        $segments = array(
-            array( 'hit',     'HIT',     'nppp-vo-seg-hit' ),
-            array( 'stale',   'STALE',   'nppp-vo-seg-stale' ),
-            array( 'miss',    'MISS',    'nppp-vo-seg-miss' ),
-            array( 'pass',    'PASS',    'nppp-vo-seg-pass' ),
-            array( 'unknown', 'UNKNOWN', 'nppp-vo-seg-unknown' ),
-        );
-        $bar    = '';
-        $legend = '';
-        foreach ( $segments as $seg ) {
-            $count = $n( $seg[0] );
-            if ( $count < 1 ) {
-                continue;
-            }
-            $bar    .= '<span class="nppp-vo-seg ' . esc_attr( $seg[2] ) . '" style="width:' . esc_attr( number_format( $count / $sampled * 100, 2, '.', '' ) ) . '%"></span>';
-            $legend .= '<span class="nppp-vo-leg"><span class="nppp-vo-dot ' . esc_attr( $seg[2] ) . '"></span><strong>' . (int) $count . '</strong> ' . esc_html( $seg[1] ) . '</span> ';
-        }
-        $cell .= '<span class="nppp-vo-bar" role="img" aria-label="' . esc_attr( $pct ) . '">' . $bar . '</span>';
-        $cell .= '<span class="nppp-vo-legend">' . $legend . '</span>';
-    }
-
-    $foot = ( $chk !== null )
-        /* translators: %s: time since the last check, e.g. "2 mins ago" */
-        ? sprintf( __( 'Checked %s', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_ago( (int) $chk['at'] ) ) . ' · '
-        : '';
-    $cell .= '<span class="nppp-vo-meta nppp-vo-foot">' . esc_html( $foot )
-        . '<button type="button" id="nppp-vo-check-now" class="nppp-vo-link" title="' . esc_attr__( 'Ask Varnish for the status of the home page and of a sample of the crawled URLs (lookup only: nothing is fetched, cached or purged)', 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
-        . esc_html__( 'Check now', 'fastcgi-cache-purge-and-preload-nginx' ) . '</button>'
-        . ' <span class="nppp-vo-checkmsg" role="status"></span></span>';
-    $cell .= '</td>';
-
-    $set = (int) ( $chk['cov']['set'] ?? 0 );
-    $sub = ( $set > 0 && $set <= nppp_varnish_probe_max_urls() )
-        ? __( 'every URL of last Preload All', 'fastcgi-cache-purge-and-preload-nginx' )
-        : __( 'sample of last Preload All', 'fastcgi-cache-purge-and-preload-nginx' );
-    if ( $multi ) {
-        /* translators: %d: endpoint number */
-        $sub .= ' · ' . sprintf( __( 'asked on endpoint #%d only', 'fastcgi-cache-purge-and-preload-nginx' ), (int) ( $chk['ep'] ?? ( $idx + 1 ) ) );
-    }
-    $rows .= nppp_varnish_vo_row( esc_html__( 'Coverage', 'fastcgi-cache-purge-and-preload-nginx' ) . '<span class="nppp-vo-sub">' . esc_html( $sub ) . '</span>', $cell );
-
-    return nppp_varnish_vo_section( 'nppp-vo-live', __( 'LIVE CACHE CHECK', 'fastcgi-cache-purge-and-preload-nginx' ), __( 'Check', 'fastcgi-cache-purge-and-preload-nginx' ), $rows );
-}
-
-/**
- * PURGE ACTIVITY section: the last 24 hours of purge runs (log kept by nppp_varnish_activity_add()).
- */
-function nppp_varnish_vo_activity_section(): string {
-    $events = nppp_varnish_activity();
-    $total  = count( $events );
-    $rows   = '';
-
-    if ( $total === 0 ) {
-        $rows .= nppp_varnish_vo_row(
-            esc_html__( 'Purges', 'fastcgi-cache-purge-and-preload-nginx' ),
-            nppp_varnish_vo_cell( 'wait', __( 'None in the last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ) )
-        );
-    } else {
-        $good = 0;
-        $kind = array();
-        foreach ( $events as $e ) {
-            if ( $e['status'] === 'ok' ) {
-                $good++;
-                continue;
-            }
-            foreach ( array_unique( $e['kinds'] ) as $k ) {
-                $kind[ $k ] = ( $kind[ $k ] ?? 0 ) + 1;
-            }
-        }
-        $bad = $total - $good;
-
-        $rows .= nppp_varnish_vo_row(
-            esc_html__( 'Purges', 'fastcgi-cache-purge-and-preload-nginx' ),
-            '<td class="status"><span>' . (int) $total . '</span> · <strong class="nppp-vo-okc">'
-                . esc_html( sprintf( /* translators: %d: accepted purges */ __( '%d accepted', 'fastcgi-cache-purge-and-preload-nginx' ), $good ) ) . '</strong>'
-                . ( $bad > 0 ? ' · <strong class="nppp-vo-badc">' . esc_html( sprintf( /* translators: %d: failed purges */ __( '%d failed', 'fastcgi-cache-purge-and-preload-nginx' ), $bad ) ) . '</strong>' : '' )
-                . '</td>'
-        );
-
-        $pct   = $good / $total * 100;
-        $state = ( $bad === 0 ) ? 'ok' : ( $pct >= 90 ? 'warn' : 'bad' );
-        $label = array(
-            'unreachable' => __( 'unreachable', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'denied'      => __( 'refused', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'fail'        => __( 'HTTP error', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'parked'      => __( 'endpoint parked', 'fastcgi-cache-purge-and-preload-nginx' ),
-            'budget'      => __( 'time budget used up', 'fastcgi-cache-purge-and-preload-nginx' ),
-        );
-        $meta  = array();
-        if ( $bad > 0 && $kind !== array() ) {
-            $parts = array();
-            foreach ( $label as $k => $text ) {
-                if ( ! empty( $kind[ $k ] ) ) {
-                    $parts[] = $text . ' ' . (int) $kind[ $k ];
-                }
-            }
-            /* translators: %s: failure kinds with counts, e.g. "unreachable 2" */
-            $meta[] = sprintf( __( 'failures: %s', 'fastcgi-cache-purge-and-preload-nginx' ), implode( ', ', $parts ) );
-        }
-        $rows .= nppp_varnish_vo_row(
-            esc_html__( 'Success rate', 'fastcgi-cache-purge-and-preload-nginx' ),
-            nppp_varnish_vo_cell( $state, number_format_i18n( round( $pct, 1 ), 1 ) . '%', $meta )
-        );
-
-        $list = '';
-        foreach ( array_slice( array_reverse( $events ), 0, 4 ) as $e ) {
-            $what = ( $e['src'] === 'preload' ) ? __( 'Preload All', 'fastcgi-cache-purge-and-preload-nginx' )
-                : ( $e['scope'] === 'all' ? __( 'Purge All', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'Single URL', 'fastcgi-cache-purge-and-preload-nginx' ) );
-            if ( $e['status'] === 'ok' ) {
-                $res = ( $e['src'] === 'preload' ) ? __( 'ban accepted', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'accepted', 'fastcgi-cache-purge-and-preload-nginx' );
-                $dot = 'nppp-vo-seg-hit';
-            } else {
-                $res = ( $e['status'] === 'partial' ) ? __( 'partly failed', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'failed', 'fastcgi-cache-purge-and-preload-nginx' );
-                $res .= ( $e['detail'] !== '' ) ? ' (' . $e['detail'] . ')' : '';
-                $dot  = ( $e['status'] === 'partial' ) ? 'nppp-vo-seg-miss' : 'nppp-vo-seg-pass';
-            }
-            $list .= '<span class="nppp-vo-ev"><span class="nppp-vo-evtime">' . esc_html( nppp_varnish_vo_ago( $e['at'] ) ) . '</span>'
-                . '<span class="nppp-vo-dot ' . esc_attr( $dot ) . '"></span>'
-                . '<span>' . esc_html( $what . ' · ' . $res ) . '</span></span>';
-        }
-        $rows .= nppp_varnish_vo_row( esc_html__( 'Recent events', 'fastcgi-cache-purge-and-preload-nginx' ), '<td class="status">' . $list . '</td>' );
-    }
-
-    $rows .= nppp_varnish_vo_row(
-        esc_html__( 'VCL', 'fastcgi-cache-purge-and-preload-nginx' ),
-        '<td class="status">' . esc_html__( 'Purge ACL, control header and the probe block: see the Help tab.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>'
+    $counts  = array(
+        'hit'     => $n( 'hit' ),
+        'stale'   => $n( 'stale' ),
+        'miss'    => $n( 'miss' ),
+        'pass'    => $n( 'pass' ),
+        'unknown' => $n( 'unknown' ),
     );
+    $sampled = array_sum( $counts );
+    $known   = $counts['hit'] + $counts['stale'] + $counts['miss'] + $counts['pass'];
+    $cached  = $counts['hit'] + $counts['stale'];
 
-    return nppp_varnish_vo_section( '', __( 'PURGE ACTIVITY · 24 H', 'fastcgi-cache-purge-and-preload-nginx' ), __( 'Check', 'fastcgi-cache-purge-and-preload-nginx' ), $rows );
+    if ( $chk === null ) {
+        $kind = 'none';
+    } elseif ( $cov === null || isset( $cov['skipped'] ) || $known === 0 ) {
+        $why  = (string) ( $cov['skipped'] ?? '' );
+        $kind = ( $why === 'running' || $why === 'empty' ) ? $why : 'unavailable';
+    } else {
+        $kind = 'data';
+    }
+
+    // Purge runs of the last 24 hours.
+    $events = nppp_varnish_activity();
+    $a_tot  = count( $events );
+    $good   = 0;
+    $kinds  = array();
+    foreach ( $events as $e ) {
+        if ( $e['status'] === 'ok' ) {
+            $good++;
+            continue;
+        }
+        foreach ( array_unique( $e['kinds'] ) as $k ) {
+            $kinds[ $k ] = ( $kinds[ $k ] ?? 0 ) + 1;
+        }
+    }
+    $bad = $a_tot - $good;
+    $a_pct = ( $a_tot > 0 ) ? $good / $a_tot * 100 : null;
+    if ( $a_tot === 0 ) {
+        $a_state = 'wait';
+    } elseif ( $bad === 0 ) {
+        $a_state = 'ok';
+    } else {
+        $a_state = ( $a_pct >= 90 ) ? 'warn' : 'bad';
+    }
+
+    return array(
+        'eps'    => $eps,
+        'total'  => $total,
+        'ready'  => $ready,
+        'attn'   => $attention,
+        'lat'    => ( $first !== null ) ? $first : ( $eps[0] ?? null ),
+        'chk'    => $chk,
+        'probe'  => $probe,
+        'home'   => $home,
+        'cov'    => array(
+            'kind'    => $kind,
+            'counts'  => $counts,
+            'sampled' => $sampled,
+            'known'   => $known,
+            'cached'  => $cached,
+            'pct'     => ( $kind === 'data' ) ? $cached / $known * 100 : null,
+            'set'     => (int) ( $chk['cov']['set'] ?? 0 ),
+        ),
+        'act'    => array(
+            'events' => $events,
+            'total'  => $a_tot,
+            'good'   => $good,
+            'bad'    => $bad,
+            'pct'    => $a_pct,
+            'kinds'  => $kinds,
+            'state'  => $a_state,
+            'newest' => ( $a_tot > 0 ) ? end( $events ) : null,
+        ),
+    );
 }
 
 /**
- * Varnish-only mode: replacement for the Nginx panel on the right of the Status tab.
+ * The one-line answer to "is it working?" at the top of the card.
  *
- * Four sections in the markup of that panel (blue banner, Check / Status table), so it takes the existing styles:
- * the mode and the preload, the endpoints, the live cache check and the purge activity of the last 24 hours.
- * Rendering reads stored state only and sends no request; the live check is run by the Check now button.
+ * @param array $s nppp_varnish_vo_snapshot().
+ * @return array{state:string,title:string,sub:string} state: ok | warn | bad | wait
  */
-function nppp_varnish_vo_info_card(): string {
+function nppp_varnish_vo_health( array $s ): array {
+    $act   = $s['act'];
+    $cov   = $s['cov'];
+    $probe = $s['probe'];
+
+    if ( $s['total'] === 0 ) {
+        return array(
+            'state' => 'bad',
+            'title' => __( 'No Varnish endpoint is configured', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'Add one in Settings, then press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+    if ( $s['ready'] === 0 ) {
+        return array(
+            'state' => 'bad',
+            'title' => __( 'Varnish is not reachable', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'Every endpoint is parked after a failure; it is tried again in a few seconds.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+    if ( $probe === 'denied' ) {
+        return array(
+            'state' => 'bad',
+            'title' => __( 'Varnish refuses the requests', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'Check the VCL purge ACL, the control header and the probe block (Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+    if ( $probe === 'unreachable' ) {
+        return array(
+            'state' => 'bad',
+            'title' => __( 'Varnish did not answer', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'Varnish did not answer the lookup.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+    if ( $probe === 'off' ) {
+        return array(
+            'state' => 'warn',
+            'title' => __( 'The live check is not available', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'The VCL has no probe block: add it from the Example VCL (Help tab), then press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+    if ( $probe === 'none' ) {
+        return array(
+            'state' => 'wait',
+            'title' => __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'Press Check now to ask Varnish about the home page and the crawled URLs.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+    if ( $probe !== 'ok' ) {
+        return array(
+            'state' => 'wait',
+            'title' => __( 'The live check has no answer', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'sub'   => __( 'The lookup could not be completed.', 'fastcgi-cache-purge-and-preload-nginx' ),
+        );
+    }
+
+    // Varnish answered the lookup: what does it say, and did anything go wrong lately?
+    $home_state = is_array( $s['home'] ) ? (string) ( $s['home']['state'] ?? 'UNKNOWN' ) : '';
+    $problem    = '';
+    if ( in_array( $home_state, array( 'MISS', 'PASS', 'STALE' ), true ) ) {
+        $problem = __( 'Varnish is answering, but the home page is not cached', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $cov['pct'] !== null && $cov['pct'] < 90 ) {
+        $problem = __( 'Varnish is answering, but coverage is low', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $act['bad'] > 0 ) {
+        $problem = __( 'Varnish is answering, but some purges failed', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $s['ready'] < $s['total'] || $s['attn'] > 0 ) {
+        $problem = __( 'Varnish is answering, but an endpoint needs attention', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $parts = array();
+    if ( $cov['kind'] === 'data' ) {
+        /* translators: 1: cached URLs, 2: URLs with a definite answer */
+        $parts[] = sprintf( _n( '%1$d of %2$d crawled URL is cached', '%1$d of %2$d crawled URLs are cached', $cov['known'], 'fastcgi-cache-purge-and-preload-nginx' ), $cov['cached'], $cov['known'] );
+    } elseif ( $cov['kind'] === 'running' ) {
+        $parts[] = __( 'coverage follows once Preload All has finished', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $cov['kind'] === 'empty' ) {
+        $parts[] = __( 'no crawled URL list yet', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+    if ( $s['ready'] < $s['total'] ) {
+        /* translators: 1: endpoints that are not parked, 2: all endpoints */
+        $parts[] = sprintf( __( '%1$d of %2$d endpoints ready', 'fastcgi-cache-purge-and-preload-nginx' ), $s['ready'], $s['total'] );
+    }
+    if ( $act['total'] === 0 ) {
+        $parts[] = __( 'no purge in the last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $when = nppp_varnish_vo_ago( (int) $act['newest']['at'] );
+        /* translators: %s: time since, e.g. "2 mins ago" */
+        $parts[] = sprintf( ( $act['newest']['status'] === 'ok' ) ? __( 'last purge accepted %s', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'last purge failed %s', 'fastcgi-cache-purge-and-preload-nginx' ), $when );
+    }
+
+    return array(
+        'state' => ( $problem === '' ) ? 'ok' : 'warn',
+        'title' => ( $problem === '' ) ? __( 'Varnish is answering and caching', 'fastcgi-cache-purge-and-preload-nginx' ) : $problem,
+        'sub'   => implode( ' · ', $parts ),
+    );
+}
+
+/**
+ * The top of the card: the answer, and the only button.
+ */
+function nppp_varnish_vo_hero( array $health ): string {
+    $icons = array(
+        'ok'   => 'dashicons-yes',
+        'warn' => 'dashicons-warning',
+        'bad'  => 'dashicons-no-alt',
+        'wait' => 'dashicons-clock',
+    );
+    $state = isset( $icons[ $health['state'] ] ) ? $health['state'] : 'wait';
+
+    return '<div class="nppp-vo-hero nppp-vo-hero-' . esc_attr( $state ) . '">'
+        . '<span class="nppp-vo-hero-icon" aria-hidden="true"><span class="dashicons ' . esc_attr( $icons[ $state ] ) . '"></span></span>'
+        . '<div class="nppp-vo-hero-text">'
+        . '<span class="nppp-vo-hero-title">' . esc_html( $health['title'] ) . '</span>'
+        . '<span class="nppp-vo-hero-sub">' . esc_html( $health['sub'] ) . '</span>'
+        . '<span class="nppp-vo-checkmsg" role="status"></span>'
+        . '</div>'
+        . '<button type="button" id="nppp-vo-check-now" class="nppp-vo-btn" title="' . esc_attr__( 'Ask Varnish for the status of the home page and of a sample of the crawled URLs (lookup only: nothing is fetched, cached or purged)', 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
+        . '<span class="dashicons dashicons-update" aria-hidden="true"></span>'
+        . '<span class="nppp-vo-btntext">' . esc_html__( 'Check now', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>'
+        . '</button>'
+        . '</div>';
+}
+
+/**
+ * Stacked bar and legend of the coverage counts.
+ *
+ * @return array{bar:string,legend:string}
+ */
+function nppp_varnish_vo_cov_bar( array $cov, string $aria ): array {
+    $segments = array(
+        array( 'hit',     'HIT',     'nppp-vo-seg-hit' ),
+        array( 'stale',   'STALE',   'nppp-vo-seg-stale' ),
+        array( 'miss',    'MISS',    'nppp-vo-seg-miss' ),
+        array( 'pass',    'PASS',    'nppp-vo-seg-pass' ),
+        array( 'unknown', 'UNKNOWN', 'nppp-vo-seg-unknown' ),
+    );
+    $bar    = '';
+    $legend = '';
+    foreach ( $segments as $seg ) {
+        $count = (int) $cov['counts'][ $seg[0] ];
+        if ( $count < 1 ) {
+            continue;
+        }
+        $bar    .= '<span class="nppp-vo-seg ' . esc_attr( $seg[2] ) . '" style="width:' . esc_attr( number_format( $count / $cov['sampled'] * 100, 2, '.', '' ) ) . '%"></span>';
+        $legend .= '<span class="nppp-vo-leg"><span class="nppp-vo-dot ' . esc_attr( $seg[2] ) . '"></span><strong>' . (int) $count . '</strong> ' . esc_html( $seg[1] ) . '</span> ';
+    }
+
+    return array(
+        'bar'    => '<span class="nppp-vo-bar" role="img" aria-label="' . esc_attr( $aria ) . '">' . $bar . '</span>',
+        'legend' => '<span class="nppp-vo-legend">' . $legend . '</span>',
+    );
+}
+
+/**
+ * One measure box.
+ *
+ * @param string $state     ok | warn | bad | wait | off | plain. Colours the big number.
+ * @param string $value_html Already escaped.
+ * @param string $bar_html   Already escaped, or ''.
+ * @param string $foot_html  Already escaped.
+ */
+function nppp_varnish_vo_tile( string $label, string $state, string $value_html, string $bar_html, string $foot_html ): string {
+    return '<div class="nppp-vo-kpi nppp-vo-kpi-' . esc_attr( $state ) . '">'
+        . '<span class="nppp-vo-kpi-label">' . esc_html( $label ) . '</span>'
+        . '<span class="nppp-vo-kpi-value">' . $value_html . '</span>'
+        . $bar_html
+        . '<span class="nppp-vo-kpi-foot">' . $foot_html . '</span>'
+        . '</div>';
+}
+
+/**
+ * The three measure boxes: cache coverage, purge success of 24 h, latency of the endpoint the lookup uses.
+ */
+function nppp_varnish_vo_kpis( array $s ): string {
+    $cov = $s['cov'];
+    $act = $s['act'];
+    $dash = '<span aria-hidden="true">–</span><span class="screen-reader-text">' . esc_html__( 'not available', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
+
+    // 1. Coverage.
+    if ( $cov['kind'] === 'data' ) {
+        $state = ( $cov['pct'] >= 90 ) ? 'ok' : ( $cov['pct'] >= 50 ? 'warn' : 'bad' );
+        $parts = nppp_varnish_vo_cov_bar( $cov, nppp_varnish_vo_pct( $cov['pct'] ) );
+        $one   = nppp_varnish_vo_tile(
+            __( 'Cache coverage', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $state,
+            esc_html( nppp_varnish_vo_pct( $cov['pct'] ) ),
+            $parts['bar'],
+            esc_html( sprintf(
+                /* translators: 1: cached URLs, 2: URLs with a definite answer, 3: time since the check, e.g. "2 mins ago" */
+                __( '%1$d of %2$d URLs · checked %3$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $cov['cached'],
+                $cov['known'],
+                nppp_varnish_vo_ago( (int) $s['chk']['at'] )
+            ) )
+        );
+    } else {
+        if ( $cov['kind'] === 'running' ) {
+            $why = __( 'Preload All is running', 'fastcgi-cache-purge-and-preload-nginx' );
+        } elseif ( $cov['kind'] === 'empty' ) {
+            $why = __( 'No crawled URL list yet', 'fastcgi-cache-purge-and-preload-nginx' );
+        } elseif ( $cov['kind'] === 'none' ) {
+            $why = __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' );
+        } else {
+            $why = __( 'Not available', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+        $one = nppp_varnish_vo_tile( __( 'Cache coverage', 'fastcgi-cache-purge-and-preload-nginx' ), 'off', $dash, '', esc_html( $why ) );
+    }
+
+    // 2. Purge success.
+    if ( $act['total'] === 0 ) {
+        $two = nppp_varnish_vo_tile( __( 'Purge success, 24 h', 'fastcgi-cache-purge-and-preload-nginx' ), 'off', $dash, '', esc_html__( 'No purges in the last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    } else {
+        $bad_w = $act['bad'] / $act['total'] * 100;
+        $bar   = '<span class="nppp-vo-bar" role="img" aria-label="' . esc_attr( nppp_varnish_vo_pct( $act['pct'] ) ) . '">'
+            . '<span class="nppp-vo-seg nppp-vo-seg-hit" style="width:' . esc_attr( number_format( 100 - $bad_w, 2, '.', '' ) ) . '%"></span>'
+            . ( $act['bad'] > 0 ? '<span class="nppp-vo-seg nppp-vo-seg-pass" style="width:' . esc_attr( number_format( $bad_w, 2, '.', '' ) ) . '%"></span>' : '' )
+            . '</span>';
+        $text  = nppp_varnish_vo_event_text( $act['newest'] );
+        $two   = nppp_varnish_vo_tile(
+            __( 'Purge success, 24 h', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $act['state'],
+            esc_html( nppp_varnish_vo_pct( $act['pct'] ) )
+                . '<span class="nppp-vo-kpi-unit">' . esc_html( sprintf(
+                    /* translators: 1: accepted purges, 2: all purges of the last 24 hours */
+                    __( '%1$d of %2$d', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $act['good'],
+                    $act['total']
+                ) ) . '</span>',
+            $bar,
+            esc_html( sprintf(
+                /* translators: %s: the newest purge, e.g. "Preload All, ban accepted" */
+                __( 'last: %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $text['what'] . ', ' . $text['res']
+            ) )
+        );
+    }
+
+    // 3. Latency of the endpoint the lookup uses.
+    $ep = $s['lat'];
+    if ( $ep === null ) {
+        $three = nppp_varnish_vo_tile( __( 'Endpoint latency', 'fastcgi-cache-purge-and-preload-nginx' ), 'off', $dash, '', esc_html__( 'No endpoint', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    } else {
+        $ms = ( is_array( $ep['last'] ) && in_array( $ep['last']['kind'], array( 'ok', 'absent' ), true ) && $ep['last']['ms'] !== null ) ? (int) $ep['last']['ms'] : null;
+        $three = nppp_varnish_vo_tile(
+            /* translators: %d: endpoint number */
+            sprintf( __( 'Endpoint #%d latency', 'fastcgi-cache-purge-and-preload-nginx' ), (int) $ep['n'] ),
+            'plain',
+            ( $ms !== null ) ? esc_html( (string) $ms ) . '<span class="nppp-vo-kpi-unit">ms</span>' : $dash,
+            '',
+            '<span class="nppp-vo-mono">' . esc_html( $ep['endpoint'] ) . '</span>'
+                . '<span class="nppp-vo-kpi-state"><span class="nppp-vo-dot nppp-vo-dot-' . esc_attr( $ep['state'] ) . '" aria-hidden="true"></span>' . esc_html( $ep['text'] ) . '</span>'
+        );
+    }
+
+    return '<div class="nppp-vo-kpis">' . $one . $two . $three . '</div>';
+}
+
+/**
+ * Accordion: mode and configuration.
+ *
+ * @return array{id:string,title:string,state:string,summary:string,body:string}
+ */
+function nppp_varnish_vo_mode_parts(): array {
     $settings = get_option( 'nginx_cache_settings', [] );
     $scratch  = ( is_array( $settings ) && ! empty( $settings['nginx_cache_path'] ) && is_string( $settings['nginx_cache_path'] ) )
         ? $settings['nginx_cache_path']
@@ -1868,8 +2065,9 @@ function nppp_varnish_vo_info_card(): string {
 
     // Mode: where the switch comes from.
     $locked = nppp_varnish_only_locked();
+    $source = $locked ? __( 'Locked · wp-config.php', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'Settings', 'fastcgi-cache-purge-and-preload-nginx' );
     $mode   = '<td class="status nppp-vo-st nppp-vo-ok"><span class="dashicons dashicons-yes" aria-hidden="true"></span> <span class="nppp-vo-text">' . esc_html__( 'Active', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span> '
-        . '<span class="nppp-vo-chip">' . esc_html( $locked ? __( 'Locked · wp-config.php', 'fastcgi-cache-purge-and-preload-nginx' ) : __( 'Settings', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</span></td>';
+        . '<span class="nppp-vo-chip">' . esc_html( $source ) . '</span></td>';
 
     // Last Preload All.
     $lp = nppp_varnish_vo_last_preload();
@@ -1893,12 +2091,301 @@ function nppp_varnish_vo_info_card(): string {
     $rows .= nppp_varnish_vo_row( esc_html__( 'Preload scratch directory', 'fastcgi-cache-purge-and-preload-nginx' ), '<td class="status"><span class="nppp-vo-mono">' . esc_html( $scratch !== '' ? $scratch : __( 'Not set', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</span></td>' );
     $rows .= nppp_varnish_vo_row( esc_html__( 'Last Preload All', 'fastcgi-cache-purge-and-preload-nginx' ), $last );
 
-    return '<header></header><main>'
-        . nppp_varnish_vo_section( '', __( 'VARNISH-ONLY MODE', 'fastcgi-cache-purge-and-preload-nginx' ), __( 'Check', 'fastcgi-cache-purge-and-preload-nginx' ), $rows )
-        . nppp_varnish_vo_section( '', __( 'ENDPOINTS', 'fastcgi-cache-purge-and-preload-nginx' ), __( 'Endpoint', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_endpoint_rows() )
-        . nppp_varnish_vo_live_section()
-        . nppp_varnish_vo_activity_section()
-        . '</main>';
+    return array(
+        'id'      => 'nppp-vo-acc-mode',
+        'title'   => __( 'Mode and configuration', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'state'   => 'ok',
+        'summary' => __( 'Active', 'fastcgi-cache-purge-and-preload-nginx' ) . ' · ' . $source,
+        'body'    => nppp_varnish_vo_table( $rows ),
+    );
+}
+
+/**
+ * Accordion: endpoints.
+ *
+ * @return array{id:string,title:string,state:string,summary:string,body:string}
+ */
+function nppp_varnish_vo_endpoints_parts( array $s ): array {
+    if ( $s['total'] > 0 && $s['ready'] === 0 ) {
+        $state = 'bad';
+    } elseif ( $s['total'] === 0 || $s['ready'] < $s['total'] || $s['attn'] > 0 ) {
+        $state = 'warn';
+    } else {
+        $state = 'ok';
+    }
+
+    /* translators: 1: endpoints that are not parked, 2: all endpoints */
+    $summary = sprintf( __( '%1$d of %2$d ready', 'fastcgi-cache-purge-and-preload-nginx' ), $s['ready'], $s['total'] );
+    if ( $s['attn'] > 0 ) {
+        /* translators: %d: endpoints whose last PURGE was refused or failed */
+        $summary .= ' · ' . sprintf( _n( '%d needs attention', '%d need attention', $s['attn'], 'fastcgi-cache-purge-and-preload-nginx' ), $s['attn'] );
+    }
+
+    return array(
+        'id'      => 'nppp-vo-acc-endpoints',
+        'title'   => __( 'Endpoints', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'state'   => $state,
+        'summary' => $summary,
+        'body'    => nppp_varnish_vo_table( nppp_varnish_vo_endpoint_rows( $s['eps'] ) ),
+    );
+}
+
+/**
+ * Accordion: live cache check. Rendered from the stored result of the last check; it never sends a request.
+ *
+ * @return array{id:string,title:string,state:string,summary:string,body:string}
+ */
+function nppp_varnish_vo_live_parts( array $s ): array {
+    $chk   = $s['chk'];
+    $cov   = $s['cov'];
+    $probe = $s['probe'];
+
+    if ( $probe === 'off' ) {
+        $cell = nppp_varnish_vo_cell( 'warn', __( 'Not answering', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'The VCL has no probe block: add it from the Example VCL (Help tab), then press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+    } elseif ( $probe === 'parked' ) {
+        $cell = nppp_varnish_vo_cell( 'wait', __( 'Endpoint parked', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Every endpoint is parked after a failure; try again in a few seconds.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+    } elseif ( $probe === 'none' ) {
+        $cell = nppp_varnish_vo_cell( 'wait', __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Press Check now.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+    } elseif ( $probe === 'ok' ) {
+        $cell = nppp_varnish_vo_cell( 'ok', __( 'Answering', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    } elseif ( $probe === 'denied' ) {
+        $cell = nppp_varnish_vo_cell( 'bad', __( 'Refused', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Check the VCL purge ACL, the control header and the probe block (Help tab).', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+    } elseif ( $probe === 'unreachable' ) {
+        $cell = nppp_varnish_vo_cell( 'bad', __( 'Unreachable', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'Varnish did not answer the lookup.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+    } else {
+        $cell = nppp_varnish_vo_cell( 'wait', __( 'No answer', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'The lookup could not be completed.', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
+    }
+    $rows = nppp_varnish_vo_row( esc_html__( 'Probe block in VCL', 'fastcgi-cache-purge-and-preload-nginx' ), $cell );
+
+    // The home page, asked with the same lookup.
+    $home       = $s['home'];
+    $home_state = '';
+    if ( $home === null ) {
+        $home_cell = nppp_varnish_vo_cell( 'wait', __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ) );
+    } else {
+        $home_state = (string) ( $home['state'] ?? 'UNKNOWN' );
+        $meta       = array();
+        if ( $home_state === 'HIT' || $home_state === 'STALE' ) {
+            $parts = array();
+            if ( isset( $home['age'] ) && is_numeric( $home['age'] ) ) {
+                /* translators: %s: duration such as "4m 12s" */
+                $parts[] = sprintf( __( 'age %s', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_duration( $home['age'] ) );
+            }
+            if ( $home_state === 'STALE' ) {
+                $parts[] = __( 'past its TTL, served stale while refreshed', 'fastcgi-cache-purge-and-preload-nginx' );
+            } elseif ( isset( $home['ttl'] ) && is_numeric( $home['ttl'] ) ) {
+                /* translators: %s: duration such as "5m 48s" */
+                $parts[] = sprintf( __( 'TTL left %s', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_duration( $home['ttl'] ) );
+            }
+        } elseif ( $home_state === 'MISS' ) {
+            $parts = array( __( 'not cached (or not cacheable)', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        } elseif ( $home_state === 'PASS' ) {
+            $parts = array( __( 'passed to the origin (hit-for-pass)', 'fastcgi-cache-purge-and-preload-nginx' ) );
+        } else {
+            $parts = array( (string) ( $home['reason'] ?? '' ) );
+        }
+        if ( in_array( $home_state, array( 'HIT', 'STALE', 'MISS', 'PASS' ), true ) && isset( $home['ms'] ) ) {
+            /* translators: %d: milliseconds */
+            $parts[] = sprintf( __( 'lookup %d ms', 'fastcgi-cache-purge-and-preload-nginx' ), (int) $home['ms'] );
+        }
+        $meta[] = implode( ' · ', array_filter( $parts, 'strlen' ) );
+
+        if ( $home_state === 'HIT' ) {
+            $home_cell = nppp_varnish_vo_cell( 'ok', 'HIT', $meta );
+        } elseif ( $home_state === 'UNKNOWN' ) {
+            $home_cell = nppp_varnish_vo_cell( 'wait', __( 'Unknown', 'fastcgi-cache-purge-and-preload-nginx' ), $meta );
+        } else {
+            $home_cell = nppp_varnish_vo_cell( 'warn', $home_state, $meta );
+        }
+    }
+    $rows .= nppp_varnish_vo_row( esc_html__( 'Home page', 'fastcgi-cache-purge-and-preload-nginx' ) . ' <span class="nppp-vo-mono">/</span>', $home_cell );
+
+    // Coverage of a sample of the last Preload All.
+    $cell = '<td class="status nppp-vo-st">';
+    if ( $cov['kind'] === 'none' ) {
+        $cell .= '<span class="dashicons dashicons-clock nppp-vo-wait" aria-hidden="true"></span> <span class="nppp-vo-text nppp-vo-wait">' . esc_html__( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
+    } elseif ( $cov['kind'] !== 'data' ) {
+        if ( $cov['kind'] === 'running' ) {
+            $msg = __( 'Preload All is running; coverage is checked once it has finished.', 'fastcgi-cache-purge-and-preload-nginx' );
+        } elseif ( $cov['kind'] === 'empty' ) {
+            $msg = __( 'No completed crawl snapshot yet. Run Preload All once to build the URL list.', 'fastcgi-cache-purge-and-preload-nginx' );
+        } else {
+            $msg = __( 'Not available: Varnish did not answer the lookup (see the probe block above).', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+        $cell .= '<span class="dashicons dashicons-minus nppp-vo-off" aria-hidden="true"></span> <span class="nppp-vo-text nppp-vo-off">' . esc_html( $msg ) . '</span>';
+    } else {
+        $pct   = nppp_varnish_vo_pct( $cov['pct'] );
+        $cell .= '<span class="nppp-vo-covtext">' . esc_html( sprintf(
+            /* translators: 1: percentage such as "92%", 2: cached URLs, 3: URLs with a definite answer */
+            _n( '%1$s (%2$d of %3$d URL cached)', '%1$s (%2$d of %3$d URLs cached)', $cov['known'], 'fastcgi-cache-purge-and-preload-nginx' ),
+            $pct,
+            $cov['cached'],
+            $cov['known']
+        ) ) . '</span>';
+        $bar   = nppp_varnish_vo_cov_bar( $cov, $pct );
+        $cell .= $bar['bar'] . $bar['legend'];
+        $cell .= '<span class="nppp-vo-meta nppp-vo-foot">' . esc_html( sprintf(
+            /* translators: %s: time since the last check, e.g. "2 mins ago" */
+            __( 'Checked %s', 'fastcgi-cache-purge-and-preload-nginx' ),
+            nppp_varnish_vo_ago( (int) $chk['at'] )
+        ) ) . '</span>';
+    }
+    $cell .= '</td>';
+
+    $sub = ( $cov['set'] > 0 && $cov['set'] <= nppp_varnish_probe_max_urls() )
+        ? __( 'every URL of last Preload All', 'fastcgi-cache-purge-and-preload-nginx' )
+        : __( 'sample of last Preload All', 'fastcgi-cache-purge-and-preload-nginx' );
+    if ( $s['total'] > 1 ) {
+        /* translators: %d: endpoint number */
+        $sub .= ' · ' . sprintf( __( 'asked on endpoint #%d only', 'fastcgi-cache-purge-and-preload-nginx' ), (int) ( $chk['ep'] ?? ( $s['lat']['n'] ?? 1 ) ) );
+    }
+    $rows .= nppp_varnish_vo_row( esc_html__( 'Coverage', 'fastcgi-cache-purge-and-preload-nginx' ) . '<span class="nppp-vo-sub">' . esc_html( $sub ) . '</span>', $cell );
+
+    // The line of the closed accordion.
+    if ( $probe === 'off' ) {
+        $state   = 'warn';
+        $summary = __( 'Probe block not answering', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $probe === 'parked' ) {
+        $state   = 'wait';
+        $summary = __( 'Endpoint parked', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $probe === 'none' ) {
+        $state   = 'wait';
+        $summary = __( 'Not checked yet', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $probe === 'denied' ) {
+        $state   = 'bad';
+        $summary = __( 'Refused', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $probe === 'unreachable' ) {
+        $state   = 'bad';
+        $summary = __( 'Unreachable', 'fastcgi-cache-purge-and-preload-nginx' );
+    } elseif ( $probe === 'ok' ) {
+        $state = 'ok';
+        $bits  = array();
+        if ( $home_state !== '' && $home_state !== 'UNKNOWN' ) {
+            /* translators: %s: HIT, MISS, PASS or STALE */
+            $bits[] = sprintf( __( 'Home page %s', 'fastcgi-cache-purge-and-preload-nginx' ), $home_state );
+            if ( $home_state !== 'HIT' ) {
+                $state = 'warn';
+            }
+        }
+        if ( $cov['kind'] === 'data' ) {
+            /* translators: %s: percentage such as "92%" */
+            $bits[] = sprintf( __( '%s cached', 'fastcgi-cache-purge-and-preload-nginx' ), nppp_varnish_vo_pct( $cov['pct'] ) );
+            if ( $cov['pct'] < 90 ) {
+                $state = 'warn';
+            }
+        }
+        $summary = ( $bits !== array() ) ? implode( ' · ', $bits ) : __( 'Answering', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $state   = 'wait';
+        $summary = __( 'No answer', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    return array(
+        'id'      => 'nppp-vo-acc-live',
+        'title'   => __( 'Live cache check', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'state'   => $state,
+        'summary' => $summary,
+        'body'    => nppp_varnish_vo_table( $rows ),
+    );
+}
+
+/**
+ * Accordion: the last 24 hours of purge runs (log kept by nppp_varnish_activity_add()).
+ *
+ * @return array{id:string,title:string,state:string,summary:string,body:string}
+ */
+function nppp_varnish_vo_activity_parts( array $s ): array {
+    $act  = $s['act'];
+    $body = '';
+
+    if ( $act['total'] === 0 ) {
+        $body .= '<div class="nppp-vo-evlist"><span class="nppp-vo-text nppp-vo-wait">' . esc_html__( 'None in the last 24 hours', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span></div>';
+        $summary = __( 'None in 24 h', 'fastcgi-cache-purge-and-preload-nginx' );
+    } else {
+        $list = '';
+        foreach ( array_slice( array_reverse( $act['events'] ), 0, 4 ) as $e ) {
+            $t     = nppp_varnish_vo_event_text( $e );
+            $list .= '<span class="nppp-vo-ev"><span class="nppp-vo-evtime">' . esc_html( nppp_varnish_vo_ago( $e['at'] ) ) . '</span>'
+                . '<span class="nppp-vo-dot ' . esc_attr( $t['dot'] ) . '"></span>'
+                . '<span>' . esc_html( $t['what'] . ' · ' . $t['res'] ) . '</span></span>';
+        }
+        $body .= '<div class="nppp-vo-evlist">' . $list . '</div>';
+
+        if ( $act['bad'] > 0 && $act['kinds'] !== array() ) {
+            $label = array(
+                'unreachable' => __( 'unreachable', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'denied'      => __( 'refused', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'fail'        => __( 'HTTP error', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'parked'      => __( 'endpoint parked', 'fastcgi-cache-purge-and-preload-nginx' ),
+                'budget'      => __( 'time budget used up', 'fastcgi-cache-purge-and-preload-nginx' ),
+            );
+            $parts = array();
+            foreach ( $label as $k => $text ) {
+                if ( ! empty( $act['kinds'][ $k ] ) ) {
+                    $parts[] = $text . ' ' . (int) $act['kinds'][ $k ];
+                }
+            }
+            if ( $parts !== array() ) {
+                /* translators: %s: failure kinds with counts, e.g. "unreachable 2" */
+                $body .= '<div class="nppp-vo-note nppp-vo-badc">' . esc_html( sprintf( __( 'failures: %s', 'fastcgi-cache-purge-and-preload-nginx' ), implode( ', ', $parts ) ) ) . '</div>';
+            }
+        }
+        /* translators: 1: accepted purges, 2: all purges of the last 24 hours */
+        $summary = sprintf( __( '%1$d of %2$d accepted', 'fastcgi-cache-purge-and-preload-nginx' ), $act['good'], $act['total'] );
+    }
+    $body .= '<div class="nppp-vo-note">' . esc_html__( 'Purge ACL, control header and the probe block: see the Help tab.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</div>';
+
+    return array(
+        'id'      => 'nppp-vo-acc-activity',
+        'title'   => __( 'Purge activity · 24 h', 'fastcgi-cache-purge-and-preload-nginx' ),
+        'state'   => $act['state'],
+        'summary' => $summary,
+        'body'    => $body,
+    );
+}
+
+/**
+ * The whole card: health summary, three measure boxes, four accordions.
+ *
+ * Rendering reads stored state only and sends no request; the live check is run by the Check now button, which
+ * swaps this element for a fresh one (nppp_vo_status_check_callback() answers with this same markup).
+ * A section that needs attention opens by itself; when none does, the purge activity is the one left open.
+ */
+function nppp_varnish_vo_root(): string {
+    $s     = nppp_varnish_vo_snapshot();
+    $parts = array(
+        nppp_varnish_vo_mode_parts(),
+        nppp_varnish_vo_endpoints_parts( $s ),
+        nppp_varnish_vo_live_parts( $s ),
+        nppp_varnish_vo_activity_parts( $s ),
+    );
+
+    $open_any = false;
+    foreach ( $parts as $i => $p ) {
+        $parts[ $i ]['open'] = ( $p['state'] === 'warn' || $p['state'] === 'bad' );
+        $open_any            = $open_any || $parts[ $i ]['open'];
+    }
+    if ( ! $open_any ) {
+        $parts[3]['open'] = true;
+    }
+
+    $accs = '';
+    foreach ( $parts as $p ) {
+        $accs .= nppp_varnish_vo_acc( $p['id'], $p['title'], $p['state'], $p['summary'], $p['body'], $p['open'] );
+    }
+
+    return '<div id="nppp-vo-root" class="nppp-vo-root">'
+        . nppp_varnish_vo_hero( nppp_varnish_vo_health( $s ) )
+        . nppp_varnish_vo_kpis( $s )
+        . '<div class="nppp-vo-accs">' . $accs . '</div>'
+        . '</div>';
+}
+
+/**
+ * Varnish-only mode: replacement for the Nginx panel on the right of the Status tab.
+ */
+function nppp_varnish_vo_info_card(): string {
+    return '<header></header><main>' . nppp_varnish_vo_root() . '</main>';
 }
 
 /**
@@ -1936,7 +2423,8 @@ function nppp_varnish_vo_coverage_sample( $wp_filesystem ): array {
  *
  * Read-only lookups against the first endpoint that is not parked: one for the home page (timed), then up to
  * 50 for a sample of the last Preload All. The result is stored (state "varnish_vo_check") and the answer is
- * the refreshed LIVE CACHE CHECK section, so rendering the tab never waits on Varnish.
+ * the whole refreshed card (summary, measure boxes and accordions change together), so rendering the tab never
+ * waits on Varnish.
  */
 function nppp_vo_status_check_callback() {
     if ( ! isset( $_POST['_wpnonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ), 'nppp_vo_status_nonce' ) ) {
@@ -2027,7 +2515,7 @@ function nppp_vo_status_check_callback() {
         wp_send_json_error( __( 'The live check failed.', 'fastcgi-cache-purge-and-preload-nginx' ) );
     }
 
-    wp_send_json_success( array( 'html' => nppp_varnish_vo_live_section() ) );
+    wp_send_json_success( array( 'card' => nppp_varnish_vo_root() ) );
 }
 
 function nppp_my_status_html() {
