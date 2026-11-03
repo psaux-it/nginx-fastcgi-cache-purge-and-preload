@@ -125,11 +125,11 @@ function nppp_nginx_cache_preload_progress($request) {
     $snapshot_path = nppp_get_runtime_file( 'nppp-wget-snapshot.log' );
     if ( ! $is_running && $wp_filesystem->exists( $snapshot_path ) ) {
         $snapshot_exists = true;
-        $snap_contents = $wp_filesystem->get_contents( $snapshot_path );
-        if ( $snap_contents !== false && $snap_contents !== '' ) {
-            if ( preg_match( '/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/m', $snap_contents, $snap_match ) ) {
-                $snapshot_time = trim( $snap_match[1] );
-            }
+        // The snapshot is written when the crawl finishes, so its mtime is the finish time as a real epoch, shown in
+        // the site timezone like the Status card. The wget FINISHED line inside it is the server's own clock.
+        $snap_mtime = (int) $wp_filesystem->mtime( $snapshot_path );
+        if ( $snap_mtime > 0 ) {
+            $snapshot_time = wp_date( 'Y-m-d H:i:s', $snap_mtime );
         }
     }
 
