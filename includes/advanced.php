@@ -1472,6 +1472,36 @@ function nppp_vo_probe_callback() {
         );
     }
 
+    // Check all asks the home page too (it is part of the crawl list). Keep the Status card's home row as fresh
+    // as the coverage this run replaces, otherwise the card pairs fresh coverage with an older home answer.
+    if ( isset( $_POST['full_run'] ) && function_exists( 'nppp_state_get' ) && function_exists( 'nppp_state_set' ) ) {
+        $home_parts = wp_parse_url( home_url( '/' ) );
+        $home_host  = (string) ( $home_parts['host'] ?? '' );
+        $home_path  = (string) ( $home_parts['path'] ?? '/' );
+        $chk_row    = nppp_state_get( 'varnish_vo_check' );
+        if ( is_array( $chk_row ) && ! empty( $chk_row['at'] ) ) {
+            foreach ( $list as $i => $url ) {
+                $u  = ( $url !== '' ) ? wp_parse_url( $url ) : false;
+                $st = (string) ( $results[ $i ]['state'] ?? 'UNKNOWN' );
+                if ( ! is_array( $u ) || $st === 'UNKNOWN'
+                    || strcasecmp( (string) ( $u['host'] ?? '' ), $home_host ) !== 0
+                    || (string) ( $u['path'] ?? '/' ) !== $home_path
+                    || ! empty( $u['query'] ) ) {
+                    continue;
+                }
+                $chk_row['home'] = array(
+                    'state'  => $st,
+                    'age'    => $results[ $i ]['age'],
+                    'ttl'    => $results[ $i ]['ttl'],
+                    'ms'     => null,
+                    'reason' => '',
+                );
+                nppp_state_set( 'varnish_vo_check', $chk_row, 7 * DAY_IN_SECONDS );
+                break;
+            }
+        }
+    }
+
     // Check all: the chunks of one run add up to the result the Status tab card shows (see nppp_vo_full_record()).
     if ( isset( $_POST['full_run'], $_POST['full_idx'] ) && is_scalar( $_POST['full_run'] ) && is_scalar( $_POST['full_idx'] ) ) {
         nppp_vo_full_record(
