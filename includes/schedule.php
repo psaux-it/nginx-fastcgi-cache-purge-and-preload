@@ -436,6 +436,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
     $last_preload_time = '';
     $log_contents      = '';
     $nppp_mail_hits    = null;
+    $finish_ts         = 0;
 
     // Parse log file using to get total processed URL
     if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
@@ -456,6 +457,17 @@ function nppp_create_scheduled_event_preload_status_callback() {
             if (preg_match('/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/m', $log_contents, $match)) {
                 $last_preload_time = trim($match[1]);
             }
+        }
+    }
+
+    // wget's FINISHED stamp is its own wall clock string in the server's timezone, not the WordPress one, and the
+    // snapshot below is written by this tick, which WP-Cron may run late. The log stops growing the moment wget
+    // exits, so its mtime is the end of the crawl as a real epoch that neither a timezone skew nor a late tick moves.
+    // $last_preload_time is kept as a site-timezone string so the mail, the transient and the Status card agree.
+    if ($last_preload_time !== '') {
+        $finish_ts = (int) $wp_filesystem->mtime($log_path);
+        if ($finish_ts > 0) {
+            $last_preload_time = wp_date('Y-m-d H:i:s', $finish_ts);
         }
     }
 
@@ -511,11 +523,11 @@ function nppp_create_scheduled_event_preload_status_callback() {
     nppp_preload_cycle_start_delete();
 
     if ($mobile_enabled && $cycle_start && !empty($last_preload_time)) {
-        // End of the crawl as a real epoch: the snapshot was written the moment it completed. wget's FINISHED line
-        // is the server's own clock, not the WordPress timezone: read as one it skews the total by the difference
-        // between the two (and the max() below turns a negative skew into "0m 0s").
-        // A snapshot that could not be rewritten keeps an old mtime: never end before the cycle began.
-        $end_ts = (int) $wp_filesystem->mtime($snapshot_path);
+        // End of the crawl as a real epoch ($finish_ts above): wget's FINISHED line is the server's own clock, not the
+        // WordPress timezone (read as one it skews the total, and the max() below turns a negative skew into "0m 0s"),
+        // and the snapshot mtime moves with a late WP-Cron tick. A missing or stale log mtime falls back to now:
+        // never end before the cycle began.
+        $end_ts = $finish_ts;
         if ($end_ts <= 0 || $end_ts < intval($cycle_start)) {
             $end_ts = time();
         }
