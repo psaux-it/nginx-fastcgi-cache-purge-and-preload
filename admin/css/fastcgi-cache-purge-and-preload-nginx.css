@@ -2348,6 +2348,54 @@ button.nppp-preload-btn[disabled] {
     margin-top: 2px;
 }
 
+/* Freshness strip: how old the coverage figures are, and where to get fresh ones */
+#nppp-nginx-info .nppp-vo-fresh {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background-color: #fff;
+    border: 1px solid #dcdcde;
+    border-left-width: 4px;
+    border-radius: 2px;
+}
+#nppp-nginx-info .nppp-vo-fresh-ok   { border-left-color: #008000; }
+#nppp-nginx-info .nppp-vo-fresh-warn { border-left-color: #dba617; background-color: #fcf9e8; }
+#nppp-nginx-info .nppp-vo-fresh-info { border-left-color: #2271b1; }
+#nppp-nginx-info .nppp-vo-fresh > .dashicons {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+}
+#nppp-nginx-info .nppp-vo-fresh-ok   > .dashicons { color: #008000; }
+#nppp-nginx-info .nppp-vo-fresh-warn > .dashicons { color: #b45f06; }
+#nppp-nginx-info .nppp-vo-fresh-info > .dashicons { color: #2271b1; }
+#nppp-nginx-info .nppp-vo-fresh-text {
+    flex: 1 1 200px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+#nppp-nginx-info .nppp-vo-fresh-title {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #1d2327;
+}
+#nppp-nginx-info .nppp-vo-fresh-sub {
+    display: block;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #50575e;
+}
+#nppp-nginx-info .nppp-vo-fresh-link {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
 /* Sections: native <details>, closed line = title + short result */
 #nppp-nginx-info .nppp-vo-accs {
     margin-top: 10px;

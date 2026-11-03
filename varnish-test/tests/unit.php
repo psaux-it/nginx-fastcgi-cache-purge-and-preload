@@ -1230,6 +1230,201 @@ if ( $S === 'vopurge' ) {   // Status tab card (Varnish-only mode): what a purge
     chk( nppp_state_get( 'varnish_vo_check' ) === null && nppp_state_get( 'varnish_vo_full' ) === null && nppp_state_get( 'varnish_vo_full_run' ) === null && $marks() === null, 'mode switch / settings save clears the check, the Check all result, the run and the purge marks' );
     $st = file_get_contents( ( getenv( 'NPPP_INCLUDES' ) ?: dirname( __DIR__, 2 ) . '/includes' ) . '/status.php' );
     chk( preg_match( "/nppp_state_delete\( 'varnish_vo_check' \);\s+nppp_state_delete\( 'varnish_vo_full' \);\s+nppp_state_delete\( 'varnish_vo_full_run' \);\s+nppp_gen_mode_flag_delete/", $st ) === 1, 'Clear Plugin Cache drops the check, the Check all result and a running Check all' );
+
+    // --- Check now vs the stored Check all: a page that is never cached must not make every Check now drop the Check all ---
+    // The functions are the real ones from includes/status.php and includes/advanced.php (those files need the whole admin;
+    // only the few that are needed here are loaded).
+    $stsrc = file_get_contents( vt_includes() . '/status.php' );
+    $adsrc = file_get_contents( vt_includes() . '/advanced.php' );
+    foreach ( [ [ $stsrc, 'nppp_varnish_vo_full_state' ], [ $stsrc, 'nppp_varnish_vo_sample_unexpected' ], [ $stsrc, 'nppp_varnish_vo_purges_since' ],
+                [ $stsrc, 'nppp_varnish_vo_cov_resolve' ], [ $stsrc, 'nppp_varnish_vo_coverage_sample' ], [ $stsrc, 'nppp_varnish_vo_reconcile_full' ],
+                [ $stsrc, 'nppp_varnish_vo_run_check' ], [ $adsrc, 'nppp_url_match_key' ], [ $adsrc, 'nppp_vo_full_record' ],
+                [ $stsrc, 'nppp_varnish_vo_full_max_age' ], [ $stsrc, 'nppp_varnish_vo_freshness' ], [ $stsrc, 'nppp_varnish_vo_fresh_note' ],
+                [ $stsrc, 'nppp_varnish_vo_purged_text' ], [ $stsrc, 'nppp_varnish_vo_ago' ] ] as [ $src, $fn ] ) {
+        if ( ! function_exists( $fn ) && preg_match( '/\nfunction ' . $fn . '\(.*?\n}\n/s', $src, $m ) ) { eval( $m[0] ); }   // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test harness
+    }
+    chk( function_exists( 'nppp_varnish_vo_sample_unexpected' ) && function_exists( 'nppp_varnish_vo_cov_resolve' ) && function_exists( 'nppp_varnish_vo_run_check' ) && function_exists( 'nppp_vo_full_record' ), 'status.php / advanced.php: the helper, the card resolver, the live check and the Check all recorder are present' );
+    if ( ! function_exists( 'nppp_varnish_vo_sample_unexpected' ) ) { exit( vt_summary() ); }   // without the helper nothing below can run: report, do not fatal
+
+    // the pure helper
+    $U   = fn( array $a, array $b ) => nppp_varnish_vo_sample_unexpected( $a, $b );
+    $bad = [ 'k|home' => 'miss', 'k|cart' => 'pass', 'k|old' => 'stale', 'k|odd' => 'unknown' ];
+    chk( $U( [ [ 'k|home', 'miss' ], [ 'k|cart', 'pass' ] ], $bad ) === 0, 'helper: MISS / PASS the Check all already had as not cached are not new' );
+    chk( $U( [ [ 'k|home', 'pass' ], [ 'k|cart', 'miss' ] ], $bad ) === 0, 'helper: MISS <-> PASS of a URL that was not cached stays the same group' );
+    chk( $U( [ [ 'k|a', 'hit' ], [ 'k|b', 'stale' ], [ 'k|home', 'hit' ] ], $bad ) === 0, 'helper: HIT / STALE never count (as before)' );
+    chk( $U( [ [ 'k|new', 'miss' ] ], $bad ) === 1 && $U( [ [ 'k|new', 'pass' ] ], $bad ) === 1, 'helper: a MISS / PASS for a URL the Check all had as cached counts' );
+    chk( $U( [ [ 'k|old', 'miss' ] ], $bad ) === 1, 'helper: a URL the Check all had as STALE (held by Varnish) that is MISS now counts' );
+    chk( $U( [ [ 'k|home', 'unknown' ] ], $bad ) === 1 && $U( [ [ 'k|new', 'unknown' ] ], $bad ) === 1, 'helper: no answer for a URL the Check all had a definite answer for counts' );
+    chk( $U( [ [ 'k|odd', 'unknown' ] ], $bad ) === 0, 'helper: no answer again for a URL the Check all had no answer for is not new' );
+    chk( $U( [ [ 'k|odd', 'miss' ] ], $bad ) === 1, 'helper: an answer for a URL the Check all had no answer for counts' );
+    chk( $U( [ [ 'k|home', 'miss' ], [ 'k|cart', 'pass' ], [ 'k|x', 'unknown' ] ], [] ) === 3, 'helper: without a baseline it is MISS + PASS + UNKNOWN, the old rule' );
+    chk( $U( [ [ '', 'miss' ], 'junk', [ 'k|home' ], [ 5, 'miss' ] ], $bad ) === 4, 'helper: malformed pairs count (fail towards dropping the Check all, never towards keeping it)' );
+    chk( $U( [], $bad ) === 0, 'helper: empty sample' );
+
+    // the card resolver: which measurement the figures come from
+    $cs = function ( array $full_over, array $cov, array $chk_over = [] ) {
+        vt_reset();
+        nppp_state_set( 'varnish_vo_full', $full_over + [ 'at' => time() - 300, 'from' => time() - 330, 'set' => 10, 'ep' => 1, 'counts' => [ 'hit' => 8, 'stale' => 0, 'miss' => 1, 'pass' => 1, 'unknown' => 0 ], 'bad' => [ 'k|home' => 'miss', 'k|cart' => 'pass' ] ], 600 );
+        return nppp_varnish_vo_cov_resolve( $chk_over + [ 'at' => time() - 60, 'status' => 'ok', 'ep' => 1, 'cov' => $cov ] );
+    };
+    $c_known = [ 'hit' => 48, 'stale' => 0, 'miss' => 1, 'pass' => 1, 'unknown' => 0, 'set' => 10 ];
+    $r = $cs( [], $c_known + [ 'unexpected' => 0 ] );
+    chk( $r['full'] === true && $r['set'] === 10 && $r['counts']['hit'] === 8, 'card: the sample shows only what the Check all already knew (home MISS, cart PASS): the Check all stays', json_encode( $r ) );
+    $r = $cs( [], $c_known + [ 'unexpected' => 1 ] );
+    chk( $r['full'] === false && $r['counts']['hit'] === 48, 'card: one answer the Check all did not show: the sample replaces it, as before', json_encode( $r ) );
+    $r = $cs( [], $c_known );
+    chk( $r['full'] === false, 'card: a check row stored without "unexpected" (older version) keeps the old rule: its MISS / PASS replace the Check all' );
+    $r = $cs( [], [ 'hit' => 50, 'stale' => 0, 'miss' => 0, 'pass' => 0, 'unknown' => 0, 'set' => 10 ] );
+    chk( $r['full'] === true, 'card: an all-HIT sample without "unexpected" keeps the Check all, as before' );
+    $r = $cs( [], $c_known + [ 'unexpected' => 0 ], [ 'status' => 'denied' ] );
+    chk( $r['full'] === false, 'card: a lookup that does not work never keeps the Check all (unchanged rule)' );
+    $r = $cs( [ 'at' => time() - 31 * 60, 'from' => time() - 32 * 60 ], $c_known + [ 'unexpected' => 0 ] );
+    chk( $r['full'] === false, 'card: a Check all older than 30 minutes is still replaced (unchanged rule)' );
+    $r = $cs( [], $c_known + [ 'unexpected' => 0 ], [ 'at' => time() - 400 ] );
+    chk( $r['full'] === true && $r['at'] > time() - 310, 'card: a Check all newer than the check is shown as before (unchanged rule)' );
+    vt_reset();
+    nppp_state_set( 'varnish_vo_full', [ 'at' => time() - 300, 'from' => time() - 330, 'set' => 10, 'ep' => 1, 'counts' => [ 'hit' => 8, 'stale' => 0, 'miss' => 1, 'pass' => 1, 'unknown' => 0 ], 'bad' => [ 'k|home' => 'miss' ] ], 600 );
+    nppp_state_set( 'varnish_vo_purged', [ time() - 10 ], 600 );
+    $r = nppp_varnish_vo_cov_resolve( [ 'at' => time() - 60, 'status' => 'ok', 'ep' => 1, 'cov' => $c_known + [ 'unexpected' => 0 ] ] );
+    chk( $r['full'] === false, 'card: a purge run after the Check all still replaces it (unchanged rule)' );
+
+    // End to end: real Check all recorder -> real Check now (probe on the scripted transport) -> real card resolver.
+    // Only the crawl list, the filesystem and the preload state are stubbed.
+    if ( ! function_exists( 'wp_is_using_https' ) )          { function wp_is_using_https() { return false; } }
+    if ( ! function_exists( 'nppp_initialize_wp_filesystem' ) ) { function nppp_initialize_wp_filesystem() { return new stdClass(); } }
+    if ( ! function_exists( 'nppp_is_preload_running' ) )      { function nppp_is_preload_running( $fs ) { return false; } }
+    if ( ! function_exists( 'nppp_parse_wget_log_urls' ) ) {
+        function nppp_parse_wget_log_urls( $fs ) {
+            $o = [];
+            foreach ( $GLOBALS['VT_LIST'] as $u ) { $o[ nppp_url_match_key( $u ) ] = [ 'url' => $u, 'url_encoded' => $u ]; }
+            return $o;
+        }
+    }
+    $PS = static function ( string $state ) { return [ 'code' => 200, 'headers' => [ 'x-npp-probe-state' => $state ] ]; };
+    $site = function ( string $host, array $then, array $now ) use ( $PS ) {
+        vt_reset(); vt_home( 'http://vc.test' );
+        vt_set( [ 'nppp_varnish_sync_enabled' => 'yes', 'nppp_varnish_endpoints' => 'http://' . $host . ':6081' ] );
+        add_filter( 'nppp_varnish_only', fn() => true );
+        $GLOBALS['VT_LIST'] = array_map( fn( $p ) => 'http://vc.test' . $p, array_keys( $then ) );
+        // the Check all of the Advanced tab: one chunk with everything, recorded by the real recorder
+        $res = []; foreach ( $then as $st ) { $res[] = [ 'state' => $st ]; }
+        nppp_vo_full_record( 'runtoken1234', 0, 'ok', $res, $GLOBALS['VT_LIST'] );
+        // Varnish's answers at the time of the Check now
+        foreach ( $now as $path => $st ) { vt_script( '#^NPPPROBE http://' . preg_quote( $host, '#' ) . ':6081' . preg_quote( $path, '#' ) . '$#', $PS( $st ) ); }
+    };
+    $age = function () { $f = nppp_state_get( 'varnish_vo_full' ); $f['at'] = time() - 300; $f['from'] = time() - 330; nppp_state_set( 'varnish_vo_full', $f, 600 ); };
+    $then = [ '/' => 'MISS', '/cart/' => 'PASS', '/a/' => 'HIT', '/b/' => 'HIT', '/c/' => 'HIT', '/d/' => 'HIT' ];
+
+    // 1. the reported case: a home page that is never cached, a cart that is never cached, nothing changed
+    $site( 'lc1.test', $then, $then ); $age();
+    $f0 = nppp_state_get( 'varnish_vo_full' );
+    chk( is_array( $f0 ) && $f0['counts']['hit'] === 4 && $f0['counts']['miss'] === 1 && $f0['counts']['pass'] === 1 && count( $f0['bad'] ) === 2, 'e2e: the real Check all recorder stored 4 HIT / 1 MISS / 1 PASS and the 2 not-cached URLs', json_encode( $f0 ) );
+    $res = nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' ); $r = nppp_varnish_vo_cov_resolve( $row );
+    chk( $res['ok'] === true && ( $row['cov']['miss'] ?? -1 ) === 1 && ( $row['cov']['pass'] ?? -1 ) === 1 && ( $row['cov']['hit'] ?? -1 ) === 4, 'e2e: the counts of the sample itself are unchanged (1 MISS, 1 PASS, 4 HIT)', json_encode( $row['cov'] ?? null ) );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 0, 'e2e: the never-cached home page and cart are not "unexpected"', json_encode( $row['cov'] ?? null ) );
+    chk( $r['full'] === true && $r['counts']['hit'] === 4 && $r['known'] === 6, 'e2e: the card keeps showing the Check all after this Check now', json_encode( $r ) );
+    chk( ( $row['home']['state'] ?? '' ) === 'MISS', 'e2e: the home row of the card still says MISS (it is a separate lookup and stays honest)' );
+
+    // 2. a page the Check all had cached is a MISS now: the card follows the sample, as before
+    $site( 'lc2.test', $then, [ '/a/' => 'MISS' ] + $then ); $age();
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 1 && nppp_varnish_vo_cov_resolve( $row )['full'] === false, 'e2e: a HIT of the Check all that is a MISS now makes the card use the sample' );
+
+    // 3. a page that was never cached is HIT now (someone fixed it): nothing is lost, the Check all stays
+    $site( 'lc3.test', $then, [ '/cart/' => 'HIT' ] + $then ); $age();
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 0, 'e2e: a not-cached URL of the Check all that is a HIT now is not "unexpected" (as before: HIT never counts)' );
+
+    // 4. the Varnish does not answer one URL that the Check all had answered
+    $site( 'lc4.test', $then, $then ); $age();
+    vt_script( '#^NPPPROBE http://lc4\\.test:6081/b/$#', [ 'code' => 500, 'body' => 'boom' ] );   // one URL gets an HTTP error: UNKNOWN, the batch itself still answers
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' );
+    chk( ( $row['cov']['unknown'] ?? -1 ) === 1 && ( $row['cov']['unexpected'] ?? -1 ) === 1 && nppp_varnish_vo_cov_resolve( $row )['full'] === false, 'e2e: a URL without an answer that had one in the Check all makes the card use the sample' );
+
+    // 5. no Check all stored: every MISS / PASS counts (the old rule), the card shows the sample
+    $site( 'lc5.test', $then, $then ); nppp_state_delete( 'varnish_vo_full' );
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 2 && nppp_varnish_vo_cov_resolve( $row )['full'] === false, 'e2e: without a stored Check all every MISS / PASS is counted and the card shows the sample' );
+
+    // 6. more not-cached URLs than the Check all remembers (bad_over): the extra ones count, the old rule for them
+    $site( 'lc6.test', $then, $then ); $age();
+    $f = nppp_state_get( 'varnish_vo_full' ); $f['bad'] = [ nppp_url_match_key( 'http://vc.test/cart/' ) => 'pass' ]; $f['bad_over'] = true; nppp_state_set( 'varnish_vo_full', $f, 600 );
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 1, 'e2e: a Check all that could not remember every not-cached URL: only the remembered ones are "known", the home page counts' );
+
+    // 7. a single purge after the Check all, URL still not cached: the real reconcile corrects the Check all, the card keeps it
+    $site( 'lc7.test', $then, [ '/a/' => 'MISS' ] + $then ); $age();
+    nppp_state_set( 'varnish_vo_purged', [ time() - 10 ], 600 );
+    nppp_state_set( 'varnish_vo_purged_urls', [ 'http://vc.test/a/' => time() - 10 ], 600 );
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' ); $f = nppp_state_get( 'varnish_vo_full' ); $r = nppp_varnish_vo_cov_resolve( $row );
+    chk( $f['counts']['hit'] === 3 && $f['counts']['miss'] === 2, 'e2e: the reconcile moved the purged URL from HIT to MISS in the stored Check all (3 HIT / 2 MISS)', json_encode( $f['counts'] ?? null ) );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 0 && $r['full'] === true && $r['counts']['hit'] === 3 && $r['purged'] === 0, 'e2e: the sample agrees with the corrected Check all: the card keeps it, with the corrected counts and no purge note', json_encode( $r ) );
+
+    // 8. the same, but the purged URL is a HIT in the sample (warmed again): reconcile changes nothing, nothing new in the sample
+    $site( 'lc8.test', $then, $then ); $age();
+    nppp_state_set( 'varnish_vo_purged', [ time() - 10 ], 600 );
+    nppp_state_set( 'varnish_vo_purged_urls', [ 'http://vc.test/a/' => time() - 10 ], 600 );
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' ); $f = nppp_state_get( 'varnish_vo_full' );
+    chk( $f['counts']['hit'] === 4 && ( $row['cov']['unexpected'] ?? -1 ) === 0 && nppp_varnish_vo_cov_resolve( $row )['full'] === true, 'e2e: a purged URL that was warmed again leaves the Check all as it was and the card keeps it' );
+
+    // 9. a purge after the Check all that reconcile can not correct (not a single-URL purge): the rule "no purge since" still drops it
+    $site( 'lc9.test', $then, $then ); $age();
+    nppp_state_set( 'varnish_vo_purged', [ time() - 10 ], 600 );
+    nppp_varnish_vo_run_check(); $row = nppp_state_get( 'varnish_vo_check' );
+    chk( ( $row['cov']['unexpected'] ?? -1 ) === 0 && nppp_varnish_vo_cov_resolve( $row )['full'] === false, 'e2e: a purge run after the Check all that left no purged URL to correct still replaces it (unchanged rule)' );
+
+    // 10. the baseline is read after the reconcile
+    preg_match( '/function nppp_varnish_vo_run_check\(.*?\n}\n/s', $stsrc, $m ); $rcs = $m[0] ?? '';
+    $p1 = strpos( $rcs, 'nppp_varnish_vo_reconcile_full(' ); $p2 = strrpos( $rcs, 'nppp_varnish_vo_full_state(' ); $p3 = strpos( $rcs, 'nppp_varnish_vo_sample_unexpected(' );
+    chk( $p1 !== false && $p2 !== false && $p3 !== false && $p1 < $p2 && $p2 < $p3, 'source: the baseline is read after nppp_varnish_vo_reconcile_full() has corrected it' );
+    chk( preg_match( "/isset\\( \\\$cov\\['unexpected'\\] \\)/", $stsrc ) === 1, "source: the card reads 'unexpected' with a fallback for rows without it" );
+
+    // --- Freshness strip: how old the figures are, and where to get fresh ones ---------------------------------------
+    foreach ( [ 'esc_attr' => fn( $x ) => htmlspecialchars( (string) $x, ENT_QUOTES ), 'esc_html__' => fn( $x, $d = '' ) => htmlspecialchars( (string) $x, ENT_QUOTES ),
+                'esc_attr__' => fn( $x, $d = '' ) => htmlspecialchars( (string) $x, ENT_QUOTES ), 'number_format_i18n' => fn( $n, $dec = 0 ) => number_format( (float) $n, $dec ) ] as $fn => $impl ) {
+        if ( ! function_exists( $fn ) ) { eval( 'function ' . $fn . '( ...$a ) { return ( $GLOBALS["VT_STUB_' . $fn . '"] )( ...$a ); }' ); $GLOBALS[ 'VT_STUB_' . $fn ] = $impl; }   // phpcs:ignore Squiz.PHP.Eval.Discouraged -- test harness
+    }
+    if ( ! function_exists( 'human_time_diff' ) ) { function human_time_diff( $from, $to = 0 ) { $d = abs( (int) $to - (int) $from ); return $d < 3600 ? max( 1, intdiv( $d, 60 ) ) . ' mins' : intdiv( $d, 3600 ) . ' hours'; } }
+    $now = 1000000; $max = 50; $MA = nppp_varnish_vo_full_max_age();
+    $F = fn( array $o ) => nppp_varnish_vo_freshness( $o + [ 'kind' => 'data', 'set' => 2400, 'full' => true, 'at' => $now - 120, 'purged' => 0, 'sampled' => 2400 ], $now, $max );
+
+    chk( $MA === 1800, 'freshness: the age limit is 30 minutes, the same helper cov_resolve() uses' );
+    chk( preg_match( '/nppp_varnish_vo_full_max_age\(\)/', preg_replace( '/function nppp_varnish_vo_full_max_age.*?\n}\n/s', '', ( preg_match( '/function nppp_varnish_vo_cov_resolve\(.*?\n}\n/s', $stsrc, $m ) ? $m[0] : '' ) ) ) === 1 && strpos( $m[0], '30 * MINUTE_IN_SECONDS' ) === false, 'source: cov_resolve() uses the shared age limit, not its own literal' );
+
+    $x = $F( [] );
+    chk( $x['kind'] === 'fresh' && $x['state'] === 'ok' && $x['cta'] === '', 'freshness: a recent Check all with no purge since is fresh, nothing to do' );
+    $x = $F( [ 'at' => $now - $MA + 1 ] );
+    chk( $x['kind'] === 'fresh', 'freshness: one second under the limit is still fresh' );
+    $x = $F( [ 'at' => $now - $MA ] );
+    chk( $x['kind'] === 'stale' && $x['state'] === 'warn' && $x['cta'] === 'checkall', 'freshness: at the age limit a Check all is stale and points at the Advanced tab' );
+    $x = $F( [ 'purged' => 2 ] );
+    chk( $x['kind'] === 'stale' && $x['purged'] === 2 && $x['cta'] === 'checkall', 'freshness: a purge after the Check all makes it stale however young it is' );
+    $x = $F( [ 'full' => false, 'sampled' => 50 ] );
+    chk( $x['kind'] === 'sample' && $x['state'] === 'info' && $x['cta'] === 'checkall', 'freshness: a sample of a long crawl list points at Check all' );
+    $x = $F( [ 'full' => false, 'set' => 40, 'sampled' => 40 ] );
+    chk( $x['kind'] === 'fresh', 'freshness: a crawl list that fits one batch is fully asked by Check now: fresh, no Check all needed' );
+    $x = $F( [ 'full' => false, 'set' => 40, 'sampled' => 40, 'at' => $now - 2 * $MA ] );
+    chk( $x['kind'] === 'stale' && $x['cta'] === 'checknow', 'freshness: the same small list gone old: Check now refreshes it, not Check all' );
+    chk( $F( [ 'kind' => 'none' ] ) === null && $F( [ 'kind' => 'unavailable' ] ) === null && $F( [ 'kind' => 'running' ] ) === null && $F( [ 'kind' => 'empty' ] ) === null, 'freshness: no figures, no strip' );
+    chk( $F( [ 'full' => false, 'set' => 0 ] ) === null, 'freshness: a sample without a list size shows no strip' );
+    chk( $F( [ 'at' => $now + 500 ] )['age'] === 0, 'freshness: a clock that ran backwards gives age 0, not a negative number' );
+
+    // the markup
+    $N = function ( array $cov ) { return nppp_varnish_vo_fresh_note( [ 'cov' => $cov ] ); };
+    $base = [ 'kind' => 'data', 'set' => 2400, 'full' => true, 'at' => time() - 120, 'purged' => 0, 'sampled' => 2400 ];
+    $h = $N( $base );
+    chk( strpos( $h, 'nppp-vo-fresh-ok' ) !== false && strpos( $h, 'Every crawled URL was checked 2 mins ago' ) !== false && strpos( $h, 'href=' ) === false, 'markup: fresh = green strip with the age in the title and no link' );
+    $h = $N( [ 'at' => time() - 45 * 60, 'purged' => 3 ] + $base );
+    chk( strpos( $h, 'nppp-vo-fresh-warn' ) !== false && strpos( $h, 'The last full check was 45 mins ago' ) !== false && strpos( $h, '3 purge runs after this check' ) !== false && strpos( $h, 'may be out of date' ) !== false, 'markup: stale = amber strip with the age, the purge count and the warning' );
+    chk( strpos( $h, 'href="#premium"' ) !== false && strpos( $h, 'Run Check all' ) !== false, 'markup: stale Check all links to the Advanced tab (#premium) with a button' );
+    $h = $N( [ 'full' => false, 'sampled' => 50 ] + $base );
+    chk( strpos( $h, 'nppp-vo-fresh-info' ) !== false && strpos( $h, 'Sample of 50 of 2,400 crawled URLs, checked 2 mins ago' ) !== false && strpos( $h, 'href="#premium"' ) !== false, 'markup: sample = blue strip with "50 of 2,400" and the link' );
+    $h = $N( [ 'full' => false, 'set' => 40, 'sampled' => 40, 'at' => time() - 3600 ] + $base );
+    chk( strpos( $h, 'Press Check now' ) !== false && strpos( $h, 'href=' ) === false, 'markup: a small list gone old says Check now, no Advanced tab link' );
+    chk( $N( [ 'kind' => 'none' ] + $base ) === '', 'markup: no figures: empty string' );
+    chk( preg_match( '/function nppp_varnish_vo_root\(.*?\n}\n/s', $stsrc, $m ) === 1 && preg_match( '/nppp_varnish_vo_kpis\( \$s \)\s*\.\s*nppp_varnish_vo_fresh_note\( \$s \)\s*\.\s*\'<div class="nppp-vo-accs">/', $m[0] ) === 1, 'source: the strip sits between the measure boxes and the accordions in the card root (so Check now replaces it with the card)' );
+    $css = file_get_contents( dirname( vt_includes() ) . '/admin/css/fastcgi-cache-purge-and-preload-nginx.css' );
+    chk( strpos( $css, '.nppp-vo-fresh-ok' ) !== false && strpos( $css, '.nppp-vo-fresh-warn' ) !== false && strpos( $css, '.nppp-vo-fresh-info' ) !== false && strpos( $css, '.nppp-vo-fresh-link' ) !== false, 'css: the strip states and the link are styled' );
 }
 
 exit( vt_summary() );

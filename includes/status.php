@@ -1702,6 +1702,56 @@ function nppp_varnish_vo_full_state(): ?array {
 }
 
 /**
+ * How long a stored Check all may be shown next to a newer Check now sample (and how long the card calls it fresh).
+ * Kept below the usual Varnish TTL.
+ */
+function nppp_varnish_vo_full_max_age(): int {
+    return 30 * MINUTE_IN_SECONDS;
+}
+
+/**
+ * How many URLs of a Check now sample answered "not cached" (MISS / PASS) or without an answer (UNKNOWN) in a way the
+ * stored Check all did not already show.
+ *
+ * A page that can not be cached (cart, login, a home page that is never cached) answers MISS / PASS on every check. If the
+ * stored Check all recorded that same URL as not cached, the sample only repeats what it already knows, which is no reason
+ * to drop that Check all. Everything else counts, as before: a MISS / PASS for a URL the Check all had as cached (or does
+ * not know), and an UNKNOWN for a URL the Check all had a definite answer for. HIT / STALE never count.
+ *
+ * Pure function (no state, no request). Without a baseline ($bad empty) the result is MISS + PASS + UNKNOWN of the sample,
+ * i.e. the old rule. A malformed pair counts: the failure mode is dropping the Check all, never keeping it.
+ *
+ * @param array<int,array{0:string,1:string}> $answers One pair per sampled URL: nppp_url_match_key() and the class
+ *                                                      (hit | stale | miss | pass | unknown).
+ * @param array<string,string>                $bad     nppp_varnish_vo_full_state()['bad']: match key => class of the
+ *                                                      URLs that were not a HIT in the Check all (at most 200 of them).
+ */
+function nppp_varnish_vo_sample_unexpected( array $answers, array $bad ): int {
+    $n = 0;
+
+    foreach ( $answers as $a ) {
+        $cls = ( is_array( $a ) && isset( $a[1] ) ) ? (string) $a[1] : 'unknown';
+        if ( $cls === 'hit' || $cls === 'stale' ) {
+            continue;
+        }
+
+        $key  = ( is_array( $a ) && isset( $a[0] ) && is_string( $a[0] ) && $a[0] !== '' ) ? $a[0] : '';
+        $then = ( $key !== '' && isset( $bad[ $key ] ) ) ? (string) $bad[ $key ] : '';
+        if ( $cls === 'unknown' ) {
+            $same = ( $then === 'unknown' );
+        } else {
+            $same = ( $then === 'miss' || $then === 'pass' );
+        }
+
+        if ( ! $same ) {
+            $n++;
+        }
+    }
+
+    return $n;
+}
+
+/**
  * How many purge runs reached Varnish at or after $since (log kept by nppp_varnish_purge_mark()).
  *
  * A stored check does not move when a purge removes pages after it was made; this number tells the card so.
@@ -1793,12 +1843,16 @@ function nppp_varnish_vo_cov_resolve( ?array $chk ): array {
     $keep_full = false;
     if ( $full !== null && $status === 'ok' && (int) $full['at'] < $cov_at ) {
         // A newer Check now sample does not replace a Check all that is still valid: the sample agrees with it
-        // (no MISS / PASS / silent URL), no purge ran since, and it is not older than 30 min (keep it below the Varnish TTL).
+        // (no MISS / PASS / silent URL that the Check all did not already show), no purge ran since, and it is not older
+        // than 30 min (keep it below the Varnish TTL). 'unexpected' is made by nppp_varnish_vo_run_check(); a check row
+        // stored without it (older version) counts every MISS / PASS / UNKNOWN, as before.
         $sample_bad = is_array( $cov ) && (
-            (int) ( $cov['miss'] ?? 0 ) + (int) ( $cov['pass'] ?? 0 ) + (int) ( $cov['unknown'] ?? 0 )
+            isset( $cov['unexpected'] )
+                ? (int) $cov['unexpected']
+                : (int) ( $cov['miss'] ?? 0 ) + (int) ( $cov['pass'] ?? 0 ) + (int) ( $cov['unknown'] ?? 0 )
         ) > 0;
         $keep_full  = ! $sample_bad
-            && ( time() - (int) $full['at'] ) < 30 * MINUTE_IN_SECONDS
+            && ( time() - (int) $full['at'] ) < nppp_varnish_vo_full_max_age()
             && nppp_varnish_vo_purges_since( (int) ( $full['from'] ?? $full['at'] ) ) === 0;
     }
     if ( $full !== null && $status === 'ok' && ( (int) $full['at'] >= $cov_at || $keep_full ) ) {
@@ -2114,6 +2168,103 @@ function nppp_varnish_vo_cov_bar( array $cov, string $aria ): array {
         'bar'    => '<span class="nppp-vo-bar" role="img" aria-label="' . esc_attr( $aria ) . '">' . $bar . '</span>',
         'legend' => '<span class="nppp-vo-legend">' . $legend . '</span>',
     );
+}
+
+/**
+ * How fresh the coverage figures of the card are, and what the person can do about it.
+ *
+ * Pure function (no state, no request).
+ *
+ *   fresh  every crawled URL was asked, no purge since, not older than nppp_varnish_vo_full_max_age(): nothing to do.
+ *   stale  every crawled URL was asked, but the figures are old or a purge ran after them.
+ *   sample only a sample of the crawl list was asked: a Check all of the Advanced tab asks every URL.
+ *
+ * 'cta' says where the fresh figures come from: 'checkall' (Advanced tab), 'checknow' (the crawl list is small enough
+ * that Check now asks every URL itself) or '' (nothing to do).
+ *
+ * @param array $cov       nppp_varnish_vo_cov_resolve().
+ * @param int   $now       Unix time.
+ * @param int   $max_urls  nppp_varnish_probe_max_urls().
+ * @return array{kind:string,state:string,cta:string,age:int,purged:int}|null null when there are no figures.
+ */
+function nppp_varnish_vo_freshness( array $cov, int $now, int $max_urls ): ?array {
+    if ( ( $cov['kind'] ?? '' ) !== 'data' ) {
+        return null;
+    }
+
+    $set    = (int) ( $cov['set'] ?? 0 );
+    $full   = ! empty( $cov['full'] );
+    $age    = max( 0, $now - (int) ( $cov['at'] ?? 0 ) );
+    $purged = (int) ( $cov['purged'] ?? 0 );
+
+    // The whole list was asked: a Check all, or a list so short that the Check now sample is all of it.
+    if ( $full || ( $set > 0 && $set <= $max_urls ) ) {
+        if ( $age < nppp_varnish_vo_full_max_age() && $purged === 0 ) {
+            return array( 'kind' => 'fresh', 'state' => 'ok', 'cta' => '', 'age' => $age, 'purged' => 0 );
+        }
+
+        return array( 'kind' => 'stale', 'state' => 'warn', 'cta' => $full ? 'checkall' : 'checknow', 'age' => $age, 'purged' => $purged );
+    }
+
+    if ( $set < 1 ) {
+        return null;
+    }
+
+    return array( 'kind' => 'sample', 'state' => 'info', 'cta' => 'checkall', 'age' => $age, 'purged' => $purged );
+}
+
+/**
+ * The freshness strip under the measure boxes: how old the coverage figures are, in plain words, and where to get fresh
+ * ones. Rendered from stored state like the rest of the card (no request); Check now replaces it with the card.
+ *
+ * @param array $s nppp_varnish_vo_snapshot().
+ * @return string HTML, escaped; '' when the card has no coverage figures.
+ */
+function nppp_varnish_vo_fresh_note( array $s ): string {
+    $cov = $s['cov'];
+    $f   = nppp_varnish_vo_freshness( $cov, time(), nppp_varnish_probe_max_urls() );
+    if ( $f === null ) {
+        return '';
+    }
+
+    $ago   = nppp_varnish_vo_ago( (int) $cov['at'] );
+    $icons = array( 'ok' => 'dashicons-yes-alt', 'warn' => 'dashicons-warning', 'info' => 'dashicons-info-outline' );
+    $sub   = array();
+
+    if ( $f['kind'] === 'fresh' ) {
+        /* translators: %s: time since the check, e.g. "2 mins ago" */
+        $title = sprintf( __( 'Every crawled URL was checked %s', 'fastcgi-cache-purge-and-preload-nginx' ), $ago );
+    } elseif ( $f['kind'] === 'stale' ) {
+        /* translators: %s: time since the check, e.g. "42 mins ago" */
+        $title = sprintf( __( 'The last full check was %s', 'fastcgi-cache-purge-and-preload-nginx' ), $ago );
+        $note  = nppp_varnish_vo_purged_text( (int) $f['purged'] );
+        if ( $note !== '' ) {
+            $sub[] = $note;
+        }
+        $sub[] = __( 'These figures may be out of date.', 'fastcgi-cache-purge-and-preload-nginx' );
+        if ( $f['cta'] === 'checknow' ) {
+            $sub[] = __( 'Press Check now to refresh them.', 'fastcgi-cache-purge-and-preload-nginx' );
+        }
+    } else {
+        /* translators: 1: URLs asked, 2: URLs of the crawl list, 3: time since the check, e.g. "2 mins ago" */
+        $title = sprintf( __( 'Sample of %1$s of %2$s crawled URLs, checked %3$s', 'fastcgi-cache-purge-and-preload-nginx' ), number_format_i18n( (int) $cov['sampled'] ), number_format_i18n( (int) $cov['set'] ), $ago );
+        $sub[] = __( 'Check all in the Advanced tab asks every URL for exact figures.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    $html  = '<div class="nppp-vo-fresh nppp-vo-fresh-' . esc_attr( $f['state'] ) . '">';
+    $html .= '<span class="dashicons ' . esc_attr( $icons[ $f['state'] ] ) . '" aria-hidden="true"></span>';
+    $html .= '<span class="nppp-vo-fresh-text"><span class="nppp-vo-fresh-title">' . esc_html( $title ) . '</span>';
+    if ( $sub !== array() ) {
+        $html .= '<span class="nppp-vo-fresh-sub">' . esc_html( implode( ' ', $sub ) ) . '</span>';
+    }
+    $html .= '</span>';
+    if ( $f['cta'] === 'checkall' ) {
+        // The Advanced tab is a jQuery UI tab: the hash link switches to it like the other in-page links of the settings page.
+        $html .= '<a class="button button-small nppp-vo-fresh-link" href="#premium" title="' . esc_attr__( 'Opens the Advanced tab: press Check all there to ask Varnish about every crawled URL.', 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
+            . esc_html__( 'Run Check all', 'fastcgi-cache-purge-and-preload-nginx' ) . '</a>';
+    }
+
+    return $html . '</div>';
 }
 
 /**
@@ -2587,6 +2738,7 @@ function nppp_varnish_vo_root(): string {
     return '<div id="nppp-vo-root" class="nppp-vo-root">'
         . nppp_varnish_vo_hero( nppp_varnish_vo_health( $s ) )
         . nppp_varnish_vo_kpis( $s )
+        . nppp_varnish_vo_fresh_note( $s )
         . '<div class="nppp-vo-accs">' . $accs . '</div>'
         . '</div>';
 }
@@ -2790,16 +2942,26 @@ function nppp_varnish_vo_run_check(): array {
                     $batch = nppp_varnish_probe_batch( $sample['urls'], false );
                     $count = array( 'hit' => 0, 'stale' => 0, 'miss' => 0, 'pass' => 0, 'unknown' => 0, 'set' => $sample['set'] );
                     $map   = array( 'HIT' => 'hit', 'STALE' => 'stale', 'MISS' => 'miss', 'PASS' => 'pass' );
+                    $seen  = array();   // [ match key, class ] per sampled URL
                     foreach ( $sample['urls'] as $u ) {
-                        $st = isset( $batch['results'][ $u ]['state'] ) ? (string) $batch['results'][ $u ]['state'] : 'UNKNOWN';
-                        $count[ $map[ $st ] ?? 'unknown' ]++;
+                        $st  = isset( $batch['results'][ $u ]['state'] ) ? (string) $batch['results'][ $u ]['state'] : 'UNKNOWN';
+                        $cls = $map[ $st ] ?? 'unknown';
+                        $count[ $cls ]++;
+                        $seen[] = array( nppp_url_match_key( $u ), $cls );
                     }
-                    $row['cov'] = $count;
                     if ( (string) $batch['status'] !== 'ok' ) {
                         $row['status'] = (string) $batch['status'];   // e.g. the endpoint went away half way
                     } else {
                         nppp_varnish_vo_reconcile_full( $wp_filesystem );   // purged URLs since the last Check all
                     }
+                    // What of the not-cached answers is NEW compared with the stored Check all (after the reconcile, so the
+                    // URLs it just corrected are known): a page that is never cached must not make every Check now drop it.
+                    $base = nppp_varnish_vo_full_state();
+                    $count['unexpected'] = nppp_varnish_vo_sample_unexpected(
+                        $seen,
+                        ( is_array( $base ) && is_array( $base['bad'] ?? null ) ) ? $base['bad'] : array()
+                    );
+                    $row['cov'] = $count;
                 }
             }
         }
