@@ -2,7 +2,7 @@
 /**
  * Varnish / Vinyl Cache read-only lookup for the Advanced tab (Varnish-only mode)
  * Description: Asks Varnish whether a URL is cached right now, without fetching, caching or purging anything.
- * Version: 2.1.9
+ * Version: 2.1.8
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  *
