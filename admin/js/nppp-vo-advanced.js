@@ -5,7 +5,16 @@
  * unless the table carries data-nppp-vo="1" (rendered by nppp_premium_html_vo()), and it never changes the
  * shared script: it listens to the AJAX calls the shared script already makes (jQuery ajaxSuccess runs after
  * the shared success callback) and then replaces the Nginx-style status of the affected rows with what
- * Varnish says (nppp_vo_probe, a read-only lookup: nothing is fetched, cached or purged).
+  * Varnish says (nppp_vo_probe, a read-only lookup: nothing is fetched, cached or purged).
+ *
+ * What it adds to the table:
+ *  - Status and Age of each row. Only the rows on screen are asked (pages of 50), and a status younger
+ *    than 30 s is not asked again on a page change.
+ *  - "Check all" asks every URL of the list and makes the server forget an earlier "VCL without the probe
+ *    block" verdict.
+ *  - The count on the Preload MISS button (rows that are MISS and not waiting for a preload).
+ *  - Purge buttons stay enabled on every row (a Varnish PURGE is idempotent; the shared script disables them).
+ *  - A notice line above the table for lookup problems.
  *
  * Status: HIT | STALE | MISS | PASS (answers of Varnish), PROGRESS (a preload was sent, waiting for Varnish
  * to cache it, max 60 s), … (checking), ? (Varnish did not answer or the URL can not be looked up).
@@ -146,6 +155,8 @@
             }
         } else {
             info[url] = { state: 'UNKNOWN', at: Date.now() };
+            // PROGRESS is limited to AWAIT_MS even when Varnish never answers: stop waiting and polling.
+            if (awaiting[url] && Date.now() >= awaiting[url]) { delete awaiting[url]; }
             if (!awaiting[url]) { paint(url, 'UNKNOWN'); }
         }
         return state;
