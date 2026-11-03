@@ -327,7 +327,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 
 = 2.1.9 (2026-11-01) =
 
-* NEW: Dashboard "Cache Traffic Hit Ratio" — Displays real visitor HIT/MISS ratios from Nginx (ngx_cache_purge v4) with a 24-hour trend excluding "Preload All" runs.
+* NEW: Dashboard "Nginx Cache Traffic Hit Ratio" — Displays real visitor HIT/MISS ratios from Nginx (ngx_cache_purge v4) with a 24-hour trend excluding "Preload All" runs.
 * NEW: "Varnish Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends HTTP Purge to the configured Varnish Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
 * NEW: "Varnish-Only Mode" — For setups where Nginx has no cache and Varnish is the only cache layer (Nginx → Varnish → Apache / PHP-FPM). Purge, Purge All and Preload go through Varnish only.
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
@@ -348,6 +348,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Fixed: The redirect and address-bar cleanup after a single-page Purge/Preload no longer rewrite the query string, so the next click hits the same cache key.
 * Fixed: Purge now successfully removes all spellings of percent-encoded or raw UTF-8 cache keys instead of leaving silent stale files or triggering false "ERROR REGEX" warnings.
 * Fixed: HTTP Purge now purges the real page on inline `fastcgi_cache_purge PURGE` setups.
+* Fixed: Preload finish time and Mobile + Desktop total time no longer depend on the server's timezone; they now reflect when the crawl actually ended, in the site timezone.
 * Security: HTTP Purge now skips single-page URLs whose path contains dot-segments, which could reach other locations of the same origin such as Purge All.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All.
 * Changed: The dashboard widget's Settings area is now a collapsible panel with a compact tile grid and an on/off summary, replacing the long status table.
