@@ -116,6 +116,16 @@ function nppp_nginx_cache_preload_progress($request) {
         }
     }
 
+    // wget's FINISHED stamp is the server's own clock, not the site timezone. The log stops growing the moment wget
+    // exits, so its mtime is the finish as a real epoch: show it in the site timezone, like the snapshot time below
+    // and the completion mail, so the rows of this panel (and "Started At", derived from it) share one clock.
+    if ( $last_preload_time !== '' ) {
+        $log_mtime = (int) $wp_filesystem->mtime( $log_path );
+        if ( $log_mtime > 0 ) {
+            $last_preload_time = wp_date( 'Y-m-d H:i:s', $log_mtime );
+        }
+    }
+
     // Check if live log has a FINISHED marker (complete run)
     if ( $log_found && isset( $raw_log ) && $raw_log !== false ) {
         $log_complete = nppp_wget_log_is_complete( $raw_log );
