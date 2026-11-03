@@ -1,13 +1,29 @@
 /**
- * Status tab in Varnish-only mode: "Check now" in the health summary at the top of the card.
+ * Status tab scripts for Nginx Cache Purge Preload (Varnish-only mode)
+ * Description: Runs "Check now" in the health summary at the top of the Varnish Status card.
+ * Version: 2.1.8
+ * Author: Hasan CALISIR
+ * Author Email: hasan.calisir@psauxit.com
+ * Author URI: https://www.psauxit.com
+ * License: GPL-2.0+
  *
  * The card is rendered by PHP from stored state and never waits on Varnish. This button asks the server to
- * run the read-only lookups (nppp_vo_status_check: the home page plus a sample of the last Preload All; nothing
- * is fetched, cached or purged) and swaps in the refreshed card (summary, measure boxes and sections change
- * together), which the server renders with the same code as the first paint. A section the person opened or
- * closed by hand keeps that state across the swap, except that a section that needs attention (data-state warn
- * or bad) always stays open. The Status tab is loaded by AJAX, so the handlers are delegated.
+ * run the read-only lookups (nppp_vo_status_check: the home page plus a sample of up to 50 URLs of the last
+ * Preload All, evenly spread over the list; nothing is fetched, cached or purged) and swaps in the refreshed
+ * card (summary, measure boxes and sections change together), which the server renders with the same code as
+ * the first paint.
+ *
+ * Sections: a section the person opened or closed by hand keeps that state across the swap, except that a
+ * section that needs attention (data-state warn or bad) is always open. This only holds for the card the
+ * person worked on: the Status tab is loaded again on every visit and starts from the server's defaults.
+ *
+ * One check at a time: the button is disabled while a check runs and the server refuses a second one while
+ * one is running (lock of at most 30 s), so a double click or a second admin does not double the lookups sent
+ * to Varnish. The request gives up after 60 s; the server itself stops after 10 s per lookup batch, two batches.
+ *
+ * The Status tab is loaded by AJAX, so the handlers are delegated.
  */
+
 (function ($) {
     'use strict';
 
@@ -20,6 +36,17 @@
     var ROOT = '#nppp-vo-root';
     var busy = false;
     var touched = {};   // section id -> open (true) or closed (false), as the person last left it
+    var touchedRoot = null;   // the card element `touched` belongs to
+
+    // The Status tab is loaded again on every visit and PHP draws the sections in their default state, so what
+    // the person did to an earlier card says nothing about this one: forget it when the card is a new element.
+    function syncTouched() {
+        var root = $(ROOT)[0] || null;
+        if (root !== touchedRoot) {
+            touched = {};
+            touchedRoot = root;
+        }
+    }
 
     function text(key) {
         return typeof T[key] === 'string' ? T[key] : '';
@@ -33,6 +60,7 @@
     // after this handler, so the new state is the opposite of the current one.
     $(document).on('click', ROOT + ' details.nppp-vo-acc > summary', function () {
         var section = this.parentNode;
+        syncTouched();
         if (section && section.id) {
             touched[section.id] = !section.open;
         }
@@ -44,6 +72,7 @@
             return;
         }
         busy = true;
+        syncTouched();
 
         var $btn = $(this);
         var $label = $btn.find('.nppp-vo-btntext');
@@ -75,6 +104,7 @@
                         }
                     });
                     $(ROOT).replaceWith($card);
+                    touchedRoot = $(ROOT)[0] || null;   // the answer carries the person's choices over
                     return;
                 } catch (err) {
                     // fall through: the old card stays, the button comes back and the error is shown
