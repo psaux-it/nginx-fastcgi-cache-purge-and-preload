@@ -1413,6 +1413,29 @@ function nppp_varnish_vo_cell( string $state, string $text, array $meta = array(
 }
 
 /**
+ * One neutral value cell of the card: dashicon + a plain value (path, host, duration). Same icon + text rhythm as
+ * nppp_varnish_vo_cell(), but it carries no verdict, so the icon is not green/orange/red.
+ *
+ * @param string   $icon  Dashicon class, e.g. dashicons-portfolio.
+ * @param string   $text  Value, plain text.
+ * @param bool     $mono  Monospace (paths, hosts) instead of the bold label weight.
+ * @param string[] $meta  Detail lines under the value, plain text.
+ * @return string HTML, escaped.
+ */
+function nppp_varnish_vo_value_cell( string $icon, string $text, bool $mono = false, array $meta = array(), string $title = '' ): string {
+    $html  = '<td class="status nppp-vo-st nppp-vo-info"' . ( $title !== '' ? ' title="' . esc_attr( $title ) . '"' : '' ) . '>';
+    $html .= '<span class="dashicons ' . esc_attr( $icon ) . '" aria-hidden="true"></span> ';
+    $html .= '<span class="nppp-vo-value' . ( $mono ? ' nppp-vo-mono' : '' ) . '">' . esc_html( $text ) . '</span>';
+    foreach ( $meta as $line ) {
+        if ( is_string( $line ) && $line !== '' ) {
+            $html .= '<span class="nppp-vo-meta">' . esc_html( $line ) . '</span>';
+        }
+    }
+
+    return $html . '</td>';
+}
+
+/**
  * One table row: label cell + prepared status cell.
  *
  * @param string $label_html Label, already escaped (may hold a <span class="nppp-vo-mono">).
@@ -1606,7 +1629,13 @@ function nppp_varnish_vo_endpoint_rows( array $states ): string {
     // Host header the PURGE and lookup requests carry.
     $rows .= nppp_varnish_vo_row(
         esc_html__( 'Host header sent', 'fastcgi-cache-purge-and-preload-nginx' ),
-        '<td class="status"><span class="nppp-vo-mono">' . esc_html( nppp_varnish_host_header() ) . '</span></td>'
+        nppp_varnish_vo_value_cell(
+            'dashicons-yes',
+            nppp_varnish_host_header(),
+            true,
+            array(),
+            __( 'The Host header carried by every PURGE and lookup request.', 'fastcgi-cache-purge-and-preload-nginx' )
+        )
     );
 
     // Control header: the NAME only. The value is a secret and never leaves the server.
@@ -1621,14 +1650,19 @@ function nppp_varnish_vo_endpoint_rows( array $states ): string {
     $budget = rtrim( rtrim( number_format( nppp_varnish_budget_seconds(), 1, '.', '' ), '0' ), '.' );
     $rows  .= nppp_varnish_vo_row(
         esc_html__( 'Park window / time budget', 'fastcgi-cache-purge-and-preload-nginx' ),
-        '<td class="status">' . esc_html( sprintf(
-            /* translators: 1: park window in seconds, 2: time budget in seconds */
-            __( '%1$d s · budget %2$s s per run', 'fastcgi-cache-purge-and-preload-nginx' ),
-            nppp_varnish_breaker_seconds(),
-            $budget
-        ) ) . '</td>'
+        nppp_varnish_vo_value_cell(
+            'dashicons-clock',
+            sprintf(
+                /* translators: 1: park window in seconds, 2: time budget in seconds */
+                __( '%1$d s · budget %2$s s per run', 'fastcgi-cache-purge-and-preload-nginx' ),
+                nppp_varnish_breaker_seconds(),
+                $budget
+            ),
+            false,
+            array(),
+            __( 'How long a failing endpoint is skipped, and how long one purge run may take in total.', 'fastcgi-cache-purge-and-preload-nginx' )
+        )
     );
-
     return $rows;
 }
 
@@ -2087,8 +2121,16 @@ function nppp_varnish_vo_mode_parts(): array {
     }
 
     $rows  = nppp_varnish_vo_row( esc_html__( 'Mode', 'fastcgi-cache-purge-and-preload-nginx' ), $mode );
-    $rows .= nppp_varnish_vo_row( esc_html__( 'Cache layer', 'fastcgi-cache-purge-and-preload-nginx' ), '<td class="status">' . esc_html__( 'Varnish / Vinyl Cache only. No Nginx cache is involved.', 'fastcgi-cache-purge-and-preload-nginx' ) . '</td>' );
-    $rows .= nppp_varnish_vo_row( esc_html__( 'Preload scratch directory', 'fastcgi-cache-purge-and-preload-nginx' ), '<td class="status"><span class="nppp-vo-mono">' . esc_html( $scratch !== '' ? $scratch : __( 'Not set', 'fastcgi-cache-purge-and-preload-nginx' ) ) . '</span></td>' );
+    $rows .= nppp_varnish_vo_row(
+        esc_html__( 'Cache layer', 'fastcgi-cache-purge-and-preload-nginx' ),
+        nppp_varnish_vo_value_cell( 'dashicons-yes', __( 'Varnish Only', 'fastcgi-cache-purge-and-preload-nginx' ), false, array(), __( 'Varnish / Vinyl Cache is the only cache layer. No Nginx cache is involved.', 'fastcgi-cache-purge-and-preload-nginx' ) )
+    );
+    $rows .= nppp_varnish_vo_row(
+        esc_html__( 'Preload scratch directory', 'fastcgi-cache-purge-and-preload-nginx' ),
+        ( $scratch !== '' )
+            ? nppp_varnish_vo_value_cell( 'dashicons-yes', $scratch, true, array(), __( 'Scratch space of the Preload crawler: it must be an existing, empty, persistent directory that PHP can read and write.', 'fastcgi-cache-purge-and-preload-nginx' ) )
+            : nppp_varnish_vo_cell( 'off', __( 'Not set', 'fastcgi-cache-purge-and-preload-nginx' ) )
+    );
     $rows .= nppp_varnish_vo_row( esc_html__( 'Last Preload All', 'fastcgi-cache-purge-and-preload-nginx' ), $last );
 
     return array(
