@@ -9,13 +9,20 @@
  * Wire contract (answered by the probe block of the Example VCL in the Help tab):
  *
  *   NPPPROBE <path[?query]>   Host: <site authority>   <control header>
+ *                             Accept-Encoding: identity, Cache-Control: no-cache,
+ *                             User-Agent: the desktop crawler's
  *   -> 200, X-NPP-Probe-State: HIT | STALE | MISS | PASS, X-NPP-Probe-Age / X-NPP-Probe-TTL (HIT, STALE)
  *
  * Why a custom method and not GET / HEAD / PURGE with a marker header: a VCL without the probe block
  * must never turn the lookup into a cache fill (GET, HEAD) or a purge (PURGE). An unknown method is
  * never cached by Varnish, so the worst an old VCL can do is pass it to the origin (Varnish 7 and older)
- * or answer 501 (Varnish 8+ / Vinyl). The first answer without the marker therefore stops the batch and
- * is remembered for an hour (see nppp_varnish_probe_batch()).
+ * or answer 501 (Varnish 8+ / Vinyl).
+ *
+ * The first answer that is not a probe answer stops the batch (it would be the same for every URL):
+ *  - 200 without the marker (old VCL): remembered for an hour, "Check all" asks again
+ *    (see nppp_varnish_probe_batch()).
+ *  - 401 / 403 / 405 / 501 (ACL, control key, no handler) or a transport error: not remembered,
+ *    the next lookup asks again.
  *
  * Design rules:
  *  - Read-only and side-channel: a probe problem never changes a purge or preload result.
@@ -245,13 +252,15 @@ if ( ! function_exists( 'nppp_varnish_probe_batch' ) ) {
 
             // First configured endpoint that is not parked. Several endpoints are several caches; the table shows one.
             $endpoint = '';
+            $ep_index = 0;
             $parked   = false;
-            foreach ( nppp_varnish_endpoints() as $candidate ) {
+            foreach ( nppp_varnish_endpoints() as $i => $candidate ) {
                 if ( nppp_varnish_breaker_open( $candidate ) ) {
                     $parked = true;
                     continue;
                 }
                 $endpoint = $candidate;
+                $ep_index = (int) $i;
                 break;
             }
             if ( $endpoint === '' ) {
@@ -317,7 +326,7 @@ if ( ! function_exists( 'nppp_varnish_probe_batch' ) ) {
                 }
 
                 // Anything else ends the batch: the answer is the same for every URL.
-                $label = nppp_varnish_endpoint_label( 0 );
+                $label = nppp_varnish_endpoint_label( $ep_index );
                 if ( $r['kind'] === 'nomarker' ) {
                     $stop = 'unsupported';
                     nppp_varnish_state_map_set( 'varnish_probe_off', $id, nppp_varnish_probe_unsupported_seconds() );
