@@ -1480,6 +1480,9 @@ function nppp_varnish_vo_table( string $rows ): string {
  */
 function nppp_varnish_vo_pct( float $pct ): string {
     $r = round( $pct, 1 );
+    if ( $pct < 100 && $r >= 100 ) {
+        $r = 99.9;   // 2655 of 2656 must not read as 100 %
+    }
 
     return number_format_i18n( $r, ( $r == floor( $r ) ) ? 0 : 1 ) . '%';
 }
@@ -2604,6 +2607,96 @@ function nppp_varnish_vo_coverage_sample( $wp_filesystem ): array {
 }
 
 /**
+ * Check now: brings the stored Check all result up to date for the URLs that were purged since it was made.
+ *
+ * Nothing here runs when the tab is drawn (the card reads stored state only). It runs inside the Check now click and
+ * asks Varnish ONLY about the URLs that a single purge covered after the Check all began (nppp_varnish_note_purged_urls())
+ * and that are in the crawl list: usually a handful, one batch, and no request at all when there were no purges.
+ * The old state of each such URL is known (HIT, or the entry in 'bad' that Check all kept for every URL that was not a
+ * HIT), so the counts are corrected exactly: a purged URL that Varnish has not cached again moves from hit to miss
+ * (2655 of 2656), one that was warmed again changes nothing.
+ *
+ * Gives up quietly (the card then falls back to the sample, as before) when there is no baseline to correct: no Check
+ * all, one from before this was recorded, too many non-HIT URLs to remember, a crawl list that changed, more than
+ * one batch of purged URLs, or a lookup that did not answer.
+ *
+ * @param object $wp_filesystem Initialised WP_Filesystem.
+ */
+function nppp_varnish_vo_reconcile_full( $wp_filesystem ): void {
+    $full = nppp_varnish_vo_full_state();
+    if ( $full === null || ! is_array( $full['bad'] ?? null ) || ! empty( $full['bad_over'] ) ) {
+        return;
+    }
+
+    $purged = nppp_state_get( 'varnish_vo_purged_urls' );
+    if ( ! is_array( $purged ) || $purged === array() ) {
+        return;
+    }
+
+    // The list is the snapshot's parsed list (cached against its mtime), keyed by nppp_url_match_key().
+    $list = nppp_parse_wget_log_urls( $wp_filesystem );
+    if ( count( $list ) !== (int) $full['set'] ) {
+        return;
+    }
+
+    $from = (int) ( $full['from'] ?? $full['at'] );
+    $ask  = array();   // match key => URL of the crawl list
+    foreach ( $purged as $url => $ts ) {
+        if ( ! is_string( $url ) || (int) $ts < $from ) {
+            continue;
+        }
+        $key = nppp_url_match_key( $url );
+        if ( ! isset( $list[ $key ] ) ) {
+            continue;
+        }
+        $u = ! empty( $list[ $key ]['url_encoded'] ) ? $list[ $key ]['url_encoded'] : ( $list[ $key ]['url'] ?? '' );
+        if ( is_string( $u ) && $u !== '' ) {
+            $ask[ $key ] = $u;
+        }
+    }
+    if ( $ask === array() || count( $ask ) > nppp_varnish_probe_max_urls() ) {
+        return;
+    }
+
+    $start = time();
+    $batch = nppp_varnish_probe_batch( array_values( $ask ), false );
+    if ( (string) $batch['status'] !== 'ok' ) {
+        return;
+    }
+
+    // All or nothing: one URL without a definite answer (odd HTTP status, time budget) and the stored counts stay as
+    // they are; the next Check now asks again. A hiccup must not turn a counted HIT into "no answer".
+    $map = array( 'HIT' => 'hit', 'STALE' => 'stale', 'MISS' => 'miss', 'PASS' => 'pass' );
+    foreach ( $ask as $u ) {
+        if ( ! isset( $map[ (string) ( $batch['results'][ $u ]['state'] ?? '' ) ] ) ) {
+            return;
+        }
+    }
+
+    foreach ( $ask as $key => $u ) {
+        $new = $map[ (string) $batch['results'][ $u ]['state'] ];
+        $old = (string) ( $full['bad'][ $key ] ?? 'hit' );
+        if ( $new === $old ) {
+            continue;
+        }
+        $full['counts'][ $old ] = max( 0, (int) ( $full['counts'][ $old ] ?? 0 ) - 1 );
+        $full['counts'][ $new ] = (int) ( $full['counts'][ $new ] ?? 0 ) + 1;
+        if ( $new === 'hit' ) {
+            unset( $full['bad'][ $key ] );
+        } else {
+            $full['bad'][ $key ] = $new;
+        }
+    }
+    if ( count( $full['bad'] ) > 200 ) {
+        $full['bad_over'] = true;
+    }
+
+    // Purges up to now are in the counts; "N purge runs after this check" counts from here on.
+    $full['from'] = $start;
+    nppp_state_set( 'varnish_vo_full', $full, 7 * DAY_IN_SECONDS );
+}
+
+/**
  * AJAX: Check now on the Status tab card (Varnish-only mode).
  *
  * Read-only lookups against the first endpoint that is not parked: one for the home page (timed), then up to
@@ -2683,6 +2776,8 @@ function nppp_vo_status_check_callback() {
                     $row['cov'] = $count;
                     if ( (string) $batch['status'] !== 'ok' ) {
                         $row['status'] = (string) $batch['status'];   // e.g. the endpoint went away half way
+                    } else {
+                        nppp_varnish_vo_reconcile_full( $wp_filesystem );   // purged URLs since the last Check all
                     }
                 }
             }

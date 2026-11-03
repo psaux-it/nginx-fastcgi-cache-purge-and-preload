@@ -402,6 +402,7 @@ if ( ! function_exists( 'nppp_varnish_only_reset_state' ) ) {
         nppp_state_delete( 'varnish_vo_full' );
         nppp_state_delete( 'varnish_vo_full_run' );
         nppp_state_delete( 'varnish_vo_purged' );
+        nppp_state_delete( 'varnish_vo_purged_urls' );
     }
 }
 
@@ -716,6 +717,7 @@ if ( ! function_exists( 'nppp_varnish_purge_mark' ) ) {
             if ( $scope === 'all' ) {
                 nppp_state_delete( 'varnish_vo_full' );
                 nppp_state_delete( 'varnish_vo_full_run' );
+                nppp_state_delete( 'varnish_vo_purged_urls' );
             }
 
             $now  = time();
@@ -730,6 +732,46 @@ if ( ! function_exists( 'nppp_varnish_purge_mark' ) ) {
             $rows[] = $now;
 
             nppp_state_set( 'varnish_vo_purged', array_slice( $rows, -nppp_varnish_activity_max() ), 7 * DAY_IN_SECONDS + HOUR_IN_SECONDS );
+        } catch ( \Throwable $e ) {
+            return;
+        }
+    }
+}
+
+if ( ! function_exists( 'nppp_varnish_note_purged_urls' ) ) {
+    /**
+     * Varnish-only mode: remembers which URLs a single purge covered (url => time of the purge).
+     *
+     * The Status tab keeps only counts of the last Check all. Check now uses this list to ask Varnish again about
+     * just these URLs and correct the counts (nppp_varnish_vo_reconcile_full()). One small row, newest 200 URLs,
+     * not autoloaded. It records what was ASKED to be purged, not what Varnish accepted: Check now compares the
+     * answers, so a refused purge simply changes nothing.
+     *
+     * @param array $urls Every URL the purge covered (primary + related).
+     */
+    function nppp_varnish_note_purged_urls( array $urls ): void {
+        if ( ! function_exists( 'nppp_state_set' ) || ! function_exists( 'nppp_varnish_only_mode' ) || ! nppp_varnish_only_mode() ) {
+            return;
+        }
+
+        try {
+            $now  = time();
+            $keep = $now - 7 * DAY_IN_SECONDS;
+            $old  = nppp_state_get( 'varnish_vo_purged_urls' );
+            $rows = array();
+            foreach ( ( is_array( $old ) ? $old : array() ) as $u => $ts ) {
+                if ( is_string( $u ) && is_int( $ts ) && $ts >= $keep ) {
+                    $rows[ $u ] = $ts;
+                }
+            }
+            foreach ( $urls as $u ) {
+                if ( is_string( $u ) && $u !== '' && strlen( $u ) <= 2048 ) {
+                    unset( $rows[ $u ] );   // re-add at the end: newest last
+                    $rows[ $u ] = $now;
+                }
+            }
+
+            nppp_state_set( 'varnish_vo_purged_urls', array_slice( $rows, -200, null, true ), 7 * DAY_IN_SECONDS + HOUR_IN_SECONDS );
         } catch ( \Throwable $e ) {
             return;
         }
@@ -1571,6 +1613,8 @@ if ( ! function_exists( 'nppp_varnish_purge_urls' ) ) {
             if ( empty( $paths ) ) {
                 return;
             }
+
+            nppp_varnish_note_purged_urls( $urls );   // Status tab: Check now asks these again
 
             $extra    = nppp_varnish_extra_header();
             $deadline = microtime( true ) + nppp_varnish_budget_seconds();

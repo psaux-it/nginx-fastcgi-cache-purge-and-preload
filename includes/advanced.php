@@ -1344,8 +1344,10 @@ function nppp_preload_miss_batch_callback() {
  * @param int    $idx     0-based index of this chunk within the run.
  * @param string $status  Status of the probe batch of this chunk.
  * @param array  $results Result rows of this chunk, one per requested URL, each with a 'state' key.
+ * @param array  $urls    The URLs of this chunk in the same order. The URLs that are not a HIT are remembered
+ *                        (match key => state, at most 200) so that Check now can correct the counts for purged URLs.
  */
-function nppp_vo_full_record( string $run, int $idx, string $status, array $results ): void {
+function nppp_vo_full_record( string $run, int $idx, string $status, array $results, array $urls = array() ): void {
     if ( ! preg_match( '/^[A-Za-z0-9]{8,32}$/', $run ) ) {
         return;
     }
@@ -1387,6 +1389,7 @@ function nppp_vo_full_record( string $run, int $idx, string $status, array $resu
                 'set'    => $set,
                 'ep'     => $ep,
                 'counts' => array( 'hit' => 0, 'stale' => 0, 'miss' => 0, 'pass' => 0, 'unknown' => 0 ),
+                'bad'    => array(),
             );
         } else {
             $row = nppp_state_get( 'varnish_vo_full_run', true );
@@ -1397,9 +1400,17 @@ function nppp_vo_full_record( string $run, int $idx, string $status, array $resu
         }
 
         $map = array( 'HIT' => 'hit', 'STALE' => 'stale', 'MISS' => 'miss', 'PASS' => 'pass' );
-        foreach ( $results as $r ) {
-            $st = ( is_array( $r ) && isset( $r['state'] ) ) ? (string) $r['state'] : 'UNKNOWN';
-            $row['counts'][ $map[ $st ] ?? 'unknown' ]++;
+        foreach ( $results as $k => $r ) {
+            $st  = ( is_array( $r ) && isset( $r['state'] ) ) ? (string) $r['state'] : 'UNKNOWN';
+            $cls = $map[ $st ] ?? 'unknown';
+            $row['counts'][ $cls ]++;
+            if ( $cls !== 'hit' && isset( $urls[ $k ] ) && is_string( $urls[ $k ] ) && $urls[ $k ] !== '' ) {
+                if ( count( (array) ( $row['bad'] ?? array() ) ) < 200 ) {
+                    $row['bad'][ nppp_url_match_key( $urls[ $k ] ) ] = $cls;
+                } else {
+                    $row['bad_over'] = true;   // too many to remember: no per-URL correction for this Check all
+                }
+            }
         }
         $row['seen'] = (int) $row['seen'] + count( $results );
         $row['next'] = $idx + 1;
@@ -1416,6 +1427,8 @@ function nppp_vo_full_record( string $run, int $idx, string $status, array $resu
                     'set'    => (int) $row['set'],
                     'ep'     => (int) $row['ep'],
                     'counts' => $row['counts'],
+                    'bad'    => (array) ( $row['bad'] ?? array() ),
+                    'bad_over' => ! empty( $row['bad_over'] ),
                 ),
                 7 * DAY_IN_SECONDS
             );
@@ -1508,7 +1521,8 @@ function nppp_vo_probe_callback() {
             sanitize_text_field( wp_unslash( (string) $_POST['full_run'] ) ),
             absint( wp_unslash( (string) $_POST['full_idx'] ) ),
             (string) $probe['status'],
-            $results
+            $results,
+            $list
         );
     }
 
