@@ -1483,13 +1483,15 @@ function nppp_varnish_vo_pct( float $pct ): string {
 /**
  * Finish time, URL count and duration of the last completed Preload All.
  *
- * All three come from the wget summary of the completed-crawl snapshot (the same FINISHED / Downloaded / wall
- * clock lines schedule.php parses for the completion mail and for the "last preload" transient). The parsed
- * result is cached against the snapshot's mtime: the file is read once per crawl, never on a later render.
+ * The finish time is the mtime of the completed-crawl snapshot (written when Preload All ends), a real epoch. The
+ * URL count and duration come from the wget summary inside it (Downloaded / wall clock lines, the same ones
+ * schedule.php parses). The wget FINISHED line is not used for the time: it is the server's local clock, not the
+ * WordPress timezone. The parsed summary is cached against the snapshot's mtime: the file is read once per crawl,
+ * never on a later render.
  *
- * nppp_get_last_preload_complete_date() is only the fallback for a snapshot without a FINISHED line. It is not
- * the primary source because, once its 24 h transient has expired, it re-reads the whole operations log on every call
- * and does not cache the result, which a tab that is opened often should not pay for.
+ * nppp_get_last_preload_complete_date() (operations log, WordPress timezone) is only the fallback when there is no
+ * snapshot. It is not the primary source because, once its 24 h transient has expired, it re-reads the whole
+ * operations log on every call and does not cache the result, which a tab that is opened often should not pay for.
  *
  * @return array{at:int,files:?int,elapsed:string}|null null when no Preload All has completed yet.
  */
@@ -1497,6 +1499,7 @@ function nppp_varnish_vo_last_preload(): ?array {
     $finished = '';
     $files    = null;
     $elapsed  = '';
+    $mtime    = 0;
 
     $wp_filesystem = nppp_initialize_wp_filesystem();
     if ( $wp_filesystem !== false ) {
@@ -1527,15 +1530,19 @@ function nppp_varnish_vo_last_preload(): ?array {
         }
     }
 
-    if ( $finished === '' && function_exists( 'nppp_get_last_preload_complete_date' ) ) {
-        $fallback = nppp_get_last_preload_complete_date();
-        $finished = is_string( $fallback ) ? trim( $fallback ) : '';
-    }
+    // The snapshot is written when Preload All completes, so its mtime is a real epoch. The FINISHED line inside it
+    // is wget's own clock (the server's local time, not the WordPress timezone), so it must not be read as one:
+    // on a server in UTC with a WordPress site in UTC+3 it made a crawl that had just ended read "3 hours ago".
+    $at = ( $mtime > 0 ) ? $mtime : 0;
 
-    $at = 0;
-    if ( $finished !== '' ) {
-        $dt = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $finished, wp_timezone() );
-        $at = $dt ? $dt->getTimestamp() : 0;
+    // No snapshot: the operations log. Its stamps come from current_time(), i.e. they are in the WordPress timezone.
+    if ( $at === 0 && function_exists( 'nppp_get_last_preload_complete_date' ) ) {
+        $fallback = nppp_get_last_preload_complete_date();
+        $fallback = is_string( $fallback ) ? trim( $fallback ) : '';
+        if ( $fallback !== '' ) {
+            $dt = DateTimeImmutable::createFromFormat( 'Y-m-d H:i:s', $fallback, wp_timezone() );
+            $at = $dt ? $dt->getTimestamp() : 0;
+        }
     }
 
     return ( $at > 0 ) ? array( 'at' => $at, 'files' => $files, 'elapsed' => $elapsed ) : null;
@@ -1641,7 +1648,7 @@ function nppp_varnish_vo_endpoint_rows( array $states ): string {
     // Control header: the NAME only. The value is a secret and never leaves the server.
     $extra = nppp_varnish_extra_header();
     if ( ! empty( $extra['name'] ) && is_string( $extra['name'] ) ) {
-        $control = nppp_varnish_vo_cell( 'ok', $extra['name'], array( __( 'value hidden', 'fastcgi-cache-purge-and-preload-nginx' ) ), '', 'dashicons-lock' );
+        $control = nppp_varnish_vo_cell( 'ok', $extra['name'], array( __( 'value hidden', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
     } else {
         $control = nppp_varnish_vo_cell( 'off', __( 'Not set', 'fastcgi-cache-purge-and-preload-nginx' ), array( __( 'PURGE is not authenticated by a header (the VCL ACL decides)', 'fastcgi-cache-purge-and-preload-nginx' ) ) );
     }
@@ -1651,7 +1658,7 @@ function nppp_varnish_vo_endpoint_rows( array $states ): string {
     $rows  .= nppp_varnish_vo_row(
         esc_html__( 'Park window / time budget', 'fastcgi-cache-purge-and-preload-nginx' ),
         nppp_varnish_vo_value_cell(
-            'dashicons-clock',
+            'dashicons-yes',
             sprintf(
                 /* translators: 1: park window in seconds, 2: time budget in seconds */
                 __( '%1$d s · budget %2$s s per run', 'fastcgi-cache-purge-and-preload-nginx' ),
