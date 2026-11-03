@@ -1,22 +1,35 @@
 <?php
 /**
  * Varnish / Vinyl Cache compatibility for Nginx Cache Purge Preload
- * Description: Mirrors plugin purge actions to a Varnish / Vinyl Cache placed IN FRONT of the Nginx cache, so both layers stay synchronized.
+ * Description: Mirrors plugin purge actions to a Varnish / Vinyl Cache. Two modes:
+ *              - Sync: Varnish in front of the Nginx cache, both layers stay synchronized.
+ *              - Varnish-only: Nginx has no cache, Varnish is the only cache layer.
  * Version: 2.1.8
  * Author: Hasan CALISIR
  * License: GPL-2.0+
  *
- * Topology (front-only):
+ * Topologies:
  *
- *   visitor -> nginx:443 (TLS) -> Varnish / Vinyl :6081 -> nginx:8080 (fastcgi_cache) -> PHP-FPM
+ *   Sync (default, front-only):
+ *     visitor -> nginx:443 (TLS) -> Varnish / Vinyl :6081 -> nginx:8080 (fastcgi_cache) -> PHP-FPM
  *
- * Order rule: inner layer first, outer layer second. The hooks used here fire AFTER Nginx is
- * clean ("origin purged"), and BEFORE any preload crawl starts (the crawl requests the public
- * URL and therefore passes through Varnish):
+ *   Varnish-only (opt-in):
+ *     visitor -> nginx:443 (TLS, no cache) -> Varnish / Vinyl :6081 -> Apache / PHP-FPM
+ *
+ * Varnish-only mode is requested by the Settings switch, define( 'NPPP_VARNISH_ONLY', ... ) in
+ * wp-config.php (authoritative, locks the switch) or the nppp_varnish_only filter. It is active only
+ * while Varnish sync is ON with at least one valid endpoint (see nppp_varnish_only_mode()).
+ *
+ * Order rule (Sync mode): inner layer first, outer layer second. The hooks used here fire AFTER
+ * Nginx is clean ("origin purged"), and BEFORE any preload crawl starts (the crawl requests the
+ * public URL and therefore passes through Varnish):
  *
  *   nppp_purged_urls         single purge, after nginx, before auto-preload
  *   nppp_purged_all          Purge All, after nginx (deferred while nginx's queue is busy)
  *   nppp_preload_all_started direct Preload All, right before the crawl starts
+ *
+ * Varnish-only mode has no inner layer: the Nginx purge is skipped ("nothing to purge"), the same
+ * hooks fire right away, and the PURGE / ban sent here IS the purge.
  *
  * Wire contract (NPP's own PURGE contract, plain HTTP, no admin/6082 port):
  *
@@ -26,9 +39,12 @@
  * The purge-all body is a FIXED string: nothing user- or URL-derived is ever placed in a regex.
  *
  * Design rules:
- *  - Side channel. A Varnish failure never changes the purge result NPP shows; it only logs.
- *  - Synchronous, short timeouts, per-endpoint circuit breaker (no shutdown queue: the purge
- *    must be finished before the preload crawl starts).
+ *  - Sync mode: side channel. A Varnish failure never changes the purge result NPP shows; it only logs.
+ *  - Varnish-only mode: the Varnish result IS the outcome. nppp_varnish_only_report() shows it as a
+ *    notice (manual actions) or logs it (automatic ones), keeps a persistent admin notice after a
+ *    failure until the next success, and feeds the Status tab.
+ *  - Synchronous, short timeouts, per-endpoint circuit breaker (parked 300 s in Sync mode, 15 s in
+ *    Varnish-only mode; no shutdown queue: the purge must be finished before the preload crawl starts).
  *  - The log never contains endpoint addresses or the control header value.
  *
  * @package Nginx Cache Purge Preload
