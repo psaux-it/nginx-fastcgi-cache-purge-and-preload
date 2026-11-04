@@ -115,6 +115,10 @@ function nppp_clear_plugin_cache($silent = false) {
     // Varnish / Vinyl Cache Sync: forget parked endpoints and warning throttles so a fixed setup is retried at once.
     nppp_state_delete( 'varnish_breaker' );
     nppp_state_delete( 'varnish_warn' );
+    // Cloudflare Cache Sync: same reset (park window, warning throttle, "no zone" memo). Pending purges stay.
+    if ( function_exists( 'nppp_cloudflare_apo_reset_state' ) ) {
+        nppp_cloudflare_apo_reset_state();
+    }
     // Status tab card (Varnish-only mode): the stored live check is a cached probe. The purge log and the endpoint timings are history and stay.
     nppp_state_delete( 'varnish_vo_check' );
     nppp_state_delete( 'varnish_vo_full' );
