@@ -50,6 +50,13 @@ function nppp_save_toggle_option( string $nonce_action, string $post_key, string
         nppp_state_delete( 'varnish_warn' );
     }
 
+    // Cloudflare Cache Sync: a switched toggle forgets the park window and warning throttles (pending purges stay).
+    if ( $option_key === 'nppp_cloudflare_apo_sync'
+        && $prev_value !== $value
+        && function_exists( 'nppp_cloudflare_apo_reset_state' ) ) {
+        nppp_cloudflare_apo_reset_state();
+    }
+
     wp_send_json_success( __( 'Option updated successfully.', 'fastcgi-cache-purge-and-preload-nginx' ) );
 }
 
