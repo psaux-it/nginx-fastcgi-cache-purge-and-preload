@@ -127,9 +127,8 @@ function nppp_nginx_cache_cloudflare_apo_sync_callback() {
     $is_checked = isset($options['nppp_cloudflare_apo_sync']) && $options['nppp_cloudflare_apo_sync'] === 'yes';
     $cloudflare_checked = $is_checked ? 'checked="checked"' : '';
     $is_available = function_exists('nppp_cloudflare_apo_is_available') && nppp_cloudflare_apo_is_available();
-    if ( ! $is_available && isset($options['nppp_cloudflare_apo_sync']) && $options['nppp_cloudflare_apo_sync'] !== 'no' ) {
-        $options['nppp_cloudflare_apo_sync'] = 'no';
-        update_option('nginx_cache_settings', $options);
+    // Read only: rendering must never switch the user's setting off
+    if ( ! $is_available ) {
         $cloudflare_checked = '';
     }
     $disabled = $is_available ? '' : 'disabled="disabled"';
