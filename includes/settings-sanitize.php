@@ -856,6 +856,12 @@ function nppp_nginx_cache_settings_sanitize($input) {
         nppp_state_delete( 'varnish_warn' );
     }
 
+    // Cloudflare Cache Sync switched: retry at once, not after the park window or a throttled warning.
+    if ( function_exists( 'nppp_cloudflare_apo_reset_state' )
+        && ( $nppp_prev_settings['nppp_cloudflare_apo_sync'] ?? 'no' ) !== ( $sanitized_input['nppp_cloudflare_apo_sync'] ?? 'no' ) ) {
+        nppp_cloudflare_apo_reset_state();
+    }
+
     // Varnish-only mode switched: the parked-endpoint window and the recorded failure belong to the old mode.
     if ( function_exists( 'nppp_varnish_only_reset_state' )
         && ( $nppp_prev_settings['nppp_varnish_only_enabled'] ?? 'no' ) !== ( $sanitized_input['nppp_varnish_only_enabled'] ?? 'no' ) ) {
