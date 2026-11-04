@@ -161,6 +161,17 @@ fire_urls( $urls );
 ok( count( purge_reqs() ) === 2, 'stops after the first failed chunk' );
 ok( count( t_state( 'cf_pending' )['urls'] ) === 150, 'only the 150 unsent URLs are pending' );
 
+section( 'refused chunk (HTTP 400) does not drop the other chunks' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() );
+$calls = 0; t_script( '#POST .*/purge_cache#', function () use ( &$calls ) { $calls++; return $calls === 1 ? t_err( 400, 1012, 'bad url' ) : t_ok(); } );
+$urls = array(); for ( $i = 0; $i < 250; $i++ ) { $urls[] = "http://example.com/p$i/"; }
+fire_urls( $urls );
+ok( count( purge_reqs() ) === 3, 'all 3 chunks are attempted' );
+ok( t_state( 'cf_pending' ) === null && count( t_cron_events( $HOOK ) ) === 0, 'a refused chunk is not retried' );
+ok( count( t_logs( '#error: Cloudflare cache purge finished with errors: URLs=250, requests=3, failed=100\. HTTP 400#' ) ) === 1, 'one error line with the real refused count (100)' );
+ok( count( t_logs( '#success: Cloudflare cache purge completed: 150 URL\(s\) in 3 request\(s\)#' ) ) === 1, 'the 150 accepted URLs are reported' );
+ok( t_state( 'cf_last' )['ok'] === false && t_state( 'cf_last' )['status'] === 400, 'cf_last records the refusal' );
+
 section( 'next run merges what is pending (one request)' );
 t_reset(); t_enable(); t_happy();
 nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 1 );

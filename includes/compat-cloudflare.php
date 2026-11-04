@@ -1380,6 +1380,8 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
         $mobile    = 0;
         $leftover  = array();
         $fail      = null;
+        $rejected  = null;   // first chunk Cloudflare refused outright (HTTP 4xx / unsuccessful body)
+        $rejected_n = 0;     // URLs in refused chunks
         $budget_hit = false;
 
         foreach ( $chunks as $chunk ) {
@@ -1395,6 +1397,13 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
 
             $res = nppp_cloudflare_apo_send( $rt, 'POST', $path, array( 'files' => $chunk ), array(), nppp_cloudflare_apo_request_timeout( $deadline ) );
             $requests++;
+            if ( $res['kind'] === 'rejected' ) {
+                // Cloudflare refused THIS request (one bad URL, a per-request limit). Retrying it cannot help, but the
+                // other chunks are independent: keep going instead of dropping the rest of the job.
+                $rejected    = $rejected ?? $res;
+                $rejected_n += count( $chunk );
+                continue;
+            }
             if ( $res['kind'] !== 'ok' ) {
                 $fail     = $res;
                 $leftover = array_merge( $leftover, $chunk );
@@ -1414,6 +1423,11 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
                 }
                 $res2 = nppp_cloudflare_apo_send( $rt, 'POST', $path, array( 'files' => $files ), array(), nppp_cloudflare_apo_request_timeout( $deadline ) );
                 $requests++;
+                if ( $res2['kind'] === 'rejected' ) {
+                    $rejected    = $rejected ?? $res2;
+                    $rejected_n += count( $chunk );
+                    continue;
+                }
                 if ( $res2['kind'] !== 'ok' ) {
                     $fail     = $res2;
                     $leftover = array_merge( $leftover, $chunk );
@@ -1448,6 +1462,20 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
             }
         }
 
+        if ( $rejected !== null ) {
+            nppp_cloudflare_apo_log(
+                sprintf(
+                    /* translators: 1: URL count, 2: request count, 3: refused URL count, 4: error */
+                    __( 'Cloudflare cache purge finished with errors: URLs=%1$d, requests=%2$d, failed=%3$d. %4$s', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    count( $plan['urls'] ),
+                    (int) $requests,
+                    (int) $rejected_n,
+                    nppp_cloudflare_apo_failure_text( $rejected )
+                ),
+                'error'
+            );
+        }
+
         if ( $fail !== null ) {
             nppp_cloudflare_apo_handle_failed_job( $fail, false, $leftover, $tries, $zone, 'urls', $plan['urls'], $requests );
             return;
@@ -1463,6 +1491,11 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
                 'warning'
             );
             nppp_cloudflare_apo_defer( false, $leftover, $tries, 30, false );
+        }
+
+        if ( $rejected !== null ) {
+            nppp_cloudflare_apo_note_last( false, array_merge( $rejected, array( 'ctx' => 'urls', 'n' => $rejected_n ) ) );
+            return;
         }
 
         nppp_cloudflare_apo_note_last( true, array( 'kind' => 'ok', 'ctx' => 'urls', 'n' => $done ) );
