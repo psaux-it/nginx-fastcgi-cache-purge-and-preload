@@ -28,7 +28,9 @@
  *  - Every response is classified (ok, rate, server, network, auth, not_found, rejected). A purge that
  *    fails for a retryable reason (429, 5xx, network) or that arrives while the API is parked is NEVER
  *    lost: it is kept in the "cf_pending" state row and retried by ONE cron event
- *    (NPPP_CF_APO_RETRY_HOOK) or merged into the next listener run.
+ *    (NPPP_CF_APO_RETRY_HOOK) or merged into the next listener run. Work that is already queued is also
+ *    kept when a later run (or the retry run) ends on credentials / zone trouble (auth, no zone, stale zone
+ *    id); that put-back counts as a failed attempt, so NPPP_CF_APO_MAX_TRIES still bounds it.
  *
  *  - No user setting is ever written here. nppp_cloudflare_apo_status() reports what is going on.
  *
@@ -576,6 +578,53 @@ if ( ! function_exists( 'nppp_cloudflare_apo_defer' ) ) {
 
         nppp_cloudflare_apo_pending_add( $all, $urls, $tries );
         nppp_cloudflare_apo_schedule_retry( $delay );
+    }
+}
+
+if ( ! function_exists( 'nppp_cloudflare_apo_requeue_carried' ) ) {
+    /**
+     * Puts back work that was ALREADY queued when a run ends on an environmental dead end: credentials
+     * refused, no active zone, stale zone id. "Already queued" is the pending set a run took over (the next
+     * purge, a purge-all) or the whole job of a retry run. Dropping it there would leave stale pages on the
+     * edge for a cause that is often temporary (a token being fixed, a zone that is briefly not active).
+     *
+     * The put-back counts as a failed attempt, so NPPP_CF_APO_MAX_TRIES still ends it with one error line.
+     * Work that is new in this run keeps its own rules and is not queued here.
+     *
+     * @param array{all:bool,urls:string[]} $carried   The already queued part of this run.
+     * @param int                           $tries     Failed attempts so far.
+     * @param string[]|null                 $unsent    URL jobs: only carried URLs still in this (normalized) list
+     *                                                 are put back; null puts back all of them.
+     * @param string                        $zone_name Zone name used to normalize the carried URLs for $unsent.
+     */
+    function nppp_cloudflare_apo_requeue_carried( array $carried, int $tries, ?array $unsent = null, string $zone_name = '' ): void {
+        $all  = ! empty( $carried['all'] );
+        $urls = array();
+
+        if ( ! $all ) {
+            $list = ( isset( $carried['urls'] ) && is_array( $carried['urls'] ) ) ? $carried['urls'] : array();
+            $keep = ( $unsent !== null ) ? array_flip( $unsent ) : null;
+
+            foreach ( $list as $u ) {
+                if ( ! is_string( $u ) || $u === '' ) {
+                    continue;
+                }
+                if ( $keep !== null ) {
+                    $n = nppp_cloudflare_apo_normalize_url( $u, $zone_name );
+                    if ( $n === null || ! isset( $keep[ $n ] ) ) {
+                        continue;
+                    }
+                    $u = $n;
+                }
+                $urls[ $u ] = true;
+            }
+
+            if ( empty( $urls ) ) {
+                return;
+            }
+        }
+
+        nppp_cloudflare_apo_defer( $all, array_map( 'strval', array_keys( $urls ) ), $tries, 60, true );
     }
 }
 
@@ -1293,11 +1342,19 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
             return;
         }
 
+        // The part of this run that was queued before it started: the whole job of a retry run, or the pending
+        // set taken over below. It is never destroyed by an environmental dead end (see requeue_carried()).
+        $carried = array( 'all' => false, 'urls' => array() );
+        if ( $context === 'retry' ) {
+            $carried = array( 'all' => $all, 'urls' => $all ? array() : $urls );
+        }
+
         // Fold anything that is waiting into this run (one request instead of two).
         if ( $context !== 'retry' ) {
             $pending = nppp_cloudflare_apo_pending_claim();
             if ( $pending !== null ) {
-                $tries = max( $tries, $pending['tries'] );
+                $tries   = max( $tries, $pending['tries'] );
+                $carried = array( 'all' => $pending['all'], 'urls' => $pending['urls'] );
                 if ( $pending['all'] ) {
                     $all = true;
                     $ctx = 'all';
@@ -1322,6 +1379,8 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
             nppp_cloudflare_apo_note_last( false, array_merge( $z['fail'], array( 'ctx' => $ctx, 'n' => count( $urls ) ) ) );
             if ( $decision['retry'] ) {
                 nppp_cloudflare_apo_defer( $all, $urls, $tries, $decision['delay'], true );
+            } elseif ( $z['fail']['kind'] === 'auth' ) {
+                nppp_cloudflare_apo_requeue_carried( $carried, $tries );
             }
             return;
         }
@@ -1333,6 +1392,7 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
                 );
             }
             nppp_cloudflare_apo_note_last( false, array( 'kind' => 'no_zone', 'ctx' => $ctx, 'n' => count( $urls ) ) );
+            nppp_cloudflare_apo_requeue_carried( $carried, $tries );
             return;
         }
         $zone = $z['zone'];
@@ -1356,6 +1416,9 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
             }
 
             nppp_cloudflare_apo_handle_failed_job( $res, true, array(), $tries, $zone, $ctx );
+            if ( in_array( $res['kind'], array( 'auth', 'not_found' ), true ) ) {
+                nppp_cloudflare_apo_requeue_carried( $carried, $tries );
+            }
             return;
         }
 
@@ -1478,6 +1541,10 @@ if ( ! function_exists( 'nppp_cloudflare_apo_execute' ) ) {
 
         if ( $fail !== null ) {
             nppp_cloudflare_apo_handle_failed_job( $fail, false, $leftover, $tries, $zone, 'urls', $plan['urls'], $requests );
+            if ( in_array( $fail['kind'], array( 'auth', 'not_found' ), true ) ) {
+                // Only the carried URLs that were not purged yet; a chunk that Cloudflare accepted stays done.
+                nppp_cloudflare_apo_requeue_carried( $carried, $tries, $leftover, $zone['name'] );
+            }
             return;
         }
 

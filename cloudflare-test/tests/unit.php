@@ -140,6 +140,99 @@ ok( t_state( 'cf_pending' ) === null && count( t_cron_events( $HOOK ) ) === 0, '
 ok( count( t_logs( '#error: Cloudflare cache purge denied \(HTTP 403, code 10000#' ) ) === 1, 'error log names HTTP status and Cloudflare code' );
 ok( t_state( 'cf_park' ) > time() + 290, 'parked 300 s' );
 
+section( 'queued work survives a 403 at the zone lookup (taken over by the next purge)' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_err( 403, 10000, 'Authentication error' ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+fire_urls( array( 'http://example.com/new/' ) );
+$r = nppp_cloudflare_apo_pending_read();
+ok( $r !== null && $r['urls'] === array( 'http://example.com/old/' ), 'the queued URL is put back; the fresh URL is not queued (rule unchanged)' );
+ok( $r !== null && $r['tries'] === 1 && count( t_cron_events( $HOOK ) ) === 1, 'counted as one failed attempt, ONE retry event' );
+ok( count( purge_reqs() ) === 0, 'nothing was sent to purge_cache' );
+ok( count( t_logs( '#error: Cloudflare cache purge denied#' ) ) === 1, 'the credentials error is still logged' );
+t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_ok() ); reset_park();
+t_run_cron( $HOOK );
+$p = purge_reqs();
+ok( count( $p ) === 1 && ( $p[0]['body']['files'] ?? null ) === array( 'http://example.com/old/' ), 'credentials fixed: the retry event purges the queued URL' );
+ok( t_state( 'cf_pending' ) === null && count( t_cron_events( $HOOK ) ) === 0, 'queue and event cleared' );
+
+section( 'queued work survives "no active zone"' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_ok( array() ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+fire_urls( array( 'http://example.com/new/' ) );
+$r = nppp_cloudflare_apo_pending_read();
+ok( $r !== null && $r['urls'] === array( 'http://example.com/old/' ) && $r['tries'] === 1 && count( t_cron_events( $HOOK ) ) === 1, 'queued URL put back (fresh one is not), one failed attempt, ONE event' );
+ok( count( purge_reqs() ) === 0, 'nothing purged' );
+t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_ok() ); t_expire( 'cf_zone_miss' ); reset_park();
+t_run_cron( $HOOK );
+$p = purge_reqs();
+ok( count( $p ) === 1 && ( $p[0]['body']['files'] ?? null ) === array( 'http://example.com/old/' ), 'zone back: the retry event purges the queued URL' );
+
+section( 'a retry run that finds no zone keeps the job until the attempt limit' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_ok( array() ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+$kept = true;
+for ( $i = 1; $i < NPPP_CF_APO_MAX_TRIES; $i++ ) {
+    t_run_cron( $HOOK ); $r = nppp_cloudflare_apo_pending_read();
+    $kept = $kept && $r !== null && $r['tries'] === $i && count( t_cron_events( $HOOK ) ) === 1;
+}
+ok( $kept, 'kept with a growing attempt count and exactly ONE event until the last attempt' );
+t_run_cron( $HOOK );
+ok( count( t_logs( '#gave up after 6 attempts#' ) ) === 1, 'dropped with ONE error line at the limit' );
+ok( t_state( 'cf_pending' ) === null && count( t_cron_events( $HOOK ) ) === 0, 'pending and event cleared at the limit' );
+ok( count( zone_reqs() ) === 1, 'the negative zone memo keeps the retries off the network' );
+
+section( '403 on purge_cache: queued URLs are put back, fresh ones are not' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_err( 403, 10000, 'Authentication error' ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 2 );
+fire_urls( array( 'http://example.com/new/' ) );
+$r = nppp_cloudflare_apo_pending_read();
+ok( count( purge_reqs() ) === 1, 'one request, refused' );
+ok( $r !== null && $r['urls'] === array( 'http://example.com/old/' ) && $r['tries'] === 3, 'queued URL put back with the attempt count carried on (2 -> 3)' );
+ok( count( t_cron_events( $HOOK ) ) === 1 && nppp_cloudflare_apo_park_until() > time() + 290, 'ONE event; the API stays parked 300 s' );
+
+section( '403 on the second chunk: only the unsent queued URLs are put back' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() );
+$calls = 0; t_script( '#POST .*/purge_cache#', function () use ( &$calls ) { $calls++; return $calls === 1 ? t_ok() : t_err( 403, 10000, 'Authentication error' ); } );
+$urls = array(); for ( $i = 0; $i < 150; $i++ ) { $urls[] = "http://example.com/p$i/"; }
+nppp_cloudflare_apo_pending_add( false, $urls, 0 );
+t_run_cron( $HOOK );
+$r = nppp_cloudflare_apo_pending_read();
+ok( count( purge_reqs() ) === 2, 'two requests: one accepted, one refused' );
+ok( $r !== null && count( $r['urls'] ) === 50 && ! in_array( 'http://example.com/p0/', $r['urls'], true ) && in_array( 'http://example.com/p100/', $r['urls'], true ), 'the 100 purged URLs are not queued again; the 50 unsent are' );
+
+section( 'refused purge-all: queued URLs are put back; a queued purge-all stays a purge-all' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_err( 403, 10000, 'Authentication error' ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+do_action( 'nppp_purged_all', false );
+$r = nppp_cloudflare_apo_pending_read();
+ok( $r !== null && $r['all'] === false && $r['urls'] === array( 'http://example.com/old/' ), 'queued URL kept after a refused purge_everything' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_err( 403, 10000, 'Authentication error' ) );
+nppp_cloudflare_apo_pending_add( true, array(), 1 );
+fire_urls( array( 'http://example.com/new/' ) );
+$r = nppp_cloudflare_apo_pending_read();
+ok( $r !== null && $r['all'] === true && $r['tries'] === 2, 'queued purge-everything kept (it also covers the fresh URL)' );
+
+section( 'stale zone id (404/7003): queued URLs are put back and the zone is rediscovered' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_err( 404, 7003, 'Could not route' ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+fire_urls( array( 'http://example.com/new/' ) );
+$r = nppp_cloudflare_apo_pending_read();
+ok( $r !== null && $r['urls'] === array( 'http://example.com/old/' ) && t_state( 'cf_zone' ) === null, 'queued URL kept, cached zone forgotten' );
+
+section( 'unchanged rules next to the put-back' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_err( 503, 0, 'down' ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+fire_urls( array( 'http://example.com/new/' ) );
+$r = nppp_cloudflare_apo_pending_read();
+ok( $r !== null && count( $r['urls'] ) === 2 && in_array( 'http://example.com/new/', $r['urls'], true ) && in_array( 'http://example.com/old/', $r['urls'], true ) && $r['tries'] === 1 && count( t_cron_events( $HOOK ) ) === 1, '5xx: queued AND fresh URLs kept once (no duplicates, one attempt, ONE event)' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', t_err( 400, 1012, 'bad url' ) );
+nppp_cloudflare_apo_pending_add( false, array( 'http://example.com/old/' ), 0 );
+fire_urls( array( 'http://example.com/new/' ) );
+ok( t_state( 'cf_pending' ) === null && count( t_cron_events( $HOOK ) ) === 0, 'a refused request (400) is a content problem: nothing is put back' );
+t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_ok( array() ) );
+fire_urls( array( 'http://example.com/new/' ) );
+ok( t_state( 'cf_pending' ) === null && count( t_cron_events( $HOOK ) ) === 0, 'fresh work alone + no zone: still not queued' );
+
 section( 'network error: coarse reason, retried' );
 t_reset(); t_enable(); t_script( '#GET .*/zones\?#', t_zone_ok() ); t_script( '#POST .*/purge_cache#', new WP_Error( 'http_request_failed', 'cURL error 28: Connection timed out after 5001 milliseconds to 10.0.0.5:443' ) );
 fire_urls( array( 'http://example.com/a/' ) );
