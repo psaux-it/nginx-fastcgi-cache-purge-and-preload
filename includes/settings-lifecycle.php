@@ -24,9 +24,15 @@ function nppp_reset_plugin_settings_on_deactivation() {
     // holds a dead token and its POST is refused).
     wp_unschedule_hook('nppp_purged_all_deferred_event');
     delete_option('nppp_purged_all_deferred');
-    // ... and the crawl hold that mirrors it (a gated crawl must not wait for a follow-up that is gone).
+
     if (function_exists('nppp_http_purge_hold_release')) {
         nppp_http_purge_hold_release();
+    }
+
+    // Cloudflare sync: the retry event and the pending purges it would deliver.
+    wp_unschedule_hook('nppp_cloudflare_apo_retry_event');
+    if (function_exists('nppp_cloudflare_apo_cleanup')) {
+        nppp_cloudflare_apo_cleanup();
     }
 
     // Fail2ban retention cron. The recorded events themselves are kept — only
