@@ -183,6 +183,7 @@ function nppp_clear_scheduled_events_on_uninstall() {
         'npp_cache_preload_status_event',
         'nppp_index_updater_event',
         'nppp_purged_all_deferred_event',
+        'nppp_cloudflare_apo_retry_event',
         'nppp_f2b_cleanup_event',
         'nppp_f2b_enrich_event',
         'nppp_f2b_worker_event',
