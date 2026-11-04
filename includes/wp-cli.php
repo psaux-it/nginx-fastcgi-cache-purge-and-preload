@@ -1566,6 +1566,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             nppp_state_delete( 'varnish_breaker' );
             nppp_state_delete( 'varnish_warn' );
         }
+        // Cloudflare Cache Sync switched: forget the park window and warning throttles (pending purges stay).
+        if ( $key === 'nppp_cloudflare_apo_sync'
+            && $prev_value !== (string) $sanitized
+            && function_exists( 'nppp_cloudflare_apo_reset_state' ) ) {
+            nppp_cloudflare_apo_reset_state();
+        }
         // Varnish-only mode switched: the breaker window and the recorded failure belong to the old mode.
         if ( $key === 'nppp_varnish_only_enabled'
             && $prev_value !== (string) $sanitized
