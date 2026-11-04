@@ -2133,7 +2133,7 @@ function nppp_varnish_vo_hero( array $health ): string {
         . '<span class="nppp-vo-hero-sub">' . esc_html( $health['sub'] ) . '</span>'
         . '<span class="nppp-vo-checkmsg" role="status"></span>'
         . '</div>'
-        . '<button type="button" id="nppp-vo-check-now" class="nppp-vo-btn" title="' . esc_attr__( 'Ask Varnish for the status of the home page and of a sample of the crawled URLs (lookup only: nothing is fetched, cached or purged)', 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
+        . '<button type="button" id="nppp-vo-check-now" class="button button-primary nppp-vo-btn" title="' . esc_attr__( 'Ask Varnish for the status of the home page and of a sample of the crawled URLs (lookup only: nothing is fetched, cached or purged)', 'fastcgi-cache-purge-and-preload-nginx' ) . '">'
         . '<span class="dashicons dashicons-update" aria-hidden="true"></span>'
         . '<span class="nppp-vo-btntext">' . esc_html__( 'Check now', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>'
         . '</button>'
@@ -2735,10 +2735,14 @@ function nppp_varnish_vo_root(): string {
         $accs .= nppp_varnish_vo_acc( $p['id'], $p['title'], $p['state'], $p['summary'], $p['body'], $p['open'] );
     }
 
+    // The two blue section bands (plain h2, styled like the left panel's) keep this card in the same visual
+    // language as the Status Summary / Preload Progress / System Checks sections next to it.
     return '<div id="nppp-vo-root" class="nppp-vo-root">'
+        . '<h2>' . esc_html__( 'Varnish Health', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>'
         . nppp_varnish_vo_hero( nppp_varnish_vo_health( $s ) )
         . nppp_varnish_vo_kpis( $s )
         . nppp_varnish_vo_fresh_note( $s )
+        . '<h2>' . esc_html__( 'Details', 'fastcgi-cache-purge-and-preload-nginx' ) . '</h2>'
         . '<div class="nppp-vo-accs">' . $accs . '</div>'
         . '</div>';
 }

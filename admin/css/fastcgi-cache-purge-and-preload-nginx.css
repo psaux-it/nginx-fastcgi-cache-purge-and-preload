@@ -2131,9 +2131,10 @@ button.nppp-preload-btn[disabled] {
 }
 
 /* Varnish-only mode card (Status tab, right panel): health summary, three measure boxes, four sections.
-   Same palette as the left panel's rows; every rule is scoped to #nppp-nginx-info. */
+   Same palette, borders, row height and weights as the left panel; every rule is scoped to #nppp-nginx-info.
+   The card opens with a plain h2 (blue band, styled by "#nppp-nginx-info h2"), so its top lines up with the left panel. */
 #nppp-nginx-info .nppp-vo-root {
-    margin-top: 10px;
+    margin-top: 0;
 }
 
 /* States: the verdict colours shared by the rows, the summary and the dots */
@@ -2180,12 +2181,13 @@ button.nppp-preload-btn[disabled] {
     flex-wrap: wrap;
     align-items: center;
     gap: 12px 16px;
+    margin-top: 10px;
     padding: 16px 18px;
     background-color: #f6f7f7;
-    border: 1px solid #dcdcde;
+    border: 1px solid #ccc;
     border-left-width: 4px;
     border-left-color: #72aee6;
-    border-radius: 2px;
+    border-radius: 0;
 }
 #nppp-nginx-info .nppp-vo-hero-ok   { background-color: #edf7ed; border-color: #b8dfb8; border-left-color: #2b9a2b; }
 #nppp-nginx-info .nppp-vo-hero-warn { background-color: #fcf9e8; border-color: #f0e2a8; border-left-color: #dba617; }
@@ -2216,7 +2218,7 @@ button.nppp-preload-btn[disabled] {
 #nppp-nginx-info .nppp-vo-hero-title {
     display: block;
     font-size: 17px;
-    font-weight: 600;
+    font-weight: bold;
     line-height: 1.35;
     color: #1d2327;
 }
@@ -2238,41 +2240,22 @@ button.nppp-preload-btn[disabled] {
 }
 
 /* "Check now" */
+/* Size, padding and line-height come from WP's own .button (same as "Clear Plugin Cache" on the left): the
+   button is not a flex box and takes no padding of its own, only the icon is aligned the way core does it. */
 #nppp-nginx-info .nppp-vo-btn {
-    display: inline-flex;
     flex: 0 0 auto;
-    align-items: center;
-    gap: 6px;
-    min-height: 32px;
-    padding: 4px 12px;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.4;
-    color: #2271b1;
-    background-color: #fff;
-    border: 1px solid #2271b1;
-    border-radius: 3px;
     cursor: pointer;
 }
-#nppp-nginx-info .nppp-vo-btn:hover {
-    color: #135e96;
-    background-color: #f6f7f7;
-    border-color: #135e96;
-}
-#nppp-nginx-info .nppp-vo-btn:focus-visible {
-    outline: 2px solid #2271b1;
-    outline-offset: 2px;
-}
 #nppp-nginx-info .nppp-vo-btn[disabled] {
-    color: #72777c;
-    background-color: #f6f7f7;
-    border-color: #c3c4c7;
     cursor: default;
 }
 #nppp-nginx-info .nppp-vo-btn .dashicons {
     width: 18px;
     height: 18px;
+    margin: -3px 6px 0 -2px;
     font-size: 18px;
+    line-height: 18px;
+    vertical-align: middle;
 }
 #nppp-nginx-info .nppp-vo-btn.is-busy .dashicons {
     animation: nppp-vo-spin 1s linear infinite;
@@ -2301,8 +2284,8 @@ button.nppp-preload-btn[disabled] {
     min-width: 0;
     padding: 12px 14px;
     background-color: #fff;
-    border: 1px solid #dcdcde;
-    border-radius: 2px;
+    border: 1px solid #ccc;
+    border-radius: 0;
 }
 #nppp-nginx-info .nppp-vo-kpi-label {
     display: block;
@@ -2313,7 +2296,7 @@ button.nppp-preload-btn[disabled] {
     display: block;
     margin-top: 4px;
     font-size: 28px;
-    font-weight: 600;
+    font-weight: bold;
     line-height: 1.2;
     color: #1d2327;
     font-variant-numeric: tabular-nums;
@@ -2357,9 +2340,9 @@ button.nppp-preload-btn[disabled] {
     margin-top: 10px;
     padding: 8px 12px;
     background-color: #fff;
-    border: 1px solid #dcdcde;
+    border: 1px solid #ccc;
     border-left-width: 4px;
-    border-radius: 2px;
+    border-radius: 0;
 }
 #nppp-nginx-info .nppp-vo-fresh-ok   { border-left-color: #008000; }
 #nppp-nginx-info .nppp-vo-fresh-warn { border-left-color: #dba617; background-color: #fcf9e8; }
@@ -2381,7 +2364,7 @@ button.nppp-preload-btn[disabled] {
 #nppp-nginx-info .nppp-vo-fresh-title {
     display: block;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: bold;
     line-height: 1.4;
     color: #1d2327;
 }
@@ -2398,21 +2381,19 @@ button.nppp-preload-btn[disabled] {
 
 /* Sections: native <details>, closed line = title + short result */
 #nppp-nginx-info .nppp-vo-accs {
-    margin-top: 10px;
+    margin-top: 0;
 }
 #nppp-nginx-info .nppp-vo-acc {
     background-color: #fff;
-    border: 1px solid #dcdcde;
-}
-#nppp-nginx-info .nppp-vo-acc + .nppp-vo-acc {
-    margin-top: -1px;
+    border: 1px solid #ccc;
+    border-top: 0;
 }
 #nppp-nginx-info .nppp-vo-acc > summary {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px 10px;
-    padding: 13px 14px;
+    padding: 10px;
     font-size: 14px;
     list-style: none;
     cursor: pointer;
@@ -2436,21 +2417,21 @@ button.nppp-preload-btn[disabled] {
 }
 #nppp-nginx-info .nppp-vo-acc > summary:hover,
 #nppp-nginx-info .nppp-vo-acc[open] > summary {
-    background-color: #f6f7f7;
+    background-color: #f0f0f0;
 }
 #nppp-nginx-info .nppp-vo-acc[open] > summary {
-    border-bottom: 1px solid #dcdcde;
+    border-bottom: 1px solid #ccc;
 }
 #nppp-nginx-info .nppp-vo-acc > summary:focus-visible {
     outline: 2px solid #2271b1;
     outline-offset: -2px;
 }
 #nppp-nginx-info .nppp-vo-acc-title {
-    font-weight: 600;
+    font-weight: bold;
     color: #1d2327;
 }
 #nppp-nginx-info .nppp-vo-acc[open] .nppp-vo-acc-title {
-    color: #135e96;
+    color: #005a9e;
 }
 #nppp-nginx-info .nppp-vo-acc-sum {
     display: inline-flex;
@@ -2484,11 +2465,11 @@ button.nppp-preload-btn[disabled] {
 }
 #nppp-nginx-info .nppp-vo-acc-body td.action,
 #nppp-nginx-info .nppp-vo-acc-body td.status {
-    padding: 11px 14px;
+    padding: 10px;
     font-size: 14px;
     line-height: 1.5;
     vertical-align: top;
-    border-bottom-color: #dcdcde;
+    border-bottom-color: #ccc;
 }
 #nppp-nginx-info .nppp-vo-acc-body tr:last-child td {
     border-bottom: 0;
@@ -2553,7 +2534,7 @@ button.nppp-preload-btn[disabled] {
 #nppp-nginx-info .nppp-vo-covtext {
     display: block;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: bold;
 }
 #nppp-nginx-info .nppp-vo-bar {
     display: flex;
