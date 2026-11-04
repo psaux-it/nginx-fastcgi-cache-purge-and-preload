@@ -194,6 +194,7 @@ foreach ([
     'npp_cache_preload_status_event',
     'nppp_index_updater_event',
     'nppp_purged_all_deferred_event',
+    'nppp_cloudflare_apo_retry_event',
     'publish_future_post',
     'nppp_f2b_cleanup_event',
     'nppp_f2b_enrich_event',
