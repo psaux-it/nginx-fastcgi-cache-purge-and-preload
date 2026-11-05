@@ -167,7 +167,7 @@ function nppp_nginx_cache_settings_page() {
             }
         }
 
-        // Display RG badge when missing. Providing a Resource Group significantly reduces
+        // Display RG badge when missing. Providing ripgrep (rg) significantly reduces
         // load times for the Advanced tab and other expensive recursive operations.
         // Highly recommended for performance optimization.
         $nppp_show_rg_warn = ! $nppp_rg_installed;
@@ -370,7 +370,7 @@ function nppp_nginx_cache_settings_page() {
                                 </p>
                                 <div class="cache-paths-info">
                                     <p>
-                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the page and—if Related Pages are enabled—the Homepage, Shop Page, Category & Tag archives, Author archives, Date archives, and RSS feeds. Site-wide purges will trigger a global preload.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'If Auto Preload is ON, any single-item purge (automatic or manual) will immediately preload the purged page, and site-wide purges will trigger a global preload. Related Pages (Homepage, Shop Page, Category & Tag archives, Author archives, Date archives) are preloaded separately when "Preload Related Pages" is enabled under Purge Scope, and their RSS feeds are included only when "Preload Feeds" is also enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </p>
                                 </div>
                                 <?php nppp_nginx_cache_autopurge_triggers_callback(); ?>
@@ -414,7 +414,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php echo esc_html__( 'Synchronize the Redis Object Cache with the Nginx cache to keep both layers aligned.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
-                                    <?php echo esc_html__( 'Independent of "Auto Purge". When ON: "Purge All" (Admin, REST) also flushes the Redis object cache, but only if "Auto Preload" is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                    <?php echo esc_html__( 'Independent of "Auto Purge". When ON: "Purge All" (Admin Bar, REST, WP-CLI or a site-wide Auto Purge event) also flushes the Redis object cache, but only if "Auto Preload" is ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                 </p>
                                 <p class="description">
                                     <?php echo esc_html__( 'When ON: "Preload All" (Admin, REST, Cron) always flushes the Redis object cache.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
@@ -569,7 +569,7 @@ function nppp_nginx_cache_settings_page() {
                                 <p class="description"><?php echo esc_html__( 'Enable this feature to automatically preload the cache after a purge. This ensures fast load times by proactively caching content before the first visitor arrives.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'When enabled, your website will automatically rebuild the cache with the latest content, ensuring a high cache hit rate even for frequently changing pages.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 <p class="description"><?php echo esc_html__( 'This process is triggered after any purge: automatically via the Auto Purge feature, manually via "Purge All", or via a single-URL purge from the Admin Bar or Advanced Tab.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                <p class="description"><?php echo esc_html__( 'To trigger Preload Related Pages (Purge Scope) when Auto Purge is ON, this setting must be turned ON.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'This setting controls the preload of the purged page itself and the global preload after Purge All. Preload Related Pages (Purge Scope) has its own toggle and works independently of this setting.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                             </td>
                         </tr>
                         <tr valign="top">
@@ -615,7 +615,6 @@ function nppp_nginx_cache_settings_page() {
                                 </div>
                             </td>
                         </tr>
-                        </tr>
                         <tr valign="top">
                             <th scope="row">
                                 <span class="dashicons dashicons-rss"></span>
@@ -631,8 +630,8 @@ function nppp_nginx_cache_settings_page() {
                                     <p class="description"><?php echo esc_html__( 'Preload Nginx cache for feeds – main site feed, per‑post comment feeds, and taxonomy feeds.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'When enabled, feeds are preloaded during full-site preload operations (Preload All via UI, CRON, REST and CLI).', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'When enabled, manual single preload actions (Admin Bar/Advanced Tab) also preload associated feeds.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-									<p class="description"><?php echo esc_html__( 'Feeds are preloaded during manual purge actions when "Preload Related Pages" (Purge Scope) is enabled.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
-                                    <p class="description"><?php echo esc_html__( 'For auto purge actions, feeds are preloaded when both "Preload Related Pages" (Purge Scope) and "Preload Feeds" are enabled. Auto Preload is not required.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+									<p class="description"><?php echo esc_html__( 'After a single-URL purge (manual or automatic), related feeds are preloaded when both "Preload Related Pages" (Purge Scope) and "Preload Feeds" are enabled. Auto Preload is not required.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'When Auto Preload is ON, the feeds associated with the purged page itself (main, comments and taxonomy feeds) are preloaded together with it.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'Important: Ensure your Nginx configuration allows caching for feeds. If your server contains rules that bypass the cache for feed endpoints, caching will not work.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                                 <div class="cache-paths-info">
@@ -872,7 +871,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php nppp_get_active_cron_events(); ?>
                                 </ul>
                                 <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Enable this feature to automatically schedule cache preloading task at specified intervals.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Enable this feature to automatically schedule a Purge All followed by a cache Preload at specified intervals.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'This ensures that your website’s cache is consistently updated, optimizing performance and reducing server load.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'When enabled, your website will automatically refresh its cache according to the configured schedule, keeping content up-to-date and reducing load times for visitors.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                     <p class="description"><?php echo esc_html__( 'This feature is particularly useful for maintaining peak performance on dynamic websites with content that changes periodically.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
@@ -900,7 +899,7 @@ function nppp_nginx_cache_settings_page() {
                                 <ul class="description" style="color: #646970; font-size: 14px;">
                                     <li>
                                         <strong><?php echo esc_html__( 'Generate API Key:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
-                                        <?php echo esc_html__( 'Click to generate a new API Key. Also you can create your own 64-char API Key and Update Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                                        <?php echo esc_html__( 'Click to generate a new API Key. You can also enter your own API Key (64 hexadecimal characters: 0-9, a-f) and click Update Options', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                                     </li>
                                     <li>
                                         <strong><?php echo esc_html__( 'API Key:', 'fastcgi-cache-purge-and-preload-nginx' ); ?></strong>
@@ -954,13 +953,13 @@ function nppp_nginx_cache_settings_page() {
                                     <span id="nppp-test-regex-result" style="display:inline-block; margin-left:12px; vertical-align:middle;"></span>
                                 </p>
                                 <div class="key-regex-info">
-                                    <br><p class="description">⚡ <?php echo esc_html__('The default regex pattern parses the \'$host\' and \'$request_uri\' portions from nginx cache key lines and correctly handles all common standard formats automatically. Supported key formats:', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
+                                    <br><p class="description">⚡ <?php echo esc_html__('The default regex pattern parses the \'$host\' and \'$request_uri\' portions from nginx cache key lines. It handles the common formats below, as long as the key contains your site\'s own \'$host\'. Supported key formats:', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">✅ <code>$scheme$request_method$host$request_uri</code> &mdash; <?php echo esc_html__('most widely used fastcgi format — all HTTP methods supported', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
-                                    <p class="description">✅ <code>$scheme$proxy_host$request_uri</code> &mdash; <?php echo esc_html__('nginx default for proxy_cache setups, no request method in key', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">✅ <code>$scheme$host$request_uri</code> &mdash; <?php echo esc_html__('scheme-only variant with no request method', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">✅ <code>$scheme://$host$request_uri</code> &mdash; <?php echo esc_html__('explicit :// separator variant', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">✅ <code>$host$request_uri</code> &mdash; <?php echo esc_html__('bare host variant with no scheme', 'fastcgi-cache-purge-and-preload-nginx'); ?></p>
                                     <p class="description">✅ <code>$host$uri$is_args$args</code> &mdash; <?php echo esc_html__('bare host with query args, no scheme', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
+                                    <p class="description">❌ <strong><?php echo esc_html__('Not supported:', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong> <code>$scheme$proxy_host$request_uri</code> &mdash; <?php echo esc_html__('this is the nginx default for proxy_cache, but $proxy_host is the address of your backend, not your site domain, so cache files cannot be matched to your URLs. Set proxy_cache_key to \'$scheme$host$request_uri\' instead.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">⚡ <?php echo esc_html__('If you use a non-standard or complex \'_cache_key\' format, you must define a custom regex pattern to correctly parse \'$host\' and \'$request_uri\' portions in order to ensure proper plugin functionality.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">⚡ <?php echo esc_html__('For example, if your custom key format is \'$scheme$request_method$host$mobile_device_type$request_uri$is_args$args\', you will need to provide a corresponding regex pattern that accurately captures the \'$host\' and \'$request_uri\' parts.', 'fastcgi-cache-purge-and-preload-nginx'); ?></p><br>
                                     <p class="description">📌 <strong><?php echo esc_html__('Guidelines for creating a compatible regex:', 'fastcgi-cache-purge-and-preload-nginx'); ?></strong></p>
@@ -1118,7 +1117,7 @@ function nppp_nginx_cache_settings_page() {
                                     <?php nppp_nginx_cache_send_mail_callback(); ?>
                                 </div>
                                 <div class="key-regex-info">
-                                    <p class="description"><?php echo esc_html__( 'Enable this feature to receive email notifications about essential plugin activities, ensuring you stay informed about preload actions, cron task statuses, and general plugin updates.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                    <p class="description"><?php echo esc_html__( 'Enable this feature to receive an email report whenever a cache preload completes (scheduled, manual, REST API or WP-CLI), including URLs crawled, 404 errors and cache coverage.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
                                 </div>
                             </td>
                         </tr>
