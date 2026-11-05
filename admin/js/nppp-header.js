@@ -138,7 +138,12 @@
     _ro: null,
     L: { x:0, y:0, w:0, h:0, tail:0 },
     hasDrawn: false,
-    allowProgress: false
+    allowProgress: false,
+    // Accumulated noise phase. Integrating (instead of t * CFG.speed) keeps the
+    // ribbons continuous when CFG.speed changes on a mode/progress switch.
+    phase: 0,
+    flat: 1,         // current godmode flatten factor, shared with sampleY()
+    _gmPrev: false
   };
 
   function pickHost(){
@@ -169,16 +174,37 @@
     const L = state.L;
     state.ribbons.length = 0;
     for(let i=0;i<CFG.ribbons;i++){
-      const y = L.y + (L.h * (0.2 + 0.6*Math.random()));
+      const fy = 0.2 + 0.6*Math.random();   // vertical position as a fraction of header height
+      const y = L.y + (L.h * fy);
       const hue = CFG.hueStops[i % CFG.hueStops.length];
       state.ribbons.push({
-        y, baseY: y,
-        x: L.x + Math.random()*L.w,
+        y, baseY: y, fy,
         hue,
         amp: 1,
         seed: Math.random()*10000
       });
     }
+  }
+
+  // Keep the existing ribbons on resize (just re-fit them to the new height)
+  // instead of re-randomising their position on every resize event.
+  function layoutRibbons(){
+    if (state.ribbons.length !== CFG.ribbons) { resetRibbons(); return; }
+    const L = state.L;
+    for (const r of state.ribbons){
+      r.baseY = L.y + L.h * r.fy;
+      r.y = r.baseY;
+    }
+  }
+
+  // Current y of a drawn ribbon at x. Same formula as draw(), so anything that
+  // wants to "stand on a ribbon" (Walkie) really follows a drawn one.
+  function ribbonYAt(r, x){
+    const n = noise2D(
+      (x + r.seed) * CFG.noiseScale,
+      (r.baseY + state.phase) * CFG.noiseScale
+    );
+    return r.baseY + (n * 60 * r.amp * state.flat);
   }
 
   function resize(){
@@ -201,7 +227,7 @@
     state.canvas.style.height = state.H + 'px';
     state.ctx.setTransform(state.DPR, 0, 0, state.DPR, 0, 0);
 
-    resetRibbons();
+    layoutRibbons();
   }
 
   function schedulePulse(nowS){
@@ -221,7 +247,7 @@
   }
 
   // Map progress/mode to continuous parameters (speed, alpha, hue drift)
-  function applyProgressShaping(){
+  function applyProgressShaping(dt){
     if (CFG.disableProgressFX) return;
     const pct01 = clamp(state.pct/100, 0, 1);
 
@@ -236,10 +262,15 @@
     const baseAlpha = (state.mode === MODE.RUNNING) ? 0.26 : (state.mode===MODE.DONE ? 0.14 : 0.18);
     CFG.alpha = state.reduce ? CFG.reducedMotionFallbackAlpha : baseAlpha;
 
-    // global hue drift toward “completion blue” as pct→1
+    // global hue drift toward “completion blue” as pct→1.
+    // completionHueBias is in degrees/second and is scaled by dt, so the drift no
+    // longer depends on the display refresh rate (same speed as before at 60fps).
+    // Reduced-motion users get no drift.
+    if (state.reduce) return;
     const completionHueBias = lerp(+18, -80, Math.pow(pct01, 0.9)); // shifts cooler near 100%
+    const dh = completionHueBias * dt;
     for (const r of state.ribbons){
-      r.hue = ((r.hue + (completionHueBias/60)) % 360 + 360) % 360; // slow drift
+      r.hue = ((r.hue + dh) % 360 + 360) % 360; // slow drift
     }
   }
 
@@ -273,42 +304,61 @@
     const L = state.L;
     const t = nowS;
 
-    applyProgressShaping();
+    applyProgressShaping(dt);
+
+    // Noise phase is integrated so a CFG.speed change (mode / progress switch)
+    // only changes the drift RATE and never teleports the ribbons.
+    // Reduced-motion users get a frozen phase.
+    if (!state.reduce) state.phase += dt * CFG.speed * 1000;
+
+    // Godmode timers live here (we own dt); Walkie only flips window.NPPPAurora.__godmode.
+    // This keeps the ribbons correct even when Walkie is not running (mobile).
+    const G = window.NPPPAurora || API;
+    const _gmOn = !!G.__godmode;
+    if (_gmOn !== state._gmPrev) {
+      state._gmPrev = _gmOn;
+      if (_gmOn) G.__godmodeElapsed = 0;
+      G.__godmodeExiting = 0;
+    }
+    if (_gmOn) {
+      G.__godmodeElapsed = (G.__godmodeElapsed || 0) + dt;
+    } else if ((G.__godmodeExiting || 0) < 0.6) {
+      G.__godmodeExiting = (G.__godmodeExiting || 0) + dt;
+    }
+    const _gmElapsed = G.__godmodeElapsed || 0;
+    const _gmExiting = G.__godmodeExiting || 0;
+    // 0 → ribbons flat, 1 → full wave
+    const _gmFlat = _gmOn ? Math.max(0, 1 - Math.min(1, _gmElapsed / 0.8))
+                          : Math.min(1, _gmExiting / 0.6);
+    // 1 → godmode look (gold, glow, bright), 0 → normal look
+    const _gmProg = _gmOn ? Math.min(1, _gmElapsed / 0.8)
+                          : 1 - Math.min(1, _gmExiting / 0.6);
+    state.flat = _gmFlat;
+
+    const blurBoost = (!CFG.disableProgressFX && state.mode === MODE.RUNNING)
+      ? Math.floor(8 * clamp(state.pct/100,0,1))
+      : 0;
+    const shadowBlur = Math.min(40, 10 + blurBoost + _gmProg * 24);
+    const _ga = CFG.alpha * (1 + _gmProg * 3.0);
 
     for(const r of state.ribbons){
       const pathPoints = 120;
-      const pct01 = clamp(state.pct/100, 0, 1);
       const thickness = CFG.thickness * (0.8 + 0.4*Math.sin(t*0.7 + r.seed));
       const hue = r.hue;
       const sat = CFG.sat;
       const lig = CFG.light;
 
-      const _gmElapsed  = (window.NPPPAurora && window.NPPPAurora.__godmodeElapsed) || 0;
-      const _gmExiting  = (window.NPPPAurora && window.NPPPAurora.__godmodeExiting) || 0;
-      const _gmActive   = !!(window.NPPPAurora && window.NPPPAurora.__godmode);
-      const _gmFlatIn   = _gmActive  ? Math.max(0, 1 - Math.min(1, _gmElapsed / 0.8)) : 0;
-      const _gmFlatOut  = !_gmActive ? Math.min(1, _gmExiting / 0.6) : 0;
-      const _gmFlat     = _gmActive ? _gmFlatIn : _gmFlatOut;
-
       state.ctx.beginPath();
       for(let i=0;i<=pathPoints;i++){
         const u = i / pathPoints;
         const x = L.x + u * L.w;
-        const n = noise2D(
-          (x + r.seed) * CFG.noiseScale,
-          (r.baseY + t*1000*CFG.speed) * CFG.noiseScale
-        );
-        const y = r.baseY + (n * 60 * r.amp * _gmFlat);
+        const y = ribbonYAt(r, x);
         if(i===0) state.ctx.moveTo(x,y);
         else state.ctx.lineTo(x,y);
       }
 
       const grad = state.ctx.createLinearGradient(L.x, r.baseY, L.x + L.w, r.baseY);
-      const _gmOn      = !!(window.NPPPAurora && window.NPPPAurora.__godmode);
-      const _gmExitPct = !_gmOn ? Math.min(1, ((window.NPPPAurora && window.NPPPAurora.__godmodeExiting) || 0) / 0.6) : 0;
-      const _gmProg    = _gmOn ? Math.min(1, (window.NPPPAurora.__godmodeElapsed || 0) / 0.8) : (1 - _gmExitPct);
       const _gh = _gmOn ? lerp(hue, 45 + Math.sin(nowS * 5 + r.seed) * 15, _gmProg) : hue;
-      const _ga = CFG.alpha * (1 + _gmProg * 3.0);
       grad.addColorStop(0.00, hslaStr(_gh, sat, lig-6, _ga*0.55));
       grad.addColorStop(0.45, hslaStr(_gh, sat, lig,   _ga));
       grad.addColorStop(0.85, hslaStr(_gh, sat, lig-6, _ga*0.50));
@@ -318,19 +368,12 @@
       state.ctx.lineWidth = thickness;
       state.ctx.lineCap = 'round';
       state.ctx.shadowColor = hslaStr(hue, sat, lig, 0.44);
-      const blurBoost = (!CFG.disableProgressFX && state.mode === MODE.RUNNING)
-        ? Math.floor(8 * clamp(state.pct/100,0,1))
-        : 0;
-      const _gmGlowProg = _gmOn ? Math.min(1, (window.NPPPAurora.__godmodeElapsed || 0) / 0.8)
-                                 : Math.max(0, 1 - Math.min(1, ((window.NPPPAurora && window.NPPPAurora.__godmodeExiting) || 0) / 0.6));
-      const _gmGlow = _gmGlowProg * 24;
-      state.ctx.shadowBlur = Math.min(40, 10 + blurBoost + _gmGlow);
+      state.ctx.shadowBlur = shadowBlur;
       state.ctx.stroke();
 
       state.hasDrawn = true;
 
       r.amp = Math.max(1, r.amp - dt*0.25);
-      r.x += (Math.sin(t*0.6 + r.seed)*0.5);
     }
 
     // ambient autopulse
@@ -377,9 +420,14 @@
       // expose for the overlay patch to read, too
       try { window.NPPPAurora.__allowProgress = state.allowProgress; } catch(_){}
     },
+    // Y of drawn ribbon #i at host-local x, or null when the engine has no ribbons.
+    sampleY(x, i){
+      const n = state.ribbons.length;
+      if (!n) return null;
+      return ribbonYAt(state.ribbons[((i|0) % n + n) % n], x);
+    },
     dispose(){
       state.disposed = true;
-      window.removeEventListener('resize', resize);
       window.removeEventListener('nppp:preload-progress', _onProgressEvent);
       if (state.canvas) state.canvas.remove();
       if (state._dprTimer) { clearInterval(state._dprTimer); state._dprTimer = null; }
@@ -408,7 +456,11 @@
 
     const total = Number(data.total) || 0;
     const checked = Number(data.checked) || 0;
-    const pct = total > 0 ? clamp(Math.round((checked/total)*100), 0, 100) : (data.status==='done' ? 100 : 0);
+    // The server reports 'done' for an interrupted run too (log has no FINISHED
+    // marker). Same rule as the Status tab (isInterrupted): that is not a success.
+    const interrupted = data.status === 'done' && data.log_complete === false && checked > 0;
+    const finished = data.status === 'done' && !interrupted;
+    const pct = total > 0 ? clamp(Math.round((checked/total)*100), 0, 100) : (finished ? 100 : 0);
     setProgressPercent(pct);
 
     if (data.status === 'running'){
@@ -422,13 +474,15 @@
         // brief alert ping on errors without leaving RUNNING mode
         pulse(1.8, -110);
       }
-    } else if (data.status === 'done'){
+    } else if (finished){
       setMode(MODE.DONE);
       setProgressPercent(100);
       if (CFG.enablePulses){
         pulse(0.9, -42);
       }
     } else {
+      // idle / interrupted: drop the stale percentage too (Walkie already does)
+      setProgressPercent(0);
       setMode(MODE.IDLE);
     }
   }
@@ -449,10 +503,8 @@
     state.DPR = Math.max(1, Math.min(2, window.devicePixelRatio||1));
     resize();
 
-    // Events
-    window.addEventListener('resize', resize, {passive:true});
-
-    // Observe the host box size (width/height changes)
+    // Observe the host box size (width/height/DPR changes). No separate window
+    // 'resize' listener: it fired on every event and re-fitted unconditionally.
     const _ro = new ResizeObserver(()=>{
       const r = state.host.getBoundingClientRect();
       const W = Math.max(320, r.width | 0);
@@ -554,8 +606,17 @@
     inView: true,
     _io: null,
     _ro: null,
-    _then: 0
+    _then: 0,
+    _raf: 0,        // id of the single pending drawOverlay frame (0 = none)
+    dirty: false    // overlay canvas holds pixels that must be cleared
   };
+
+  // Schedule at most ONE pending frame. Without this every visibilitychange
+  // added another self-perpetuating rAF chain.
+  function tick(){
+    if (S._raf || S.disposed) return;
+    S._raf = requestAnimationFrame(drawOverlay);
+  }
 
   // ------------------------------
   // Host + overlay canvas
@@ -600,7 +661,11 @@
     const checked = Number(data.checked) || 0;
     S.errors = Number(data.errors) || 0;
 
-    const pct = total > 0 ? Math.round((checked/total)*100) : (data.status==='done' ? 100 : S.pct);
+    // 'done' + incomplete log = interrupted run, not a finished one
+    const interrupted = data.status === 'done' && data.log_complete === false && checked > 0;
+    const finished    = data.status === 'done' && !interrupted;
+
+    const pct = total > 0 ? Math.round((checked/total)*100) : (finished ? 100 : S.pct);
     S.pct = Math.max(0, Math.min(100, pct));
 
     const running = data.status === 'running';
@@ -623,7 +688,7 @@
       // starting → little kinetic nudge
       window.NPPPAurora.pulse(1.25, 12);
     }
-    if (S.running && !running && data.status === 'done' && CFG.effects.flare){
+    if (S.running && !running && finished && CFG.effects.flare){
       S.flare = 1; // arm finish flare
       window.NPPPAurora.pulse(0.9, -40); // cool settle
     }
@@ -653,11 +718,12 @@
   // Overlay draw
   // ------------------------------
   function drawOverlay(){
+    S._raf = 0;
     if (S.disposed) return;
 
     // Keep the loop alive even while paused
     if (!S.inView || document.hidden) {
-      requestAnimationFrame(drawOverlay);
+      tick();
       return;
     }
 
@@ -666,8 +732,8 @@
 
     // Gate: if progress visuals are disabled, keep canvas clear
     if (!window.NPPPAurora || !window.NPPPAurora.__allowProgress) {
-      if (S.ctx) S.ctx.clearRect(0, 0, S.W, S.H);
-      requestAnimationFrame(drawOverlay);
+      if (S.ctx && S.dirty) { S.ctx.clearRect(0, 0, S.W, S.H); S.dirty = false; }
+      tick();
       return;
     }
 
@@ -682,7 +748,10 @@
     const willDrawFlare   = CFG.effects.flare   && S.flare   > 0.0025;
 
     if (!willDrawSheen && !willDrawCrackle && !willDrawFlare) {
-      requestAnimationFrame(drawOverlay);
+      // Effects just ended: wipe the last frame once, otherwise the final
+      // sheen band stays frozen on the header.
+      if (S.dirty) { S.ctx.clearRect(0, 0, S.W, S.H); S.dirty = false; }
+      tick();
       return;
     }
 
@@ -691,6 +760,7 @@
 
     const ctx = S.ctx;
     ctx.clearRect(0,0,S.W,S.H);
+    S.dirty = true;
     const scale = Math.min(3, dt / FRAME_MS);
 
     // SHEEN
@@ -734,7 +804,7 @@
     }
 
     // continue loop
-    requestAnimationFrame(drawOverlay);
+    tick();
   }
 
   // ------------------------------
@@ -777,13 +847,16 @@
     S._ro = _ro;
 
     window.addEventListener('resize', resize, {passive:true});
-    requestAnimationFrame(drawOverlay);
+    tick();
 
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         S.nextHeartbeatAt = performance.now();
       } else {
-        requestAnimationFrame(drawOverlay);
+        // The loop keeps itself alive while hidden; tick() is a no-op if a frame
+        // is already pending, so this can never start a second chain.
+        S._then = 0;
+        tick();
       }
     }, { passive: true });
 
@@ -1119,6 +1192,16 @@
     eyeOffsetX:0, eyeOffsetY:0,
     introduced: false,
     matrixDrops: [],
+    ribbonIdx: (Math.random() * 4) | 0,   // which drawn ribbon Walkie stands on
+    _fbFrac: 0,                           // fallback ribbon height (fraction of H), set once
+    _lastErrors: 0,                       // error count seen by the previous progress event
+    small: false, _slept: false,          // narrow-viewport sleep state
+    _cx: null, _cy: null,                 // last raw pointer position (rect is read once per frame)
+    speechState: '',                      // state that was active when the current bubble line was said
+    pendingMs: 0, msLine: '',             // milestone waiting for Walkie to be back in 'walk' / its visible line
+    holdTimer: 0,                         // no random events while a milestone line is on screen
+    _seen: false,                         // saw a progress event since the Status tab became active
+    _gmK: 0                               // godmode lift / aura envelope (0..1), eased on every exit path
   };
 
   /* =====================================================================
@@ -1139,8 +1222,50 @@
     if (!force && S.speechTimer > 1.2) return;
     S.speechText  = text;
     S.speechTimer = (dur !== undefined && dur !== null) ? dur : autoDuration(text);
+    S.speechState = S.state;      // remember which state this line belongs to
+  }
+  function clearSpeech() {
+    S.speechText = ''; S.speechTimer = 0; S.speechState = ''; S.msLine = '';
+  }
+
+  // How long each timed state lasts (seconds). Single source of truth for the
+  // guards in updateState() and for anything that eases in/out of a state.
+  var STATE_DUR = {
+    panic: 2.0, celebrate: 5.0, sneeze: 1.2, philosophy: 3.5, moonwalk: 3.0, ghost: 4.5,
+    nap: 2.8, dizzy: 2.2, angry: 3.5, dance: 3.5, stuck: 2.4, sprint: 2.3, glitch: 1.5,
+    cors: 1.8, timeout: 3.0, deflate: 3.0, ninja: 4.5, hacker: 4.5, godmode: 4.5, trip: 1.5
+  };
+
+  // ONE place for every state change, so exit clean-up and the bubble can never
+  // disagree with the state. A line that was said for the old state is dropped
+  // (it used to survive when another state was entered by a progress event,
+  // a click, or a non-forced say() that lost against an idle quip). The caller
+  // says the new state's line AFTER this call.
+  //   natural=true : the state simply timed out (trip keeps its line + stars)
+  function setState(next, natural) {
+    var prev = S.state;
+    if (prev === 'hacker' && next !== 'hacker') S.matrixDrops = [];
+    if (prev === 'angry') S.angerTime = 0;
+    if (prev === 'trip' && !natural) { S.stars = []; S.starTimer = 0; S.tripAngle = 0; }
+    if (!(natural && prev === 'trip')) clearSpeech();
+    S.state = next; S.stateTimer = 0;
+  }
+  // Back to a calm baseline (narrow viewport, dispose): no state, props or line left over.
+  function resetTransient() {
+    setState('walk');
+    S.stars = []; S.starTimer = 0; S.tripAngle = 0;
+    S.matrixDrops = []; S.alienBeam = 0;
+    S.pendingMs = 0; S.holdTimer = 0; S._gmK = 0;
   }
   function ribbonY(x, tSec) {
+    // Prefer a ribbon the core engine really draws, so Walkie walks on it
+    // (same noise table, phase, amplitude and godmode flattening).
+    var A = window.NPPPAurora;
+    if (A && typeof A.sampleY === 'function') {
+      var cy = A.sampleY(x, S.ribbonIdx);
+      if (cy !== null && cy === cy) return cy;
+    }
+    // Fallback when the core engine has no ribbons: private ribbon.
     const n = noise2D(
       (x + S.ribbonSeed) * 0.0018,
       (S.ribbonBaseY + tSec * 1000 * 0.20) * 0.0018
@@ -1173,8 +1298,12 @@
     S.canvas.style.width  = S.W + 'px';
     S.canvas.style.height = S.H + 'px';
     S.ctx.setTransform(S.DPR, 0, 0, S.DPR, 0, 0);
-    S.ribbonBaseY = S.H * 0.4 + Math.random() * S.H * 0.2;
-    S.ribbonSeed  = Math.random() * 10000;
+    // Pick the fallback ribbon once; later resizes only re-fit it to the new height.
+    if (!S._fbFrac) {
+      S._fbFrac    = 0.4 + Math.random() * 0.2;
+      S.ribbonSeed = Math.random() * 10000;
+    }
+    S.ribbonBaseY = S.H * S._fbFrac;
   }
 
   /* =====================================================================
@@ -1661,7 +1790,9 @@
      ===================================================================== */
 
   var _supportsRoundRect = null;
-  var _textW = (typeof Map === 'function') ? new Map() : null;
+  // Word-wrap + width are computed once per (text, max width) instead of
+  // calling measureText for every word on every frame while a bubble is shown.
+  var _wrapKey = '', _wrapLines = null, _wrapBW = 0;
 
   function drawBubble(ctx, x, y, text, isThought) {
     if (!text) return;
@@ -1673,30 +1804,27 @@
     var maxBW = Math.min(S.W - 16, 210);
     var margin = 6;
 
-    // Word-wrap
-    var words = text.split(' '), lines = [], cur = '';
-    for (var wi = 0; wi < words.length; wi++) {
-      var test = cur ? cur + ' ' + words[wi] : words[wi];
-      if (ctx.measureText(test).width > maxBW - pad * 2 && cur) { lines.push(cur); cur = words[wi]; }
-      else { cur = test; }
-    }
-    if (cur) lines.push(cur);
+    var key = maxBW + '|' + text;
+    if (key !== _wrapKey) {
+      // Word-wrap
+      var words = text.split(' '), wrapped = [], cur = '';
+      for (var wi = 0; wi < words.length; wi++) {
+        var test = cur ? cur + ' ' + words[wi] : words[wi];
+        if (ctx.measureText(test).width > maxBW - pad * 2 && cur) { wrapped.push(cur); cur = words[wi]; }
+        else { cur = test; }
+      }
+      if (cur) wrapped.push(cur);
 
-    // Measure widest line (cached)
-    var bw = 0;
-    for (var li = 0; li < lines.length; li++) {
-      var lw;
-      if (_textW) {
-        lw = _textW.get(lines[li]);
-        if (lw === undefined) {
-          lw = ctx.measureText(lines[li]).width;
-          if (_textW.size > 120) _textW.clear();
-          _textW.set(lines[li], lw);
-        }
-      } else { lw = ctx.measureText(lines[li]).width; }
-      if (lw > bw) bw = lw;
+      // Widest line
+      var widest = 0;
+      for (var li = 0; li < wrapped.length; li++) {
+        var lw = ctx.measureText(wrapped[li]).width;
+        if (lw > widest) widest = lw;
+      }
+      _wrapKey = key; _wrapLines = wrapped; _wrapBW = widest + pad * 2;
     }
-    bw += pad * 2;
+    var lines = _wrapLines;
+    var bw = _wrapBW;
     var bh = lineH * lines.length + pad * 2;
 
     var HR  = CFG.headRadius;
@@ -1889,39 +2017,65 @@
   /* =====================================================================
      Progress event
      ===================================================================== */
+  function milestoneOf(p) { return p >= 75 ? 75 : p >= 50 ? 50 : p >= 25 ? 25 : 0; }
+
   function onProgress(ev) {
     if (!ev || !ev.detail) return;
+    // Same gate as the core engine / overlay: ignore progress while the Status tab is not active.
+    if (window.NPPPAurora && !window.NPPPAurora.__allowProgress) return;
     var d = ev.detail;
     var total = Number(d.total) || 0, checked = Number(d.checked) || 0;
+    var prevErrors = S._lastErrors;
     S.errors  = Number(d.errors) || 0;
-    S.pct     = total > 0 ? Math.round((checked / total) * 100) : (d.status === 'done' ? 100 : S.pct);
+    // The server reports 'done' for an interrupted run too (no FINISHED marker in the log).
+    // Same rule as the Status tab (isInterrupted): that is not a success.
+    var interrupted = d.status === 'done' && d.log_complete === false && checked > 0;
+    var finished    = d.status === 'done' && !interrupted;
+    S.pct     = total > 0 ? Math.round((checked / total) * 100) : (finished ? 100 : S.pct);
     var wasRunning = S.running;
     S.running = d.status === 'running';
 
     if (!wasRunning && S.running) {
-      S.state = 'walk'; S.stateTimer = 0;
-      S.speechText = ''; S.speechTimer = 0; S.nextSpeech = 2;
-      S.lastMilestone = 0;
+      if (S._seen) {
+        // A run really started while we were watching: clean start.
+        setState('walk');
+        S.nextSpeech = 2;
+        S.lastMilestone = 0;
+        prevErrors = 0;            // new run: every error counts as new
+      } else {
+        // We joined a run that was already going (page load, or back on the Status
+        // tab). Its errors and milestones are history, not news: no panic for old
+        // errors, no replay of milestones that were already announced.
+        prevErrors = S.errors;
+        S.lastMilestone = milestoneOf(S.pct);
+      }
+      S.pendingMs = 0;
     }
-    // Reset speed on ANY non-running state (stale log, done, interrupted, idle)
-    if (!S.running && d.status !== 'done') S.pct = 0;
-    if (wasRunning && !S.running && d.status === 'done') {
-      S.state = 'celebrate'; S.stateTimer = 0;
+    S._seen = true;
+    // Reset speed on ANY non-running state (stale log, interrupted, idle) except a real finish
+    if (!S.running && !finished) S.pct = 0;
+    if (!S.running) {
+      // The run is over: a milestone that is queued or still on screen is stale.
+      S.pendingMs = 0;
+      if (S.msLine && S.speechText === S.msLine) clearSpeech();
+    }
+    if (wasRunning && !S.running && finished) {
+      setState('celebrate');
       say(pick(CFG.celebrateSpeech), 4, true);
     }
-    // Guard: transition into panic only once per error burst — not on every tick
-    if (S.running && S.errors > 0 && S.state !== 'panic' && S.state !== 'angry') {
-      S.state = 'panic'; S.stateTimer = 0;
+    // errors is cumulative (counted over the whole log), so panic only when it
+    // INCREASED since the last event, not on every tick after the first error.
+    if (S.running && S.errors > prevErrors && S.state !== 'panic' && S.state !== 'angry') {
+      setState('panic');
       say(pick(CFG.panicSpeech), 2, true);
     }
-    // Milestone speech at 25 / 50 / 75 % — fires once each, force overrides guard
+    S._lastErrors = S.errors;
+    // Milestone at 25 / 50 / 75 % — announced once each. It is only QUEUED here;
+    // draw() says it when Walkie is back in 'walk', so a panic / nap / ghost bubble
+    // is never replaced by (or mixed with) progress news.
     if (S.running) {
-      var ms = S.pct >= 75 ? 75 : S.pct >= 50 ? 50 : S.pct >= 25 ? 25 : 0;
-      if (ms && ms > S.lastMilestone) {
-        S.lastMilestone = ms;
-        var bank = ms === 75 ? CFG.milestone75 : ms === 50 ? CFG.milestone50 : CFG.milestone25;
-        say(pick(bank), 4, true);
-      }
+      var ms = milestoneOf(S.pct);
+      if (ms && ms > S.lastMilestone) { S.lastMilestone = ms; S.pendingMs = ms; }
     }
   }
 
@@ -1940,30 +2094,14 @@
     if (st !== 'walk') S.stateTimer += dt;
     if (st === 'angry') S.angerTime += dt;
 
-    // Transition guards
-    if (st === 'panic'      && S.stateTimer > 2.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'celebrate'  && S.stateTimer > 5.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'sneeze'     && S.stateTimer > 1.2) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'philosophy' && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'moonwalk'   && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'ghost'      && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'nap'        && S.stateTimer > 2.8) { S.state = 'walk'; S.stateTimer = 0; say(pick(CFG.napWakeSpeech), 1.8); }
-    if (st === 'dizzy'      && S.stateTimer > 2.2) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'angry'      && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; S.angerTime = 0; }
-    if (st === 'dance'      && S.stateTimer > 3.5) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'stuck'      && S.stateTimer > 2.4) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'sprint'     && S.stateTimer > 2.3) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'glitch'     && S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'cors'       && S.stateTimer > 1.8) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'timeout'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'deflate'    && S.stateTimer > 3.0) { S.state = 'walk'; S.stateTimer = 0; }
-    if (st === 'ninja'      && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'hacker'     && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.matrixDrops = []; S.speechText = ''; }
-    if (st === 'godmode'    && S.stateTimer > 4.5) { S.state = 'walk'; S.stateTimer = 0; S.speechText = ''; }
-    if (st === 'trip') {
-      S.tripAngle *= 0.88;
-      if (S.stateTimer > 1.5) { S.state = 'walk'; S.stateTimer = 0; }
+    // Transition guards (durations: STATE_DUR). Every exit goes through setState(),
+    // so the bubble of the finished state is dropped together with the state.
+    if (st === 'trip') S.tripAngle *= Math.pow(0.88, dt * 60);   // frame-rate independent (was 0.88 per frame)
+    if (st !== 'walk' && S.stateTimer > STATE_DUR[st]) {
+      setState('walk', true);
+      if (st === 'nap') say(pick(CFG.napWakeSpeech), 1.8, true);
     }
+    if (S.holdTimer > 0) S.holdTimer -= dt;
 
     // orbiting stars
     if (S.stars.length) {
@@ -2022,7 +2160,7 @@
     if (S.bananaX > -500 && st === 'walk' && Math.abs(S.walkerX - S.bananaX) < 14) {
       S.bananaX     = -9999;
       S.bananaTimer = 18 + Math.random() * 22;
-      S.state = 'trip'; S.stateTimer = 0; S.tripAngle = 1.1;
+      setState('trip'); S.tripAngle = 1.1;
       S.stars = (function() {
         var arr = [];
         for (var i = 0; i < 5; i++) {
@@ -2036,28 +2174,31 @@
       return;
     }
 
-    // random events (walk only)
-    if (st === 'walk') {
+    // random events (walk only). Entering a state always shows THAT state's
+    // line (forced): a non-forced say() used to lose against an idle quip that
+    // was still on screen, leaving e.g. a nap with "Who put me on a treadmill?".
+    // Not while a milestone line is still being read (holdTimer).
+    if (st === 'walk' && S.holdTimer <= 0) {
       var _sc = Math.min(2.0, dt * 60);
       var r = Math.random();
-      if      (r < 0.000303 * _sc) { S.state='sneeze';     S.stateTimer=0; say(pick(CFG.sneezeSpeech), 2); }
-      else if (r < 0.000525 * _sc) { S.state='moonwalk';   S.stateTimer=0; say(pick(CFG.moonwalkSpeech), 2.5); }
-      else if (r < 0.000782 * _sc) { S.state='philosophy'; S.stateTimer=0; say(pick(CFG.philosophySpeech), 3.5); }
-      else if (r < 0.000980 * _sc) { S.state='ghost';      S.stateTimer=0; S.alienBeam=0; say(pick(CFG.alienSpeech), 3.5); }
-      else if (r < 0.001148 * _sc) { S.state='nap';        S.stateTimer=0; say(pick(CFG.napSpeech), 2.5); }
-      else if (r < 0.001451 * _sc) { S.state='dizzy';      S.stateTimer=0; say(pick(CFG.dizzyQuips), 1.8); }
-      else if (r < 0.001618 * _sc) { S.state='trip'; S.stateTimer=0; S.tripAngle=0.55; S.stars=(function(){var a=[];for(var _i=0;_i<3;_i++){var _sa=_i*Math.PI*2/3;a.push({angle:_sa,x:Math.cos(_sa)*13,y:Math.sin(_sa)*9-CFG.headRadius*1.6});}return a;}()); S.starTimer=1.5; say(pick(CFG.nppTripSpeech), null, true); }
-      else if (r < 0.001951 * _sc) { S.state='dance';      S.stateTimer=0; say(pick(CFG.danceSpeech)); }
-      else if (r < 0.002189 * _sc) { S.state='stuck';      S.stateTimer=0; say(pick(CFG.stuckSpeech)); }
-      else if (r < 0.002360 * _sc) { S.state='sprint';     S.stateTimer=0; say(pick(CFG.sprintSpeech)); }
+      if      (r < 0.000303 * _sc) { setState('sneeze');     say(pick(CFG.sneezeSpeech), 2, true); }
+      else if (r < 0.000525 * _sc) { setState('moonwalk');   say(pick(CFG.moonwalkSpeech), 2.5, true); }
+      else if (r < 0.000782 * _sc) { setState('philosophy'); say(pick(CFG.philosophySpeech), 3.5, true); }
+      else if (r < 0.000980 * _sc) { setState('ghost');      S.alienBeam=0; say(pick(CFG.alienSpeech), 3.5, true); }
+      else if (r < 0.001148 * _sc) { setState('nap');        say(pick(CFG.napSpeech), 2.5, true); }
+      else if (r < 0.001451 * _sc) { setState('dizzy');      say(pick(CFG.dizzyQuips), 1.8, true); }
+      else if (r < 0.001618 * _sc) { setState('trip'); S.tripAngle=0.55; S.stars=(function(){var a=[];for(var _i=0;_i<3;_i++){var _sa=_i*Math.PI*2/3;a.push({angle:_sa,x:Math.cos(_sa)*13,y:Math.sin(_sa)*9-CFG.headRadius*1.6});}return a;}()); S.starTimer=1.5; say(pick(CFG.nppTripSpeech), null, true); }
+      else if (r < 0.001951 * _sc) { setState('dance');      say(pick(CFG.danceSpeech), null, true); }
+      else if (r < 0.002189 * _sc) { setState('stuck');      say(pick(CFG.stuckSpeech), null, true); }
+      else if (r < 0.002360 * _sc) { setState('sprint');     say(pick(CFG.sprintSpeech), null, true); }
       else if (r < 0.002799 * _sc) { say(pick(CFG.aiEgoSpeech)); }
-      else if (r < 0.003037 * _sc) { S.state='glitch';     S.stateTimer=0; say(pick(CFG.glitchSpeech), 1.5); }
-      else if (r < 0.003222 * _sc) { S.state='cors';       S.stateTimer=0; say(pick(CFG.corsSpeech), 1.6, true); }
-      else if (r < 0.003430 * _sc) { S.state='timeout';    S.stateTimer=0; say(pick(CFG.timeoutSpeech)); }
-      else if (r < 0.003640 * _sc) { S.state='deflate';    S.stateTimer=0; say(pick(CFG.deflateSpeech)); }
-      else if (r < 0.003840 * _sc) { S.state='ninja';      S.stateTimer=0; say(pick(CFG.ninjaSpeech), 4.2, true); }
-      else if (r < 0.004040 * _sc) { S.state='hacker';     S.stateTimer=0; S.matrixDrops = initMatrixDrops(); say(pick(CFG.hackerSpeech), 4.2, true); }
-      else if (r < 0.004150 * _sc) { S.state='godmode';    S.stateTimer=0; say(pick(CFG.godmodeSpeech), 4, true); }
+      else if (r < 0.003037 * _sc) { setState('glitch');     say(pick(CFG.glitchSpeech), 1.5, true); }
+      else if (r < 0.003222 * _sc) { setState('cors');       say(pick(CFG.corsSpeech), 1.6, true); }
+      else if (r < 0.003430 * _sc) { setState('timeout');    say(pick(CFG.timeoutSpeech), null, true); }
+      else if (r < 0.003640 * _sc) { setState('deflate');    say(pick(CFG.deflateSpeech), null, true); }
+      else if (r < 0.003840 * _sc) { setState('ninja');      say(pick(CFG.ninjaSpeech), 4.2, true); }
+      else if (r < 0.004040 * _sc) { setState('hacker');     S.matrixDrops = initMatrixDrops(); say(pick(CFG.hackerSpeech), 4.2, true); }
+      else if (r < 0.004150 * _sc) { setState('godmode');    say(pick(CFG.godmodeSpeech), 4, true); }
     }
   }
 
@@ -2069,22 +2210,42 @@
     if (!S.inView || document.hidden) { requestAnimationFrame(draw); return; }
     if (!document.body.contains(S.host)) { dispose(); return; }
 
+    // Narrow viewport (phone, rotation, split-screen): stay asleep, draw nothing.
+    if (S.small) {
+      if (!S._slept) { S.ctx.clearRect(0, 0, S.W, S.H); S._slept = true; }
+      S._then = nowMs;
+      requestAnimationFrame(draw);
+      return;
+    }
+    S._slept = false;
+
     var dt = Math.min(0.05, (nowMs - (S._then || nowMs)) / 1000);
     S._then = nowMs;
     S.animTime += dt;
-    // Godmode flag + elapsed sync → Aurora core reads these
+
+    // Godmode: Walkie only publishes the flag. The aurora core owns the
+    // elapsed/exiting timers (it already has dt), so the ribbons stay correct
+    // even when Walkie is not running.
     if (window.NPPPAurora) {
       var _gmNow = S.state === 'godmode';
-      if (_gmNow !== !!window.NPPPAurora.__godmode) {
-        window.NPPPAurora.__godmode = _gmNow;
-        if (_gmNow) { window.NPPPAurora.__godmodeElapsed = 0; window.NPPPAurora.__godmodeExiting = 0; }
-        else        { window.NPPPAurora.__godmodeExiting = 0; }
-      }
-      if (_gmNow) {
-        window.NPPPAurora.__godmodeElapsed = (window.NPPPAurora.__godmodeElapsed || 0) + dt;
-      } else if (!_gmNow && (window.NPPPAurora.__godmodeExiting || 0) < 0.6) {
-        window.NPPPAurora.__godmodeExiting = (window.NPPPAurora.__godmodeExiting || 0) + dt;
-      }
+      if (_gmNow !== !!window.NPPPAurora.__godmode) window.NPPPAurora.__godmode = _gmNow;
+    }
+
+    // Progress went away (left the Status tab): drop stale run state so Walkie
+    // stops walking at progress speed / reacting to an old run. _seen is cleared
+    // too, so coming back mid-run is treated as JOINING that run (no panic for old
+    // errors, no replayed milestones) instead of as a brand new one.
+    if ((S.running || S._seen) && window.NPPPAurora && !window.NPPPAurora.__allowProgress) {
+      S.running = false; S.pct = 0; S.lastMilestone = 0; S._lastErrors = 0; S._seen = false;
+      S.pendingMs = 0;
+      if (S.msLine && S.speechText === S.msLine) clearSpeech();
+    }
+
+    // Pointer position -> header-local coords: one layout read per frame at most.
+    if (S._cx !== null) {
+      var _hr = S.host.getBoundingClientRect();
+      S.mouseX = S._cx - _hr.left;
+      S.mouseY = S._cy - _hr.top;
     }
     var t    = S.animTime;
     var tSec = nowMs / 1000;
@@ -2131,24 +2292,35 @@
     yBase = Math.max(S._topM | 0, Math.min(S.H - bottomMargin, yBase));
 
     // Godmode levitation: explicit lift applied AFTER the normal clamp so he
-    // can rise above the ribbon-noise position. Eased in/out over 0.4s at
-    // each end of the 4.5s state to avoid a positional "pop".
-    if (S.state === 'godmode') {
-      var _gIn   = Math.min(1, S.stateTimer * 2.5);
-      var _gOut  = Math.min(1, (4.5 - S.stateTimer) * 2.5);
-      var _gEase = Math.max(0, Math.min(_gIn, _gOut));
-      yBase -= _gEase * (10 + Math.sin(t * 1.5) * 4);
-    }
+    // can rise above the ribbon-noise position. S._gmK ramps 0.4s in at the start
+    // and 0.4s out at the end of the state, and it also ramps out when the state
+    // is cut short (progress event, click, narrow viewport) - the lift used to
+    // vanish in one frame there (~12px pop).
+    var _gmWant = S.state === 'godmode' && (STATE_DUR.godmode - S.stateTimer) > 0.4;
+    S._gmK = Math.max(0, Math.min(1, S._gmK + (_gmWant ? 1 : -1) * dt * 2.5));
+    if (S._gmK > 0) yBase -= S._gmK * (10 + Math.sin(t * 1.5) * 4);
 
     S.curY = yBase;
 
     // Update state machine
     updateState(dt);
 
+    // Queued milestone: said only when Walkie is calm ('walk'), and dropped if the
+    // run ended meanwhile. holdTimer keeps random events from stealing the bubble.
+    if (S.pendingMs) {
+      if (!S.running) S.pendingMs = 0;
+      else if (S.state === 'walk') {
+        var _bank = S.pendingMs === 75 ? CFG.milestone75 : S.pendingMs === 50 ? CFG.milestone50 : CFG.milestone25;
+        var _line = pick(_bank);
+        say(_line, 4, true);
+        S.msLine = _line; S.holdTimer = 4.2; S.pendingMs = 0;
+      }
+    }
+
     // Speech tick
     if (S.speechTimer > 0) {
       S.speechTimer -= dt;
-      if (S.speechTimer <= 0) S.speechText = '';
+      if (S.speechTimer <= 0) clearSpeech();
     }
     if (S.state === 'walk' && !S.speechText) {
       if (!S.introduced) {
@@ -2183,19 +2355,25 @@
         ctx.restore();
       }
 
-      var _auraR = Math.min(90, 50 + Math.sin(t * 3) * 10 + S.stateTimer * 5);
+    }
+
+    // Godmode aura. Drawn while the envelope is > 0 (not only while the state is
+    // 'godmode'), so it fades with Walkie's lift instead of switching off in one frame.
+    if (S._gmK > 0.01) {
+      var _auraR = Math.min(90, 50 + Math.sin(t * 3) * 10 + (S.state === 'godmode' ? S.stateTimer : STATE_DUR.godmode) * 5);
       var _aura = ctx.createRadialGradient(S.walkerX, yBase - 12, 4, S.walkerX, yBase - 12, _auraR);
       _aura.addColorStop(0,   'rgba(255,230,120,' + (0.50 + Math.sin(t * 6) * 0.12).toFixed(3) + ')');
       _aura.addColorStop(0.5, 'rgba(255,140,0,0.18)');
       _aura.addColorStop(1,   'rgba(255,230,120,0)');
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = S._gmK;
       ctx.fillStyle = _aura;
       ctx.fillRect(0, 0, S.W, S.H);
       ctx.restore();
     }
 
-    if (S.speechText) drawBubble(ctx, S.walkerX, yBase, S.speechText, S.state === 'philosophy');
+    if (S.speechText) drawBubble(ctx, S.walkerX, yBase, S.speechText, S.state === 'philosophy' && S.speechState === 'philosophy');
     drawCharacter(ctx, S.walkerX, yBase, t, S.state);
 
     // CORS wall
@@ -2308,22 +2486,24 @@
      Bootstrap & teardown
      ===================================================================== */
   function onMouseMove(ev) {
-    var r = S.host.getBoundingClientRect();
-    S.mouseX = ev.clientX - r.left;
-    S.mouseY = ev.clientY - r.top;
+    // Just remember the raw position; draw() converts it once per frame
+    // (reading getBoundingClientRect here forced a layout on every mousemove).
+    S._cx = ev.clientX;
+    S._cy = ev.clientY;
   }
   function onMouseLeave() {
+    S._cx = null; S._cy = null;
     S.mouseX = -9999; S.mouseY = -9999;
     S.shyTimer = 0; S.eyeOffsetX = 0; S.eyeOffsetY = 0;
   }
   function onMouseClick() {
     if (!S.mouseOnWalkie) return;
     if (S.state === 'nap') {
-      say(pick(CFG.napWakeSpeech), 2); S.state = 'walk'; S.stateTimer = 0;
+      setState('walk'); say(pick(CFG.napWakeSpeech), 2, true);
     } else if (S.state === 'celebrate') {
-      say('I WAS IN THE MIDDLE OF MY VICTORY SPEECH!!! \uD83D\uDE24');
+      say('I WAS IN THE MIDDLE OF MY VICTORY SPEECH!!! \uD83D\uDE24', null, true);
     } else if (S.state === 'ghost') {
-      say('I\'M ASTRAL PROJECTING! THAT IS SO RUDE \uD83D\uDC7B');
+      say('I\'M ASTRAL PROJECTING! THAT IS SO RUDE \uD83D\uDC7B', null, true);
     } else if (S.state === 'ninja') {
       say('A true ninja is never seen mid-mission. \uD83E\uDD77', null, true);
     } else if (S.state === 'hacker') {
@@ -2334,7 +2514,7 @@
       if (S.angerTime < 7) S.stateTimer = 0;
       say(pick(CFG.angrySpeech), 3.2, true);
     } else {
-      S.state = 'angry'; S.stateTimer = 0; S.angerTime = 0; say(pick(CFG.angrySpeech), 3.2, true);
+      setState('angry'); S.angerTime = 0; say(pick(CFG.angrySpeech), 3.2, true);
     }
   }
   function onMouseRightClick(ev) {
@@ -2343,16 +2523,42 @@
     say('I see you, hacker \uD83D\uDC40  I have logged your IP.', null, true);
   }
 
-  function start() {
-    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-      // Walkie sleeps on small screens, so nothing advances the shared
-      // godmode "exit" timer the aurora ribbons read. Mark it as settled
-      // so the ribbons keep their wave instead of going flat.
-      if (window.NPPPAurora) window.NPPPAurora.__godmodeExiting = 0.6;
-      return;
+  // Walkie sleeps on narrow viewports. The breakpoint is tracked live so a
+  // rotation / resize can wake him up (or put him to sleep) after page load.
+  // The ribbons no longer depend on Walkie: the aurora core owns the godmode timers.
+  var _mqSmall = window.matchMedia ? window.matchMedia('(max-width: 768px)') : null;
+  var _booted = false;
+
+  function onBreakpoint() {
+    S.small = !!(_mqSmall && _mqSmall.matches);
+    if (S.disposed) return;
+    if (S.small) {
+      // Going narrow: calm down and release the shared godmode flag.
+      resetTransient();
+      if (window.NPPPAurora) window.NPPPAurora.__godmode = false;
+    } else if (!_booted) {
+      boot();
+    } else {
+      // Waking up: progress events kept arriving while he slept (state, bubble,
+      // queued milestone), none of it is current any more. Start from a calm walk.
+      resetTransient();
     }
+  }
+
+  function start() {
+    S.small = !!(_mqSmall && _mqSmall.matches);
+    if (_mqSmall) {
+      if (_mqSmall.addEventListener) _mqSmall.addEventListener('change', onBreakpoint);
+      else if (_mqSmall.addListener) _mqSmall.addListener(onBreakpoint);
+    }
+    if (!S.small) boot();
+  }
+
+  function boot() {
+    if (_booted) return;
     S.host = pickHost();
     if (!S.host) return;
+    _booted = true;
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
       CFG.baseSpeed *= 0.5;
 
@@ -2417,7 +2623,17 @@
     try { if (S._io) S._io.disconnect(); } catch (_) {}
     try { if (S._ro) S._ro.disconnect(); } catch (_) {}
     try { if (S.canvas) S.canvas.remove(); } catch (_) {}
-    delete window.NPPPAurora.__walkiePatched;
+    try {
+      if (_mqSmall) {
+        if (_mqSmall.removeEventListener) _mqSmall.removeEventListener('change', onBreakpoint);
+        else if (_mqSmall.removeListener) _mqSmall.removeListener(onBreakpoint);
+      }
+    } catch (_) {}
+    if (window.NPPPAurora) {
+      // Never leave the ribbons stuck in godmode if we are torn down mid-state.
+      window.NPPPAurora.__godmode = false;
+      delete window.NPPPAurora.__walkiePatched;
+    }
   }
   window.NPPPAuroraWalkieDispose = dispose;
 
@@ -2436,8 +2652,11 @@
   if (window.NPPPAurora && window.NPPPAurora.__badgeAnimated) return;
   if (window.NPPPAurora) window.NPPPAurora.__badgeAnimated = true;
 
+  var _reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
   /* Version count-up (0.0.0 → x.y.z) */
   function animateVersion() {
+    if (_reduceMotion) return;   // keep the real version text, no animation
     var pill = document.querySelector('.nppp-tip-version');
     var num  = pill && pill.querySelector('.nppp-version-num');
     if (!num) return;
@@ -2445,6 +2664,8 @@
     var raw     = (pill.getAttribute('data-version') || num.textContent).trim();
     var parts   = raw.split('.');
     var targets = parts.map(Number);
+    // Non-numeric parts (e.g. "2.1.9-rc1") would render NaN: leave those as-is.
+    if (targets.some(function (v) { return v !== v; })) return;
 
     /* Reset immediately */
     num.textContent = targets.map(function () { return '0'; }).join('.');
@@ -2471,25 +2692,33 @@
     var badge = document.querySelector('.nppp-cache-tip');
     var pill  = badge && badge.querySelector('.nppp-tip-version');
     if (!badge) return;
+    if (_reduceMotion) return;   // leave the static CSS look alone
 
     var hue = 270;
+    var lastQ = -1;
 
     (function tick() {
       hue = (hue + 0.055) % 360;   /* ~3°/s at 60 fps */
-      var h2 = (hue + 65)  % 360;
-      var h3 = (hue + 140) % 360;
 
-      /* Override CSS @keyframes — JS ring is smoother and stays in sync */
-      badge.style.boxShadow =
-        '0 0 0 1.5px hsla(' + (hue | 0) + ',80%,68%,.55),' +
-        '0 0 14px hsla(' + (hue | 0) + ',80%,60%,.20)';
+      /* The strings below only change when the integer hue changes (about every
+         18 frames), so skip the style writes on every other frame. */
+      var q = hue | 0;
+      if (q !== lastQ) {
+        lastQ = q;
+        var h2 = (hue + 65) % 360;
 
-      /* Version pill gradient tracks the same hue pair */
-      if (pill) {
-        pill.style.background =
-          'linear-gradient(135deg,' +
-            'hsla(' + (hue | 0) + ',85%,62%,.64),' +
-            'hsla(' + (h2 | 0) + ',90%,58%,.64))';
+        /* Override CSS @keyframes — JS ring is smoother and stays in sync */
+        badge.style.boxShadow =
+          '0 0 0 1.5px hsla(' + q + ',80%,68%,.55),' +
+          '0 0 14px hsla(' + q + ',80%,60%,.20)';
+
+        /* Version pill gradient tracks the same hue pair */
+        if (pill) {
+          pill.style.background =
+            'linear-gradient(135deg,' +
+              'hsla(' + q + ',85%,62%,.64),' +
+              'hsla(' + (h2 | 0) + ',90%,58%,.64))';
+        }
       }
 
       requestAnimationFrame(tick);
