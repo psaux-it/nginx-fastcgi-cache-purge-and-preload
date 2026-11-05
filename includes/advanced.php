@@ -340,17 +340,22 @@ function nppp_drop_stale_generations( array &$urls, $before = null ): void {
         $ns_ok[ $ns ] = true;
     }
     nppp_gen_scan_unverified( $unverified );
+    nppp_gen_scan_legacy( 0 );
 
     if ( empty( $max ) ) {
         return;
     }
     $stale = nppp_generation_stale_groups( $max, $before );
     nppp_gen_mode_note_seen();
-    $kept = [];
+    $kept   = [];
+    $legacy = 0;
     foreach ( $urls as $entry ) {
         $is_gen = isset( $entry['gen_group'], $entry['gen'] );
         if ( $is_gen && ( $entry['gen'] !== $max[ $entry['gen_group'] ] || isset( $stale[ $entry['gen_group'] ] ) ) ) {
             continue;
+        }
+        if ( ! $is_gen ) {
+            $legacy++;
         }
         unset( $entry['gen_group'], $entry['gen'] );
         if ( $is_gen ) {
@@ -359,6 +364,7 @@ function nppp_drop_stale_generations( array &$urls, $before = null ): void {
         $kept[] = $entry;
     }
     $urls = $kept;
+    nppp_gen_scan_legacy( $legacy );
 }
 
 /**
@@ -374,6 +380,66 @@ function nppp_gen_scan_unverified( ?bool $set = null ): bool {
         $unverified = $set;
     }
     return $unverified;
+}
+
+/**
+ * Request-local count of legacy-key files (the key scheme from before generation mode) that the last scan
+ * listed next to generation-mode (p4) files. Written by nppp_drop_stale_generations(), read by the Advanced
+ * tab notice. Stays 0 while the cache holds no generation file: a purely legacy cache is nothing to explain.
+ *
+ * @param int|null $set New value, or null to only read.
+ */
+function nppp_gen_scan_legacy( ?int $set = null ): int {
+    static $legacy = 0;
+    if ( $set !== null ) {
+        $legacy = $set;
+    }
+    return $legacy;
+}
+
+/**
+ * Advanced tab advisory for legacy-key files listed next to generation-mode files: Nginx builds p4 keys
+ * now and never asks for them again. Says when the one-time cleanup (see nppp_http_purge_legacy_sweep_once())
+ * removes them. Plain text, '' when nothing applies (also when HTTP Purge is off: the filesystem Purge All
+ * removes every file).
+ */
+function nppp_gen_scan_legacy_notice(): string {
+    $n = nppp_gen_scan_legacy();
+    if ( $n < 1 || ! function_exists( 'nppp_http_purge_legacy_sweep_info' ) ) {
+        return '';
+    }
+
+    $info = nppp_http_purge_legacy_sweep_info();
+    if ( $info === null ) {
+        return '';
+    }
+
+    switch ( $info['state'] ) {
+        case 'pending':
+            return sprintf(
+                /* translators: %d: number of listed pages */
+                __( '%d page(s) listed here were cached with the key scheme from before ngx_cache_purge generation mode. Nginx no longer serves them and they only take disk space. The next Purge All removes them.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $n
+            );
+        case 'off':
+            return sprintf(
+                /* translators: %d: number of listed pages */
+                __( '%d page(s) listed here were cached with the key scheme from before ngx_cache_purge generation mode. Nginx no longer serves them. The cleanup is switched off (nppp_http_purge_sweep_legacy_keys filter), so they stay until Nginx expires them.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $n
+            );
+        case 'retry':
+            return sprintf(
+                /* translators: %d: number of listed pages */
+                __( '%d page(s) listed here were cached with the key scheme from before ngx_cache_purge generation mode. Nginx no longer serves them. The cleanup could not finish (a file could not be deleted or read, check the permissions of the cache path) and is tried again after a day.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $n
+            );
+        default: // done
+            return sprintf(
+                /* translators: %d: number of listed pages */
+                __( '%d page(s) listed here were cached with the key scheme from before ngx_cache_purge generation mode. Nginx no longer serves them. The one-time cleanup has already run, so they are written by a location that still uses the old key. Fix that location, or press "Clear Plugin Cache" and run Purge All again.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $n
+            );
+    }
 }
 
 /**
@@ -832,9 +898,12 @@ function nppp_premium_html($nginx_cache_path) {
         </div>';
     }
 
-    // Generation mode: files listed without namespace state may already be invalidated by Nginx.
-    $nppp_gen_notice = nppp_gen_scan_unverified_notice();
-    if ( $nppp_gen_notice !== '' ) {
+    // Generation mode: files listed without namespace state may already be invalidated by Nginx, and legacy-key
+    // files listed next to generation files are no longer served (they wait for the one-time cleanup).
+    foreach ( [ nppp_gen_scan_unverified_notice(), nppp_gen_scan_legacy_notice() ] as $nppp_gen_notice ) {
+        if ( $nppp_gen_notice === '' ) {
+            continue;
+        }
         $wget_notice_html .= '<div style="background-color:#f0f6fc;border-left:6px solid #72aee6;padding:5px;margin-bottom:15px;max-width:max-content;">
             <p style="margin:0;display:flex;align-items:center;">
                 <span class="dashicons dashicons-info" style="font-size:22px;color:#2271b1;margin-right:8px;"></span>

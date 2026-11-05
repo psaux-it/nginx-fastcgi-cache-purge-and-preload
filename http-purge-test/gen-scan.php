@@ -100,6 +100,8 @@ load_fn( "$INC/advanced.php", 'nppp_adv_encode_raw_bytes' );
 // nppp_gen_mode_note_seen() comes from the Gen Index patch and is needed once the two patch sets are merged.
 foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_generation_views', 'nppp_generation_stale_groups', 'nppp_generation_count_live' ] as $fn ) { load_fn( "$INC/advanced.php", $fn, true ); }
 load_fn( "$INC/advanced.php", 'nppp_gen_scan_unverified', true );   // added by 57e57608, called by nppp_drop_stale_generations()
+load_fn( "$INC/advanced.php", 'nppp_gen_scan_legacy', true );       // legacy-key count, called by nppp_drop_stale_generations()
+load_fn( "$INC/advanced.php", 'nppp_gen_scan_legacy_notice', true );
 $HAS_NS = function_exists( 'nppp_generation_views' );
 foreach ( [ 'nppp_head_fast', 'nppp_read_head' ] as $fn ) { load_fn( "$INC/wp-filesystem.php", $fn ); }
 load_fn( "$INC/status.php", 'nppp_get_in_cache_page_count' );
@@ -309,6 +311,58 @@ scenario( 'second read fails: 2 requests, legacy result', $ST_ON, $files, fn() =
 scenario( 'no p4 key anywhere: zero status requests', $ST_ON, [], fn() => [ ST( [ NSV( 'objects', $E1, $G( 9 ), $G( 9 ) ) ] ) ], 2, [ '/a', '/b' ], 0, [ '/a', '/b' ] );
 // mixed legacy + generation files: legacy ones always count
 scenario( 'legacy and generation files together', $ST_ON, [ [ 'objects', $E1, 1, '/p/1/' ], [ 'objects', $E1, 2, '/p/2/' ] ], $two( [ NSV( 'objects', $E1, $G( 2 ), $G( 2 ) ) ] ), 2, [ '/l/1', '/p/2/' ], 2, [ '/l/1' ] );
+
+/* legacy-key files next to generation files: counted by the Advanced scan (both Advanced paths), explained by the notice */
+if ( function_exists( 'nppp_gen_scan_legacy' ) ) {
+    $legacy_seen = function ( string $path, array $files, array $legacy ) use ( $ST_OFF ): int {
+        $d = mkcache( $files, $legacy ); t_reset( $ST_OFF ); scan( $path, $d, fn() => [] ); $n = nppp_gen_scan_legacy(); rmrf( $d );
+        return $n;
+    };
+    foreach ( $PATHS as $p ) {
+        if ( strpos( $p, 'adv' ) !== 0 ) { continue; }
+        $mix = [ [ 'objects', $E1, 1, '/p/1/' ], [ 'objects', $E1, 2, '/p/2/' ] ];
+        is_( $legacy_seen( $p, $mix, [ '/l/1', '/l/2' ] ), 2, "legacy count [$p]: two legacy files next to generation files" );
+        is_( $legacy_seen( $p, $mix, [] ), 0, "legacy count [$p]: generation files only -> 0 (flag reset between scans)" );
+        is_( $legacy_seen( $p, [], [ '/l/1', '/l/2', '/l/3' ] ), 0, "legacy count [$p]: a purely legacy cache is nothing to explain -> 0" );
+    }
+}
+if ( function_exists( 'nppp_gen_scan_legacy_notice' ) ) {
+    t_reset( $ST_OFF ); nppp_gen_scan_legacy( 3 );
+    $nt = nppp_gen_scan_legacy_notice();
+    ok( strpos( $nt, '3 page(s)' ) !== false && strpos( $nt, 'next Purge All removes them' ) !== false, 'legacy notice: cleanup pending -> says the next Purge All removes them' );
+    nppp_state_set( 'legacy_sweep', [ 'at' => time(), 'deleted' => 2, 'failed' => 0, 'blind' => false ] );
+    ok( strpos( nppp_gen_scan_legacy_notice(), 'one-time cleanup has already run' ) !== false, 'legacy notice: cleanup done -> says it already ran, how to run it again' );
+    nppp_state_set( 'legacy_sweep', [ 'at' => time(), 'deleted' => 0, 'failed' => 1, 'blind' => false ], DAY_IN_SECONDS );
+    ok( strpos( nppp_gen_scan_legacy_notice(), 'tried again after a day' ) !== false, 'legacy notice: cleanup incomplete -> retry after a day' );
+    nppp_state_set( 'legacy_sweep', time() );
+    ok( strpos( nppp_gen_scan_legacy_notice(), 'already run' ) !== false, 'legacy notice: a bare timestamp marker (older patch) reads as done' );
+    nppp_gen_scan_legacy( 0 );
+    is_( nppp_gen_scan_legacy_notice(), '', 'legacy notice: nothing listed -> no notice' );
+    t_reset( [ 'nppp_http_purge_enabled' => 'no' ] ); nppp_gen_scan_legacy( 3 );
+    is_( nppp_gen_scan_legacy_notice(), '', 'legacy notice: HTTP Purge off -> no notice (the filesystem Purge All removes every file)' );
+    nppp_gen_scan_legacy( 0 );
+}
+
+/* Status card: one "Legacy key cleanup" line, only while the observed mode is invalidation */
+if ( function_exists( 'nppp_http_purge_legacy_sweep_info' ) ) {
+    if ( ! function_exists( 'human_time_diff' ) ) { function human_time_diff( $a, $b = 0 ) { return '1 min'; } }
+    load_fn( "$INC/status.php", 'nppp_get_http_purge_status', true );
+    if ( function_exists( 'nppp_get_http_purge_status' ) ) {
+        $card_meta = function () { $c = nppp_get_http_purge_status(); return is_array( $c ) ? implode( ' | ', $c['meta'] ) : 'NO CARD'; };
+        t_reset( $ST_OFF ); nppp_http_purge_remember_mode( 'all', 'invalidated' );
+        ok( strpos( $card_meta(), 'Legacy key cleanup: pending' ) !== false, 'status card: invalidation mode, marker not set -> "pending"' );
+        nppp_state_set( 'legacy_sweep', [ 'at' => time(), 'deleted' => 3, 'failed' => 0, 'blind' => false ] );
+        ok( strpos( $card_meta(), 'Legacy key cleanup: 3 file(s) removed' ) !== false, 'status card: done -> number of removed files' );
+        nppp_state_set( 'legacy_sweep', [ 'at' => time(), 'deleted' => 0, 'failed' => 0, 'blind' => false ] );
+        ok( strpos( $card_meta(), 'nothing to remove' ) !== false, 'status card: done, 0 files -> "nothing to remove"' );
+        nppp_state_set( 'legacy_sweep', [ 'at' => time(), 'deleted' => 1, 'failed' => 2, 'blind' => false ], DAY_IN_SECONDS );
+        ok( strpos( $card_meta(), 'Legacy key cleanup: incomplete' ) !== false, 'status card: failed deletes -> "incomplete"' );
+        nppp_state_delete( 'legacy_sweep' ); nppp_http_purge_remember_mode( 'all', 'accepted' ); nppp_state_delete( 'http_purge_mode' ); nppp_http_purge_remember_mode( 'all', 'accepted' );
+        ok( strpos( $card_meta(), 'Legacy key cleanup' ) === false, 'status card: async mode -> no cleanup line' );
+        t_reset( $ST_OFF ); nppp_http_purge_remember_mode( 'single', 'purged' );
+        ok( strpos( $card_meta(), 'Legacy key cleanup' ) === false, 'status card: sync mode -> no cleanup line' );
+    } else { echo "NOTE: nppp_get_http_purge_status not loadable here, Status card tests skipped\n"; }
+}
 // everything stale: Status counts 0; Advanced shows an empty list (never an error)
 scenario( 'everything stale', $ST_ON, [ [ 'objects', $E0, 1, '/p/1/' ], [ 'objects', $E1, 1, '/p/2/' ] ], $two( [ NSV( 'objects', $E1, $G( 4 ), $G( 4 ) ) ] ), 0, [], 2 );
 

@@ -39,6 +39,9 @@
  *   nppp_http_purge_queue_wait         ( int $seconds )                default 15, capped by the Purge All lock TTL
  *   nppp_http_purge_async_settle_ms    ( int $ms )                     default 1500 (best effort mode only)
  *   nppp_http_purge_verify_empty       ( bool $enabled )               default true
+ *   nppp_http_purge_sweep_legacy_keys  ( bool $enabled )               default true (false = never delete files
+ *                                                                      with a pre-generation KEY: after the move
+ *                                                                      to generation mode)
  * Action:
  *   nppp_http_purge_result ( string $scope, string $outcome, string $url,
  *                            int $http_status, string $module_code )
@@ -1426,6 +1429,9 @@ function nppp_http_purge_remember_generation( string $scope, bool $on ): void {
         }
         $state['ns'][ $scope ] = $now;
     } else {
+        if ( $scope === 'all' ) {
+            nppp_state_delete( 'legacy_sweep' ); // leaving generation mode: the next episode cleans up again
+        }
         if ( $seen === 0 ) {
             return;
         }
@@ -2310,6 +2316,146 @@ function nppp_http_purge_leftover( int $since ): bool {
     }
 
     return nppp_http_purge_has_entries_before( nppp_http_purge_cache_path(), $since ) === true;
+}
+
+/**
+ * Deletes the cache files that carry a pre-generation (legacy) KEY: line.
+ *
+ * ngx_cache_purge v4 leaves them on purpose once a location is bound to cache_purge_key: that location
+ * builds p4 keys, never asks for the old file again, and the namespace sweep only removes generation
+ * files (module MIGRATION.md: legacy files "remain for core expiry or an explicit legacy cleanup").
+ * This is that cleanup. A cache file is named md5(key), so a file at a legacy path can only ever be
+ * rewritten with the same legacy key, never with a p4 one: nothing the module still serves is touched.
+ *
+ * Conservative on purpose: a file is deleted only when its KEY: line was read and does not start with
+ * "p4:". No KEY: line, an unreadable file, a symlink, a non 32-hex name (nginx temp files) and anything
+ * outside the 1-2 hex-char shard directories are left alone.
+ *
+ * @return array{deleted:int,failed:int,blind:bool}|null null: the cache directory itself is missing
+ */
+function nppp_http_purge_sweep_legacy_keys( string $path ): ?array {
+    if ( $path === '' || ! @is_dir( $path ) ) {
+        return null;
+    }
+
+    $stack   = [ $path ];
+    $deleted = 0;
+    $failed  = 0;
+    $blind   = false;
+
+    while ( $stack ) {
+        $dir = array_pop( $stack );
+        $h   = @opendir( $dir );
+        if ( $h === false ) {
+            $blind = true;
+            continue;
+        }
+        while ( ( $name = readdir( $h ) ) !== false ) {
+            if ( $name === '.' || $name === '..' ) {
+                continue;
+            }
+            $full = $dir . '/' . $name;
+            if ( preg_match( '/^[0-9a-f]{32}$/', $name ) ) {
+                if ( is_link( $full ) ) {
+                    continue;
+                }
+                $f = @fopen( $full, 'rb' );
+                if ( $f === false ) {
+                    if ( file_exists( $full ) ) {
+                        $blind = true; // present but unreadable (other owner / mode): cannot be judged, retried daily
+                    }
+                    continue; // else it vanished meanwhile (nginx removed it)
+                }
+                $head = (string) @fread( $f, 4096 );
+                fclose( $f );
+                // First KEY: line of the file; "p4:" right after it is the generation envelope.
+                if ( ! preg_match( '/^KEY: (p4:)?/m', $head, $m ) || ( $m[1] ?? '' ) !== '' ) {
+                    continue;
+                }
+                if ( @unlink( $full ) ) {
+                    $deleted++;
+                } elseif ( file_exists( $full ) ) {
+                    $failed++;
+                }
+            } elseif ( preg_match( '/^[0-9a-f]{1,2}$/i', $name ) && @is_dir( $full ) && ! is_link( $full ) ) {
+                $stack[] = $full;
+            }
+        }
+        closedir( $h );
+    }
+
+    return [ 'deleted' => $deleted, 'failed' => $failed, 'blind' => $blind ]; // blind: a shard directory was unreadable
+}
+
+/**
+ * One legacy-key cleanup per generation-mode episode, run by the Purge All that first answers
+ * "invalidated". Later ones skip it for free (one option read); the marker is dropped again by
+ * nppp_http_purge_remember_generation() when the endpoint answers outside generation mode, so a
+ * later move back and forth runs it again. Never changes the Purge All result: it already succeeded.
+ */
+function nppp_http_purge_legacy_sweep_once(): void {
+    if ( ! apply_filters( 'nppp_http_purge_sweep_legacy_keys', true ) || nppp_state_get( 'legacy_sweep' ) !== null ) {
+        return;
+    }
+
+    $path = nppp_http_purge_cache_path();
+    $r    = nppp_http_purge_sweep_legacy_keys( $path );
+    if ( $r === null ) {
+        return; // no cache directory to look at: try again with the next Purge All
+    }
+
+    // A refused delete or an unreadable shard (read-only mount, other owner) is retried at most once a day,
+    // not on every Purge All.
+    // The marker also keeps the result for the Status card and the Advanced tab notice.
+    nppp_state_set(
+        'legacy_sweep',
+        [ 'at' => time(), 'deleted' => $r['deleted'], 'failed' => $r['failed'], 'blind' => $r['blind'] ],
+        ( $r['failed'] > 0 || $r['blind'] ) ? DAY_IN_SECONDS : 0
+    );
+
+    if ( $r['deleted'] > 0 || $r['failed'] > 0 ) {
+        nppp_display_admin_notice( 'info', sprintf(
+            /* translators: 1: number of deleted cache files, 2: number of files that could not be deleted */
+            __( 'INFO HTTP PURGE ALL: ngx_cache_purge generation mode left %1$d cache file(s) with a legacy cache key (no generation envelope) that Nginx no longer reads; they were deleted (%2$d could not be deleted).', 'fastcgi-cache-purge-and-preload-nginx' ),
+            $r['deleted'], $r['failed']
+        ), true, false );
+    }
+}
+
+/**
+ * What the legacy-key cleanup did or will do, from stored state only (no request, no directory read):
+ * the Status card and the Advanced tab notice use it.
+ *
+ *   pending  runs with the next Purge All that answers "invalidated"
+ *   done     ran for this generation-mode episode
+ *   retry    ran, but a delete was refused or something could not be read: tried again after a day
+ *   off      switched off with the nppp_http_purge_sweep_legacy_keys filter
+ *
+ * @return array{state:string,deleted:int,failed:int,at:int}|null null: HTTP Purge is off, so Purge All
+ *         walks the filesystem and removes every file anyway.
+ */
+function nppp_http_purge_legacy_sweep_info(): ?array {
+    if ( ! nppp_http_purge_enabled() ) {
+        return null;
+    }
+
+    $m = nppp_state_get( 'legacy_sweep' );
+    if ( $m === null ) {
+        $on = (bool) apply_filters( 'nppp_http_purge_sweep_legacy_keys', true );
+        return [ 'state' => $on ? 'pending' : 'off', 'deleted' => 0, 'failed' => 0, 'at' => 0 ];
+    }
+
+    if ( ! is_array( $m ) ) {
+        $m = [ 'at' => (int) $m ]; // a bare timestamp: stored before the result was kept
+    }
+    $failed = (int) ( $m['failed'] ?? 0 );
+
+    return [
+        'state'   => ( $failed > 0 || ! empty( $m['blind'] ) ) ? 'retry' : 'done',
+        'deleted' => (int) ( $m['deleted'] ?? 0 ),
+        'failed'  => $failed,
+        'at'      => (int) ( $m['at'] ?? 0 ),
+    ];
 }
 
 /**
@@ -3434,6 +3580,7 @@ function nppp_http_purge_all( ?array &$pending = null ): bool {
                     nppp_http_purge_hint_clear();
                 }
             }
+            nppp_http_purge_legacy_sweep_once(); // files of the pre-generation key scheme: nginx never removes them
             return true;
 
         case 'timeout':

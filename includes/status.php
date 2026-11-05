@@ -111,6 +111,7 @@ function nppp_clear_plugin_cache($silent = false) {
     // Option-backed state (includes/state.php): the reset helpers also drop the pre-2.1.9 transients.
     nppp_http_purge_state_reset();
     nppp_state_delete( 'http_purge_mode' );
+    nppp_state_delete( 'legacy_sweep' ); // legacy-key cleanup runs again with the next "invalidated" Purge All
     nppp_state_delete( 'traffic_hint' );
     // Varnish / Vinyl Cache Sync: forget parked endpoints and warning throttles so a fixed setup is retried at once.
     nppp_state_delete( 'varnish_breaker' );
@@ -1259,6 +1260,44 @@ function nppp_get_http_purge_status(): ?array {
         $tip[] = $setup === 'inline'
             ? __( 'Single URL purge: inline "cache_purge PURGE" in the cached location, sent to the page URL. Purge All uses its own location.', 'fastcgi-cache-purge-and-preload-nginx' )
             : __( 'Single URL purge: dedicated purge location.', 'fastcgi-cache-purge-and-preload-nginx' );
+    }
+
+    // Generation mode: the one-time cleanup of cache files written with the old (pre-generation) key.
+    $sweep = ( $mode['mode'] === 'invalidate' && function_exists( 'nppp_http_purge_legacy_sweep_info' ) )
+        ? nppp_http_purge_legacy_sweep_info()
+        : null;
+    if ( is_array( $sweep ) ) {
+        switch ( $sweep['state'] ) {
+            case 'pending':
+                $meta[] = __( 'Legacy key cleanup: pending', 'fastcgi-cache-purge-and-preload-nginx' );
+                $tip[]  = __( 'Cache files written with the key scheme from before generation mode are no longer served by Nginx. The next Purge All removes them once.', 'fastcgi-cache-purge-and-preload-nginx' );
+                break;
+            case 'off':
+                $meta[] = __( 'Legacy key cleanup: disabled', 'fastcgi-cache-purge-and-preload-nginx' );
+                $tip[]  = __( 'The nppp_http_purge_sweep_legacy_keys filter switches the cleanup of old key files off. They stay until Nginx expires them.', 'fastcgi-cache-purge-and-preload-nginx' );
+                break;
+            case 'retry':
+                $meta[] = __( 'Legacy key cleanup: incomplete', 'fastcgi-cache-purge-and-preload-nginx' );
+                $tip[]  = sprintf(
+                    /* translators: 1: files removed, 2: files that could not be removed, 3: human readable time difference */
+                    __( 'The cleanup of old key files ran %3$s ago: %1$d removed, %2$d could not be removed or read (check the permissions of the cache path). It is tried again after a day.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    $sweep['deleted'], $sweep['failed'], human_time_diff( $sweep['at'], $now )
+                );
+                break;
+            default: // done
+                $meta[] = $sweep['deleted'] > 0
+                    ? sprintf(
+                        /* translators: %d: number of removed cache files */
+                        __( 'Legacy key cleanup: %d file(s) removed', 'fastcgi-cache-purge-and-preload-nginx' ),
+                        $sweep['deleted']
+                    )
+                    : __( 'Legacy key cleanup: nothing to remove', 'fastcgi-cache-purge-and-preload-nginx' );
+                $tip[]  = sprintf(
+                    /* translators: %s: human readable time difference */
+                    __( 'Old key files are removed once per generation-mode period (done %s ago). "Clear Plugin Cache" runs it again with the next Purge All.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                    human_time_diff( $sweep['at'], $now )
+                );
+        }
     }
 
     if ( $hint_warn ) {

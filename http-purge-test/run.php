@@ -823,6 +823,87 @@ if ( time() === $sec ) { is_( nppp_http_purge_all(), true, 'file created in the 
 else { ok( true, 'second boundary crossed, skipped' ); }
 exec( 'rm -f ' . escapeshellarg( $D ) . '/1/ab/*' );
 
+/* legacy-key cleanup: the Purge All that first answers "invalidated" removes the files of the pre-generation key scheme, once per episode */
+function put_key( string $d, string $name, string $key ): string {
+    $p = "$d/1/ab/" . md5( $name );
+    file_put_contents( $p, "\x05\x00\x01hdr\nKEY: $key\n\r\nHTTP/1.1 200 OK\r\n\r\n<html>x</html>" );
+    return $p;
+}
+$LK = 'httpsGETexample.com/a/'; $PK = 'p4:npp:0000000001:0000000000000006:' . $LK;
+$SD  = mkcache( 0 ); $OUT = sys_get_temp_dir() . '/npp-out-' . getmypid();
+file_put_contents( $OUT, "\x05\x00\x01hdr\nKEY: $LK\n" );                       // outside the cache, legacy-looking
+$L1 = put_key( $SD, 'l1', $LK );
+$L2 = put_key( $SD, 'l2', 'httpsGETexample.com/b/' );
+file_put_contents( $SD . '/1/ab/' . md5( 'redir' ), "\x05\x00\x01hdr\nKEY: httpsGETexample.com/r/\n\r\nHTTP/1.1 301 Moved Permanently\r\n" );
+$R1 = $SD . '/1/ab/' . md5( 'redir' );
+$P1 = put_key( $SD, 'p1', $PK );
+$P2 = put_key( $SD, 'p2', 'p4:npp:0000000001:0000000000000006:' . 'httpsGETexample.com/zzz/' );
+$NK = $SD . '/1/ab/' . md5( 'nokey' ); file_put_contents( $NK, "no key line in here\n" );
+$TM = $SD . '/1/ab/0000000001'; file_put_contents( $TM, "\x05\x00\x01hdr\nKEY: httpsGETexample.com/tmp/\n" ); // nginx temp name: not 32 hex
+$SL = $SD . '/1/ab/' . md5( 'link' ); symlink( $OUT, $SL );
+$LT = $SD . '/tmp/' . md5( 'ltmp' ); file_put_contents( $LT, "\x05\x00\x01hdr\nKEY: httpsGETexample.com/t/\n" ); // plugin tmp dir: never entered
+$IX = $SD . '/f/00/index.html';
+
+t_reset(); cache_settings( $SD ); Q( R( 200, 'invalidated' ) );
+is_( nppp_http_purge_legacy_sweep_info()['state'] ?? null, 'pending', 'legacy sweep info: not run yet -> pending' );
+is_( nppp_http_purge_all(), true, 'legacy sweep: invalidated Purge All still returns true' );
+ok( ! file_exists( $L1 ) && ! file_exists( $L2 ) && ! file_exists( $R1 ), 'legacy sweep: legacy-key files (incl. a cached redirect) are deleted' );
+ok( file_exists( $P1 ) && file_exists( $P2 ), 'legacy sweep: generation (p4:) files are never touched' );
+ok( file_exists( $NK ) && file_exists( $TM ) && file_exists( $LT ) && file_exists( $IX ), 'legacy sweep: no KEY line, nginx temp names, plugin tmp dir and non cache names stay' );
+ok( is_link( $SL ) && file_exists( $OUT ), 'legacy sweep: a symlink is never followed or removed' );
+ok( notice_has( 'legacy cache key' ) && notice_has( '3 cache file' ), 'legacy sweep: one info line with the number of files' );
+ok( nppp_state_get( 'legacy_sweep' ) !== null, 'legacy sweep: marker stored (once per generation-mode episode)' );
+$info = nppp_http_purge_legacy_sweep_info();
+ok( ( $info['state'] ?? '' ) === 'done' && $info['deleted'] === 3 && $info['failed'] === 0 && $info['at'] > 0, 'legacy sweep info: done, keeps the number of removed files' );
+
+$L3 = put_key( $SD, 'l3', 'httpsGETexample.com/c/' );
+$GLOBALS['T']['notices'] = []; Q( R( 200, 'invalidated' ) );
+is_( nppp_http_purge_all(), true, 'legacy sweep: second invalidated Purge All -> true' );
+ok( file_exists( $L3 ) && ! notice_has( 'legacy cache key' ), 'legacy sweep: marker set -> no second pass, no notice' );
+
+$GLOBALS['T']['filters']['nppp_http_purge_verify_empty'] = fn() => false; Q( R( 200, 'purged' ) );
+is_( nppp_http_purge_all(), true, 'legacy sweep: a synchronous (legacy) answer -> true' );
+ok( file_exists( $L3 ), 'legacy sweep: a legacy-mode Purge All (purged) never deletes by key' );
+ok( nppp_state_get( 'legacy_sweep' ) === null, 'legacy sweep: back in legacy mode drops the marker (async 202 / sync 200 alike)' );
+unset( $GLOBALS['T']['filters']['nppp_http_purge_verify_empty'] );
+
+Q( R( 200, 'invalidated' ) );
+is_( nppp_http_purge_all(), true, 'legacy sweep: moving to generation mode again -> true' );
+ok( ! file_exists( $L3 ), 'legacy sweep: re-armed after a legacy-mode answer, the leftover is deleted' );
+
+$L4 = put_key( $SD, 'l4', 'httpsGETexample.com/d/' );
+t_reset(); cache_settings( $SD ); t_filter( 'nppp_http_purge_sweep_legacy_keys', fn() => false ); Q( R( 200, 'invalidated' ) );
+is_( nppp_http_purge_all(), true, 'legacy sweep: filter off -> true' );
+ok( file_exists( $L4 ) && nppp_state_get( 'legacy_sweep' ) === null, 'legacy sweep: filter off -> nothing deleted, no marker (mixed zones can opt out)' );
+is_( nppp_http_purge_legacy_sweep_info()['state'] ?? null, 'off', 'legacy sweep info: filter off -> off' );
+t_reset( [ 'nppp_http_purge_enabled' => 'no' ] );
+is_( nppp_http_purge_legacy_sweep_info(), null, 'legacy sweep info: HTTP Purge off -> null (the filesystem Purge All removes every file)' );
+t_reset(); cache_settings( $SD ); nppp_state_set( 'legacy_sweep', time() );
+is_( nppp_http_purge_legacy_sweep_info()['state'] ?? null, 'done', 'legacy sweep info: a bare timestamp marker (older patch) reads as done' );
+
+t_reset(); cache_settings( $SD ); Q( R( 200, 'invalidated' ) );
+nppp_http_purge_try_first( 'https://example.com/a/' );
+ok( file_exists( $L4 ), 'legacy sweep: a SINGLE-page invalidated never sweeps' );
+
+t_reset(); cache_settings( $SD . '/missing' ); Q( R( 200, 'invalidated' ) );
+is_( nppp_http_purge_all(), true, 'legacy sweep: missing cache dir -> true' );
+ok( nppp_state_get( 'legacy_sweep' ) === null, 'legacy sweep: missing cache dir -> no marker, retried by the next Purge All' );
+if ( posix_geteuid() !== 0 ) {
+    @chmod( "$SD/1/ab", 0555 ); t_reset(); cache_settings( $SD ); Q( R( 200, 'invalidated' ) );
+    is_( nppp_http_purge_all(), true, 'legacy sweep: delete refused -> still true' );
+    ok( file_exists( $L4 ) && nppp_state_get( 'legacy_sweep' ) !== null && notice_has( 'could not be deleted' ), 'legacy sweep: delete refused -> reported, marker with a one day expiry' );
+    $info = nppp_http_purge_legacy_sweep_info();
+    ok( ( $info['state'] ?? '' ) === 'retry' && $info['failed'] >= 1, 'legacy sweep info: refused delete -> retry, with the failed count' );
+    @chmod( "$SD/1/ab", 0777 );
+    $UR = put_key( $SD, 'unread', 'httpsGETexample.com/u/' ); @chmod( $UR, 0000 );
+    t_reset(); cache_settings( $SD ); Q( R( 200, 'invalidated' ) );
+    is_( nppp_http_purge_all(), true, 'legacy sweep: unreadable file -> still true' );
+    ok( file_exists( $UR ) && nppp_state_get( 'legacy_sweep' ) !== null, 'legacy sweep: a present but unreadable file is left alone and the marker expires after a day (retry), not forever' );
+    $row = get_option( 'nppp_st_legacy_sweep' ); ok( is_array( $row ) && (int) $row['exp'] > 0, 'legacy sweep: unreadable file -> marker has an expiry' );
+    @chmod( $UR, 0644 ); @unlink( $UR );
+} else { ok( true, 'legacy sweep: refused delete not testable as root' ); }
+@unlink( $OUT ); rmcache( $SD );
+
 /* 202 without a status endpoint: best effort through the cache directory */
 for ( $i = 0; $i < 3; $i++ ) { touch( "$D/1/ab/" . md5( "z$i" ) ); } sleep( 2 );
 t_reset(); cache_settings( $D ); Q( R( 202, 'accepted' ) );

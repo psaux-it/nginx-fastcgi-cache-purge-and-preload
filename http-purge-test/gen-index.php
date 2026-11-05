@@ -123,6 +123,7 @@ foreach ( [ 'nppp_key_generation_info', 'nppp_drop_stale_generations', 'nppp_gen
     load_fn( "$INC/advanced.php", $fn, $fn === 'nppp_generation_views' || $fn === 'nppp_generation_stale_groups' );
 }
 load_fn( "$INC/advanced.php", 'nppp_gen_scan_unverified', true );   // added by 57e57608
+load_fn( "$INC/advanced.php", 'nppp_gen_scan_legacy', true );       // legacy-key count, called by nppp_drop_stale_generations()
 // Added by the Gen Index patch; absent on an unpatched plugin, which is reported once and then every behaviour test runs anyway.
 $HELPERS = [];
 foreach ( [ 'nppp_gen_mode_note_seen', 'nppp_gen_mode_seen', 'nppp_gen_mode_active', 'nppp_index_merge_hits' ] as $fn ) { $HELPERS[ $fn ] = load_fn( "$INC/advanced.php", $fn, true ); }
