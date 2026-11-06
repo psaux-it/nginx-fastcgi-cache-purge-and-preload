@@ -161,6 +161,70 @@ function nppp_wget_site_failure( string $url ): ?string {
  * 3. Command builder
  * ========================================================================= */
 
+/** First safexec release whose NPP build accepts "stdbuf -oL -eL" as a prelude wrapper. */
+if ( ! defined( 'NPPP_SAFEXEC_STDBUF_MIN' ) ) {
+    define( 'NPPP_SAFEXEC_STDBUF_MIN', '1.9.8' );
+}
+
+/** Run a shell probe through the plugin helper when available, else guarded shell_exec(). */
+function nppp_wget_probe( string $cmd ): string {
+    if ( function_exists( 'nppp_get_command_output' ) ) {
+        return (string) nppp_get_command_output( $cmd );
+    }
+    if ( function_exists( 'shell_exec' )
+        && ! in_array( 'shell_exec', array_map( 'trim', explode( ',', (string) ini_get( 'disable_functions' ) ) ), true ) ) {
+        return (string) shell_exec( $cmd );
+    }
+    return '';
+}
+
+/**
+ * Installed safexec version ("1.9.8"), '' when unknown. Asked from the binary itself (not the cached
+ * plugin transient) so a safexec upgrade is seen immediately; cached per request.
+ */
+function nppp_wget_safexec_version( string $safexec ): string {
+    static $cache = [];
+    if ( $safexec === '' ) {
+        return '';
+    }
+    if ( ! isset( $cache[ $safexec ] ) ) {
+        $out = nppp_wget_probe( escapeshellarg( $safexec ) . ' --version 2>&1' );
+        $cache[ $safexec ] = preg_match( '/safexec\s+([0-9]+(?:\.[0-9]+){1,2})/i', $out, $m ) ? $m[1] : '';
+    }
+    return $cache[ $safexec ];
+}
+
+/**
+ * True when the live-log fix can be used: safexec is new enough to accept "stdbuf -oL -eL" AND coreutils
+ * stdbuf exists in a directory safexec trusts for prelude wrappers.
+ *
+ * Older safexec (NPP build <= 1.9.7 accepts "nohup" only) refuses the whole command, so the crawl would
+ * not start at all: the version gate is mandatory, not an optimisation.
+ *
+ * The stdbuf probe runs in the shell, not through is_file()/is_executable(): open_basedir (common on
+ * shared hosting) makes those PHP calls fail for /usr/bin even when the binary exists, which would
+ * silently disable the fix. Only safexec's trusted bin dirs are probed: safexec refuses a wrapper
+ * resolved from anywhere else, so a PATH hit outside them (e.g. /opt/...) would stop the crawl too.
+ */
+function nppp_wget_stdbuf_available( string $safexec ): bool {
+    static $cache = [];
+    if ( $safexec === '' ) {
+        return false;
+    }
+    if ( isset( $cache[ $safexec ] ) ) {
+        return $cache[ $safexec ];
+    }
+    $ok  = false;
+    $ver = nppp_wget_safexec_version( $safexec );
+    if ( $ver !== '' && version_compare( $ver, NPPP_SAFEXEC_STDBUF_MIN, '>=' ) ) {
+        $cmd = 'for d in /usr/bin /bin /usr/local/bin /usr/sbin /sbin /usr/local/sbin /run/current-system/sw/bin; do '
+             . '[ -x "$d/stdbuf" ] && { echo "$d"; break; }; done 2>/dev/null';
+        $ok  = trim( nppp_wget_probe( $cmd ) ) !== '';
+    }
+    $cache[ $safexec ] = $ok;
+    return $ok;
+}
+
 /**
  * Build the wget command line for the running flavor.
  *
@@ -222,12 +286,22 @@ function nppp_wget_build_command( array $o ): string {
 
     // Verbosity. wget1: --no-verbose gives the "ts URL:... ->" log. wget2 prints nothing with
     // --no-verbose, so the crawl log uses its default (verbose) output without the progress bar.
+    $stdbuf = false;
     if ( $o['verbosity'] === 'log' ) {
         // wget2 block-buffers stdout when it is a file (0 bytes for seconds, then 4 KB chunks), which would
-        // freeze the live progress panel. "-o /dev/stdout" re-opens the same log file with line flushing.
-        // If it cannot be re-opened (safexec: wget2 runs as nobody, the log belongs to the PHP user) wget2
-        // falls back to plain stdout: the crawl still runs, only the live log is buffered.
-        $t[] = $v2 ? '--progress=none -o /dev/stdout' : '--no-verbose';
+        // freeze the live progress panel.
+        //  - Same user as the log: "-o /dev/stdout" re-opens the log file with line flushing.
+        //  - safexec: wget2 runs as nobody and cannot re-open the PHP user's log (-o /dev/stdout, -o -,
+        //    -o /dev/stderr all fall back to block-buffered stdout). The log is never made world-writable
+        //    (the plugin parses it); instead stdbuf, a safexec prelude wrapper that runs after the
+        //    privilege drop, forces line buffering on the inherited stdout/stderr.
+        // Without stdbuf the crawl still runs, only the live log is buffered.
+        if ( $v2 ) {
+            $stdbuf = nppp_wget_stdbuf_available( (string) $o['safexec'] );
+            $t[]    = $stdbuf ? '--progress=none' : '--progress=none -o /dev/stdout';
+        } else {
+            $t[] = '--no-verbose';
+        }
     } else {
         $t[] = '--quiet';
     }
@@ -301,6 +375,7 @@ function nppp_wget_build_command( array $o ): string {
 
     $core = ( $o['safexec'] !== '' ? escapeshellarg( (string) $o['safexec'] ) . ' ' : '' )
           . ( $o['nohup'] ? 'nohup ' : '' )
+          . ( $stdbuf ? 'stdbuf -oL -eL ' : '' )
           . 'wget ' . implode( ' ', $t ) . ' -- ' . $o['urls'];
 
     if ( $v2 && $o['dir'] !== '' ) {
