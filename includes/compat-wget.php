@@ -10,6 +10,7 @@
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  *
+ *
  *   1. -e use_proxy=...      wget2: "Unknown option 'use_proxy'", exit 2.
  *                            -> --no-proxy  /  --http-proxy= --https-proxy=
  *   2. --reject / --reject-regex
@@ -30,11 +31,24 @@
  *                            FINISHED / "URL: ... ->" lines. The crawl uses wget2's default verbose
  *                            output and nppp_wget_log_read() normalises it when it is read.
  *
+ *  10. FINISHED semantics  wget1 prints FINISHED / Downloaded only when something was downloaded; wget2 prints
+ *                            "Downloaded: 0 files" for a crawl whose start URL failed. Without a rule the plugin
+ *                            would treat that run as complete and overwrite the snapshot with an empty crawl.
+ *                            -> the reader emits the FINISHED tail only for files > 0 and bytes > 0.
+ *  11. Timestamps           wget1 stamps lines with the server's local time; WordPress forces PHP to UTC.
+ *                            -> stamps use the system time zone (TZ env, /etc/localtime, /etc/timezone).
+ *  12. Crawl start          wget2 prints no wall-clock time. The crawl shell writes the epoch into
+ *                            nppp-wget.start right before wget2 starts, so a crawl held back by the Purge All
+ *                            gate does not count the wait as crawl time.
+ *
  * wget2 versions differ:
  *   - chatter: 2.1.0 "Adding URL", 2.2.1 "Enqueue", 2.3.0 "Enqueuing" (all dropped by the log reader);
  *   - 2.1.0 and 2.2.1 request /robots.txt even with --no-robots --no-follow-sitemaps (2.3.0 does not):
  *     the reader drops that response, so it is neither a crawled URL nor a "broken link";
  *   - wget2 logs decoded URLs (UTF-8, spaces): the reader re-encodes them like wget1 (%C3%A7, %20).
+ * Known, accepted differences (wget2 library behaviour, no flag turns it off): wget2 decodes %2F (path) and
+ * %2b (query) while following links, wget1 does not (the request differs from wget1 for those links only);
+ * wget2 logs one ERROR line per failed try (429/5xx), wget1 none for 429 (only ERROR 404 is counted).
  * Known, accepted: a redirect source is not logged twice (wget1 logs the target again), so the
  * "checked" counter can be lower by the number of redirects; the unique URL set is identical.
  *
@@ -242,8 +256,16 @@ function nppp_wget_build_command( array $o ): string {
         // "mkdir -p DIR; cd DIR && exec CMD": wget1 -P creates a missing directory (a Purge All removes the
         // cache tmp dir), wget2 has no usable -P, so create it here. The async list "cd && exec" runs in one
         // subshell that exec()s wget2, so $! stays the PID of the crawler (the plugin signals / watches it).
-        $d = escapeshellarg( (string) $o['dir'] );
-        return 'mkdir -p ' . $d . ' 2>/dev/null; cd ' . $d . ' && exec ' . $core;
+        $d     = escapeshellarg( (string) $o['dir'] );
+        $start = '';
+        if ( $o['verbosity'] === 'log' ) {
+            $sf = nppp_wget_start_file();
+            if ( $sf !== '' ) {
+                // Epoch of the real start (after a Purge All gate, if any): "date" runs right before the exec.
+                $start = 'date +%s > ' . escapeshellarg( $sf ) . ' 2>/dev/null; ';
+            }
+        }
+        return 'mkdir -p ' . $d . ' 2>/dev/null; ' . $start . 'cd ' . $d . ' && exec ' . $core;
     }
 
     return ( $o['exec'] ? 'exec ' : '' ) . $core;
@@ -251,7 +273,7 @@ function nppp_wget_build_command( array $o ): string {
 
 /** True when the command already replaces its shell with wget ("... && exec wget2 ..."): wget2 + dir. */
 function nppp_wget_command_has_exec( string $cmd ): bool {
-    return (bool) preg_match( '~^mkdir -p [^;]*; cd .* && exec ~s', $cmd ) || strncmp( $cmd, 'cd ', 3 ) === 0;
+    return (bool) preg_match( '~^mkdir -p [^;]*; (?:date \+%s > [^;]*; )?cd .* && exec ~s', $cmd ) || strncmp( $cmd, 'cd ', 3 ) === 0;
 }
 
 /** "-e use_proxy=no" for wget1, "--no-proxy" for wget2 (used by the purge-queue poll). */
@@ -259,7 +281,16 @@ function nppp_wget_no_proxy_flag(): string {
     return nppp_wget_is_v2() ? '--no-proxy' : '-e use_proxy=no';
 }
 
-/** Remember when this crawl started: wget2 prints no wall-clock time, the log reader needs it. */
+/** File the wget2 crawl shell writes its start epoch into (the gate wait is not part of the crawl). */
+function nppp_wget_start_file(): string {
+    return function_exists( 'nppp_get_runtime_file' ) ? (string) nppp_get_runtime_file( 'nppp-wget.start' ) : '';
+}
+
+/**
+ * Remember when this crawl started: wget2 prints no wall-clock time, the log reader needs it.
+ * This is the launch time (fallback); the crawl shell overwrites it through nppp_wget_start_file() when the
+ * crawl really starts, which is later when the crawl waited behind a Purge All.
+ */
 function nppp_wget_mark_started(): void {
     if ( nppp_wget_is_v2() ) {
         update_option( 'nppp_wget2_started_at', time(), false );
@@ -294,6 +325,39 @@ function nppp_wget_is_robots_url( string $url ): bool {
     return is_string( $path ) && $path === '/robots.txt';
 }
 
+/**
+ * Time zone wget1 stamps its lines with: the system one (TZ, /etc/localtime, /etc/timezone). WordPress forces
+ * PHP to UTC, so date() would shift every stamp on a server that is not set to UTC. Falls back to the PHP zone.
+ */
+function nppp_wget_system_timezone(): DateTimeZone {
+    static $tz = null;
+    if ( $tz instanceof DateTimeZone ) {
+        return $tz;
+    }
+    $names = [ ltrim( (string) getenv( 'TZ' ), ':' ) ];
+    $link  = @readlink( '/etc/localtime' );
+    if ( is_string( $link ) && preg_match( '~zoneinfo/(.+)$~', $link, $m ) ) {
+        $names[] = $m[1];
+    }
+    if ( @is_readable( '/etc/timezone' ) ) {
+        $names[] = trim( (string) @file_get_contents( '/etc/timezone' ) );
+    }
+    foreach ( $names as $n ) {
+        if ( $n !== '' ) {
+            try {
+                return $tz = new DateTimeZone( $n );
+            } catch ( Exception $e ) {
+                continue;
+            }
+        }
+    }
+    return $tz = new DateTimeZone( date_default_timezone_get() );
+}
+
+function nppp_wget_format_stamp( int $ts ): string {
+    return ( new DateTimeImmutable( '@' . $ts ) )->setTimezone( nppp_wget_system_timezone() )->format( 'Y-m-d H:i:s' );
+}
+
 function nppp_wget_format_duration( float $s ): string {
     if ( $s < 60 ) {
         return sprintf( '%.1fs', $s );
@@ -323,7 +387,7 @@ function nppp_wget_log_normalize( string $raw, int $mtime, int $started = 0 ): s
         return $raw;
     }
 
-    $stamp   = date( 'Y-m-d H:i:s', $mtime > 0 ? $mtime : time() );
+    $stamp   = nppp_wget_format_stamp( $mtime > 0 ? $mtime : time() );
     $elapsed = ( $started > 0 && $mtime >= $started && ( $mtime - $started ) < 604800 ) ? (float) ( $mtime - $started ) : null;
     $out     = [];
     $tail    = [];
@@ -359,6 +423,11 @@ function nppp_wget_log_normalize( string $raw, int $mtime, int $started = 0 ): s
             $bytes = (float) $m[2] * $mult[ $m[3] ];
             $size  = $m[3] === '' ? (string) (int) $m[2] : $m[2] . $m[3];
 
+            // wget1 prints FINISHED / Downloaded only when bytes were downloaded; a crawl whose start URL failed
+            // (404 / 5xx / unreachable) must stay "incomplete", or the snapshot would be overwritten by an empty one.
+            if ( (int) $m[1] < 1 || $bytes < 1 ) {
+                continue;
+            }
             $tail[] = 'FINISHED --' . $stamp . '--';
             if ( $elapsed !== null ) {
                 $tail[] = 'Total wall clock time: ' . nppp_wget_format_duration( $elapsed );
@@ -395,9 +464,13 @@ function nppp_wget_log_read( $wp_filesystem, string $path ) {
     if ( ! nppp_wget_log_is_wget2( $raw ) ) {
         return $raw;
     }
-    return nppp_wget_log_normalize(
-        $raw,
-        (int) $wp_filesystem->mtime( $path ),
-        (int) get_option( 'nppp_wget2_started_at', 0 )
-    );
+    $started = (int) get_option( 'nppp_wget2_started_at', 0 );
+    $sf      = nppp_wget_start_file();
+    if ( $sf !== '' && $wp_filesystem->exists( $sf ) ) {
+        $sf_val = (int) trim( (string) $wp_filesystem->get_contents( $sf ) );
+        if ( $sf_val >= $started ) { // the shell writes it after PHP launched the crawl
+            $started = $sf_val;
+        }
+    }
+    return nppp_wget_log_normalize( $raw, (int) $wp_filesystem->mtime( $path ), $started );
 }
