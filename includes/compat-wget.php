@@ -10,6 +10,7 @@
  * Author URI: https://www.psauxit.com
  * License: GPL-2.0+
  *
+ * Why this file exists (measured against wget 1.21.4 and wget2 2.1.0 / 2.2.1 / 2.3.0 / git master):
  *
  *   1. -e use_proxy=...      wget2: "Unknown option 'use_proxy'", exit 2.
  *                            -> --no-proxy  /  --http-proxy= --https-proxy=
@@ -41,7 +42,7 @@
  *                            nppp-wget.start right before wget2 starts, so a crawl held back by the Purge All
  *                            gate does not count the wait as crawl time.
  *
- * wget2 versions differ:
+ * wget2 versions differ (measured):
  *   - chatter: 2.1.0 "Adding URL", 2.2.1 "Enqueue", 2.3.0 "Enqueuing" (all dropped by the log reader);
  *   - 2.1.0 and 2.2.1 request /robots.txt even with --no-robots --no-follow-sitemaps (2.3.0 does not):
  *     the reader drops that response, so it is neither a crawled URL nor a "broken link";
@@ -104,6 +105,56 @@ function nppp_wget_regex_is_valid( string $regex ): bool {
     $out    = shell_exec( "printf '' | sed -E -n -e " . escapeshellarg( $script ) . ' >/dev/null 2>&1; echo $?' );
     $rc     = trim( (string) $out );
     return ! ( $rc !== '' && ctype_digit( $rc ) && (int) $rc !== 0 && (int) $rc !== 126 && (int) $rc !== 127 );
+}
+
+/**
+ * Direct reachability check of the site for the preflight probe (wget2 only).
+ *
+ * wget2 2.1.0 reports an unresolvable host or a refused connection as exit 0 and takes ~1 s to give up (it retries
+ * once), so the 300 ms probe sees "still running" and calls it a success. wget1 and wget2 >= 2.2.1 fail fast with
+ * exit 4. The probe therefore checks the site itself with a plain TCP connect, independent of wget2's exit code.
+ * IPv4 first (the crawl runs --prefer-family=IPv4), IPv6 only when there is no A record.
+ *
+ * @return string|null 'dns_error' (does not resolve), 'network_error' (resolves, connection refused / timed out),
+ *                     null (reachable, or it cannot be tested).
+ */
+function nppp_wget_site_failure( string $url ): ?string {
+    $p    = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url ) : parse_url( $url );
+    $host = is_array( $p ) ? trim( (string) ( $p['host'] ?? '' ), '[]' ) : '';
+    if ( $host === '' || ! function_exists( 'fsockopen' ) ) {
+        return null;
+    }
+    $scheme = strtolower( (string) ( $p['scheme'] ?? 'http' ) );
+    $port   = (int) ( $p['port'] ?? ( $scheme === 'https' ? 443 : 80 ) );
+
+    $target = null;
+    if ( filter_var( $host, FILTER_VALIDATE_IP ) !== false ) {
+        $target = $host;
+    } else {
+        $ip = gethostbyname( $host ); // IPv4 only: returns the input unchanged on failure
+        if ( $ip !== $host ) {
+            $target = $ip;
+        } elseif ( function_exists( 'dns_get_record' ) ) {
+            $aaaa = @dns_get_record( $host, DNS_AAAA );
+            if ( ! empty( $aaaa ) && isset( $aaaa[0]['ipv6'] ) ) {
+                $target = $aaaa[0]['ipv6'];
+            }
+        }
+    }
+    if ( $target === null ) {
+        return 'dns_error';
+    }
+    if ( strpos( $target, ':' ) !== false ) {
+        $target = 'tcp://[' . $target . ']';
+    }
+    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fsockopen -- TCP reachability probe
+    $conn = @fsockopen( $target, $port, $errno, $errstr, 2 );
+    if ( $conn ) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- closing probe socket
+        fclose( $conn );
+        return null;
+    }
+    return 'network_error';
 }
 
 /* ============================================================================
@@ -391,6 +442,7 @@ function nppp_wget_log_normalize( string $raw, int $mtime, int $started = 0 ): s
     $elapsed = ( $started > 0 && $mtime >= $started && ( $mtime - $started ) < 604800 ) ? (float) ( $mtime - $started ) : null;
     $out     = [];
     $tail    = [];
+    $ok      = 0; // 2xx pages that reach the log (robots.txt excluded): wget1's "Downloaded: N files"
 
     foreach ( preg_split( '~\r?\n~', $raw ) as $line ) {
         $line = rtrim( $line );
@@ -403,6 +455,7 @@ function nppp_wget_log_normalize( string $raw, int $mtime, int $started = 0 ): s
             }
             // Only final 2xx answers are logged by wget1 -nv; redirects / 304 are not.
             if ( $m[1][0] === '2' ) {
+                $ok++;
                 $out[] = $stamp . ' URL:' . nppp_wget_log_encode_url( $m[2] ) . ' [0/0] -> "-" [1]';
             }
             continue;
@@ -425,17 +478,19 @@ function nppp_wget_log_normalize( string $raw, int $mtime, int $started = 0 ): s
 
             // wget1 prints FINISHED / Downloaded only when bytes were downloaded; a crawl whose start URL failed
             // (404 / 5xx / unreachable) must stay "incomplete", or the snapshot would be overwritten by an empty one.
-            if ( (int) $m[1] < 1 || $bytes < 1 ) {
+            // wget2 2.1.x / 2.2.x also count the /robots.txt they fetch despite --no-robots: use the pages counted
+            // above, not wget2's own file counter, or a failed start URL would still look "finished".
+            if ( $ok < 1 || $bytes < 1 ) {
                 continue;
             }
             $tail[] = 'FINISHED --' . $stamp . '--';
             if ( $elapsed !== null ) {
                 $tail[] = 'Total wall clock time: ' . nppp_wget_format_duration( $elapsed );
                 $rate   = $elapsed > 0 ? $bytes / $elapsed / 1024 : 0.0;
-                $tail[] = 'Downloaded: ' . $m[1] . ' files, ' . $size . ' in ' . nppp_wget_format_duration( $elapsed )
+                $tail[] = 'Downloaded: ' . $ok . ' files, ' . $size . ' in ' . nppp_wget_format_duration( $elapsed )
                         . ' (' . ( $rate >= 1024 ? sprintf( '%.2f MB/s', $rate / 1024 ) : sprintf( '%.2f KB/s', $rate ) ) . ')';
             } else {
-                $tail[] = 'Downloaded: ' . $m[1] . ' files, ' . $size;
+                $tail[] = 'Downloaded: ' . $ok . ' files, ' . $size;
             }
             continue;
         }
