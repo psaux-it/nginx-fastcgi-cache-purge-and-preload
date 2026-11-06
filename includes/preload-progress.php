@@ -64,7 +64,7 @@ function nppp_nginx_cache_preload_progress($request) {
     // Parse log file
     if ( $wp_filesystem->exists( $log_path ) ) {
         $log_found = true;
-        $raw_log = $wp_filesystem->get_contents( $log_path );
+        $raw_log = nppp_wget_log_read( $wp_filesystem, $log_path );
         $lines = $raw_log !== false && $raw_log !== ''
             ? array_filter( array_map( 'trim', explode( "\n", $raw_log ) ) )
             : [];
@@ -247,7 +247,7 @@ function nppp_get_estimated_url_count( $wp_filesystem = null, $snapshot_path = '
         ! empty( $snapshot_path ) &&
         $wp_filesystem->exists( $snapshot_path )
     ) {
-        $contents = $wp_filesystem->get_contents( $snapshot_path );
+        $contents = nppp_wget_log_read( $wp_filesystem, $snapshot_path );
         if ( ! empty( $contents ) ) {
             if ( preg_match( '/^Downloaded:\s+(\d+)\s+files/m', $contents, $m ) ) {
                 $real_count = (int) $m[1];

@@ -589,7 +589,7 @@ function nppp_parse_wget_log_urls( $wp_filesystem ) {
         }
     }
 
-    $contents = $wp_filesystem->get_contents( $read_path );
+    $contents = nppp_wget_log_read( $wp_filesystem, $read_path );
     if ( $contents === false || $contents === '' ) {
         return $urls;
     }

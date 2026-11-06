@@ -125,7 +125,7 @@ function nppp_check_wget_version() {
     $installed_version = 'Not Installed';
 
     if (nppp_get_command_output('command -v wget')) {
-        $line = nppp_get_command_output("wget --version 2>&1 | head -n1 | awk '{print \$3}'");
+        $line = nppp_get_command_output("wget --version 2>&1 | head -n1 | awk '{print (\$2 == \"Wget2\" ? \"Wget2 \" : \"\") \$3}'");
         if (!empty($line)) {
             $installed_version = trim($line);
         }

@@ -124,6 +124,7 @@ require_once dirname(__DIR__) . '/includes/enqueue-assets.php';
 require_once dirname(__DIR__) . '/includes/wp-filesystem.php';
 require_once dirname(__DIR__) . '/includes/purge-lock.php';
 require_once dirname(__DIR__) . '/includes/pre-checks.php';
+require_once dirname(__DIR__) . '/includes/compat-wget.php';
 require_once dirname(__DIR__) . '/includes/admin-bar.php';
 require_once dirname(__DIR__) . '/includes/log.php';
 require_once dirname(__DIR__) . '/includes/svg.php';

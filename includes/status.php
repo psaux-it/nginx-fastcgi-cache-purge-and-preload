@@ -1563,7 +1563,8 @@ function nppp_varnish_vo_last_preload(): ?array {
                 $files    = ( $cached['files'] === null ) ? null : (int) $cached['files'];
                 $elapsed  = (string) $cached['elapsed'];
             } else {
-                $contents = $wp_filesystem->get_contents( $snapshot );
+                // Normalised like every other wget log reader (a wget1 or already-normalised snapshot passes through untouched).
+                $contents = nppp_wget_log_read( $wp_filesystem, $snapshot );
                 if ( is_string( $contents ) && $contents !== '' ) {
                     if ( preg_match( '/^FINISHED\s+--([\d\-]+\s+[\d:]+)--$/m', $contents, $m ) ) {
                         $finished = trim( $m[1] );

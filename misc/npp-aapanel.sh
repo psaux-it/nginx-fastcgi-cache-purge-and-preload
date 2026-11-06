@@ -1427,7 +1427,16 @@ ensure_gnu_wget() {
 
         # Detect wget2
         if echo "${wget_ver_raw}" | grep -qi 'GNU Wget2'; then
-            wget_reason="wget2"
+            # GNU Wget2 is supported from 2.1.0 (flags translated by includes/compat-wget.php)
+            local wget2_ver
+            wget2_ver="$(echo "${wget_ver_raw}" | grep -oP 'GNU\s+Wget2\s+\K[0-9]+(?:\.[0-9]+)+' || echo "0.0")"
+            if ver_gte "${wget2_ver}" "2.1.0"; then
+                wget_ok=true
+                _ok "GNU Wget2 ${wget2_ver} is present and compatible"
+                _track "wget: GNU Wget2 ${wget2_ver} (OK)"
+            else
+                wget_reason="wget2 (${wget2_ver} < 2.1.0)"
+            fi
         # Detect busybox/toybox
         elif echo "${wget_ver_raw}" | grep -qi 'busybox\|toybox'; then
             wget_reason="busybox_toybox"
@@ -1670,7 +1679,7 @@ post_install_verify() {
 
     # Wget check (special — must be GNU Wget)
     if have wget; then
-        local wget_v; wget_v="$(wget --version 2>&1 | head -1 | grep -oP 'GNU\s+Wget\s+\K[0-9]+(?:\.[0-9]+)+' || echo '?')"
+        local wget_v; wget_v="$(wget --version 2>&1 | head -1 | grep -oP 'GNU\s+Wget2?\s+\K[0-9]+(?:\.[0-9]+)+' || echo '?')"
         _ok "wget: $(command -v wget)  ${DIM}(GNU Wget ${wget_v})${RST}"
     else
         _fail "wget: NOT FOUND"

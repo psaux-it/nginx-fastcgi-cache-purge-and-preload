@@ -886,6 +886,13 @@ fuse-umount() {
     found_any=0
     for load_path in "${load_paths[@]}"; do
       read -r -a PIDS <<< "$(pgrep -a -f "wget .*--recursive .*--no-cache .*--delete-after .*-P ${load_path}" | grep -v "cpulimit" | awk '{print $1}')"
+      # wget2 has no -P (the crawl runs from the cache dir via "cd DIR && exec wget"): match on the process CWD
+      if (( "${#PIDS[@]}" == 0 )) || [[ -z "${PIDS[0]}" ]]; then
+        PIDS=()
+        for _p in $(pgrep -f "wget .*--recursive .*--delete-after" | grep -v "cpulimit"); do
+          [[ "$(readlink "/proc/${_p}/cwd" 2>/dev/null)" == "${load_path%/}" ]] && PIDS+=("${_p}")
+        done
+      fi
       if (( "${#PIDS[@]}" )); then
         found_any=1
         for pid in "${PIDS[@]}"; do

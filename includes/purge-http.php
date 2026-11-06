@@ -2726,7 +2726,7 @@ function nppp_http_purge_gate_pending(): ?array {
 function nppp_http_purge_gate_snippet( array $pending, bool $hold = false ): string {
     $max = nppp_http_purge_gate_max_wait();
 
-    $poll = 'wget -q -O- --no-config --no-check-certificate -e use_proxy=no -T 3 -t 1'
+    $poll = 'wget -q -O- --no-config --no-check-certificate ' . nppp_wget_no_proxy_flag() . ' -T 3 -t 1'
           . ' --header=' . escapeshellarg( 'Host: ' . (string) ( $pending['host'] ?? '' ) )
           . ' ' . escapeshellarg( (string) $pending['status_url'] ) . ' 2>/dev/null';
 
@@ -2831,7 +2831,9 @@ function nppp_http_purge_gate_command( string $crawl, string $log_path ): string
         return $crawl . $tail;
     }
 
-    return "( trap '' HUP; " . nppp_http_purge_gate_snippet( $pending, true ) . ' exec ' . $crawl . ' )' . $tail;
+    // wget2 crawl = "cd DIR && exec ..." (already ends in exec); wget1 crawl = plain command.
+    $exec = ( ( function_exists( 'nppp_wget_command_has_exec' ) && nppp_wget_command_has_exec( $crawl ) ) ) ? ' ' : ' exec ';
+    return "( trap '' HUP; " . nppp_http_purge_gate_snippet( $pending, true ) . $exec . $crawl . ' )' . $tail;
 }
 
 /* ============================================================================

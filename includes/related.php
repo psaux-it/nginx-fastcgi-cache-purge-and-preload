@@ -329,33 +329,27 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
     $home_host   = strtolower($home_parsed['host'] ?? '');
     if ($home_host === '') return;
     $base_host   = preg_replace('/^www\./i', '', $home_host);
-    $domain_list = escapeshellarg(implode(',', array_unique([$base_host, 'www.' . $base_host])));
 
-    // Common wget flags: built once, shared across both UA invocations.
-    $common =
-        '--quiet --no-config --no-cookies --delete-after ' .
-        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=1 ' .
-        '-e robots=off ' .
-        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-        '-e ' . escapeshellarg('http_proxy=' . $http_proxy) . ' ' .
-        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-        '--limit-rate=' . $nginx_cache_limit_rate . 'k ' .
-        '--domains=' . $domain_list . ' ' .
-        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ';
-
-    $safexec_prefix = $use_safexec ? escapeshellarg($safexec_path) . ' ' : '';
-
-    // All URLs passed to a single wget invocation per UA.
-    // GNU wget fetches every command-line URL sequentially in one process.
-    $url_args_str = '-- ' . implode(' ', $valid_url_args);
+    // Common wget options: built once, shared across both UA invocations.
+    // All URLs go to a single wget process per UA (wget2: --max-threads=1 keeps them sequential).
+    $common = [
+        'safexec'      => $use_safexec ? $safexec_path : '',
+        'nohup'        => true,
+        'delete_after' => true,
+        'retry_http'   => false,
+        'tries'        => 1,
+        'read_timeout' => $nginx_cache_read_timeout,
+        'use_proxy'    => $use_proxy,
+        'http_proxy'   => $http_proxy,
+        'https_proxy'  => $https_proxy,
+        'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+        'limit_rate'   => (int) $nginx_cache_limit_rate,
+        'domains'      => implode(',', array_unique([$base_host, 'www.' . $base_host])),
+        'urls'         => implode(' ', $valid_url_args),
+    ];
 
     // Desktop — 1 process total, regardless of how many related URLs.
-    $cmd_desktop = $safexec_prefix .
-        'nohup wget ' . $common .
-        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
-        $url_args_str . ' >/dev/null 2>&1 &';
+    $cmd_desktop = nppp_wget_build_command($common + ['user_agent' => NPPP_USER_AGENT]) . ' >/dev/null 2>&1 &';
     shell_exec($cmd_desktop);
 
     // Mobile — 1 process total (if enabled).
@@ -364,10 +358,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
             ? $settings['nginx_cache_mobile_user_agent']
             : NPPP_USER_AGENT_MOBILE;
 
-        $cmd_mobile = $safexec_prefix .
-            'nohup wget ' . $common .
-            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
-            $url_args_str . ' >/dev/null 2>&1 &';
+        $cmd_mobile = nppp_wget_build_command($common + ['user_agent' => $nppp_mobile_ua]) . ' >/dev/null 2>&1 &';
         shell_exec($cmd_mobile);
     }
 }

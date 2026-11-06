@@ -440,7 +440,7 @@ function nppp_create_scheduled_event_preload_status_callback() {
 
     // Parse log file using to get total processed URL
     if ($wp_filesystem->exists($log_path) && $wp_filesystem->is_readable($log_path)) {
-        $log_contents = $wp_filesystem->get_contents($log_path);
+        $log_contents = nppp_wget_log_read($wp_filesystem, $log_path);
 
         if ($log_contents) {
             // Get processed URLs

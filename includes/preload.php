@@ -44,9 +44,20 @@ function nppp_check_network_env(): array {
     nppp_prepare_request_env(true);
 
     $url = add_query_arg('nppp_probe', wp_generate_password(8, false), home_url('/'));
-    $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
-    $lines = explode("\n", trim((string) $output));
-    $ok = trim((string) end($lines)) === '0';
+    // wget1 --spider falls back to GET when the server rejects HEAD (405/501: some WAF / CDN rules); wget2 --spider
+    // does not and exits 8, which would be reported as a network failure. For wget2 probe with a plain GET.
+    if ( function_exists('nppp_wget_is_v2') && nppp_wget_is_v2() ) {
+        // wget2 exits 0 on DNS / connection failures and -q hides every message, so the exit code alone cannot tell
+        // "network down" from "reachable". Run without -q and require a real HTTP response line as well. --tries=2:
+        // wget2 retries a refused connection 20 times by default, which would block the admin request for minutes.
+        $output = shell_exec('wget --no-check-certificate --tries=2 -O /dev/null ' . escapeshellarg($url) . ' 2>&1; echo $?');
+        $lines  = explode("\n", trim((string) $output));
+        $ok     = trim((string) end($lines)) === '0' && (bool) preg_match('/^HTTP response [23]\d\d\b/m', (string) $output);
+    } else {
+        $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
+        $lines = explode("\n", trim((string) $output));
+        $ok = trim((string) end($lines)) === '0';
+    }
     return [
         'dns_ok'      => $ok,
         'outbound_ok' => $ok,
@@ -275,6 +286,22 @@ function nppp_detect_premature_process(
     $www_host  = 'www.' . $base_host;
     $domain_list = implode(',', array_unique([$base_host, $www_host]));
 
+    // wget2 treats an invalid --reject-regex as "matches nothing" (exit 0): the crawl would start with the
+    // reject filter OFF and walk /wp-admin/, /cart/ ... wget1 exits 1 here. Same outcome: command error.
+    if ( function_exists('nppp_wget_is_v2') && nppp_wget_is_v2() && ! nppp_wget_regex_is_valid($nginx_cache_reject_regex) ) {
+        return false;
+    }
+
+    // wget2 2.1.0 does not fail on an unresolvable host / refused connection (exit 0, ~1 s to give up, longer than
+    // the 300 ms probe window below): check the site directly so the preflight still aborts before a purge.
+    // Through a proxy the proxy health check above already covers the network leg.
+    if ( $use_proxy !== 'yes' && function_exists('nppp_wget_is_v2') && nppp_wget_is_v2() && function_exists('nppp_wget_site_failure') ) {
+        $site_failure = nppp_wget_site_failure($fdomain);
+        if ( $site_failure !== null ) {
+            return $site_failure;
+        }
+    }
+
     // Check safexec availability
     $safexec_path = nppp_find_safexec_path();
     $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
@@ -288,26 +315,27 @@ function nppp_detect_premature_process(
     // create that directory (hiding ERROR PATH), into an unwritable one it exits 3 (hiding
     // ERROR PERMISSION). Never combine -O /dev/null with --delete-after: wget then writes
     // /dev/null.tmp (needs write access to /dev) instead of discarding the body.
-    $testCommand =
-        'exec ' .
-        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-        'wget ' .
-        '--quiet --no-cache --no-config --no-cookies -O /dev/null ' .
-        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=2 --ignore-case ' .
-        '-e robots=off ' .
-        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-        '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
-        '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
-        '--domains=' . escapeshellarg($domain_list) . ' ' .
-        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-        '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
-        '-- ' .
-        escapeshellarg($fdomain);
+    $testCommand = nppp_wget_build_command([
+        'exec'         => true,
+        'safexec'      => $use_safexec ? $safexec_path : '',
+        'verbosity'    => 'quiet',
+        'no_cache'     => true,
+        'output'       => '/dev/null',
+        'delete_after' => false,
+        'ignore_case'  => true,
+        'tries'        => 2,
+        'read_timeout' => 60,
+        'use_proxy'    => $use_proxy,
+        'http_proxy'   => $http_proxy,
+        'https_proxy'  => $https_proxy,
+        'limit_rate'   => (int) $nginx_cache_limit_rate,
+        'wait'         => (int) $nginx_cache_wait,
+        'reject_regex' => $nginx_cache_reject_regex,
+        'reject_ext'   => $nginx_cache_reject_extension,
+        'domains'      => $domain_list,
+        'user_agent'   => $NPPP_DYNAMIC_USER_AGENT,
+        'urls'         => escapeshellarg($fdomain),
+    ]);
 
     // wget must never block on pipes, so the child shell redirects its own I/O to /dev/null
     // (see the proc_open() call below). PHP only holds pipe ends and closes them right after the spawn.
@@ -697,30 +725,32 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
             //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
 
             // Main
-            $command =
-                ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-                'nohup wget ' .
-                '--no-verbose --recursive -l inf --no-config --no-cookies --delete-after ' .
-                '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-                '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
-                '-e robots=off ' .
-                '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-                '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-                '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-                '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-                '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-                '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-                '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
-                '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
-                '--domains=' . escapeshellarg($domain_list) . ' ' .
-                '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-                '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
-                '-- ' .
-                escapeshellarg($fdomain);
+            $command = nppp_wget_build_command([
+                'safexec'      => $use_safexec ? $safexec_path : '',
+                'nohup'        => true,
+                'verbosity'    => 'log',
+                'recursive'    => true,
+                'delete_after' => true,
+                'ignore_case'  => true,
+                'tries'        => 2,
+                'read_timeout' => $nginx_cache_read_timeout,
+                'use_proxy'    => $use_proxy,
+                'http_proxy'   => $http_proxy,
+                'https_proxy'  => $https_proxy,
+                'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+                'limit_rate'   => (int) $nginx_cache_limit_rate,
+                'wait'         => (int) $nginx_cache_wait,
+                'reject_regex' => $nginx_cache_reject_regex,
+                'reject_ext'   => $nginx_cache_reject_extension,
+                'domains'      => $domain_list,
+                'user_agent'   => $NPPP_DYNAMIC_USER_AGENT,
+                'urls'         => escapeshellarg($fdomain),
+            ]);
 
             // Normally "<crawl> > log 2>&1 < /dev/null & echo $!". Behind a Purge All whose nginx
             // queue is still deleting, the crawl waits in the same background process until the
             // queue is idle (see nppp_http_purge_gate_command()), so it cannot be swept.
+            nppp_wget_mark_started();
             $command = function_exists('nppp_http_purge_gate_command')
                 ? nppp_http_purge_gate_command($command, $log_path)
                 : $command . ' > ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -967,28 +997,30 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
         //    Requests comes from our local network/server where wordpress website hosted since it minimizes the risk of a MITM security vulnerability.
 
         // Main
-        $command =
-            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-            'nohup wget ' .
-            '--no-verbose --recursive -l inf --no-config --no-cookies --delete-after ' .
-            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 --ignore-case ' .
-            '-e robots=off ' .
-            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--wait=' . ((int)$nginx_cache_wait) . ' ' .
-            '--reject-regex=' . escapeshellarg($nginx_cache_reject_regex) . ' ' .
-            '--reject=' . escapeshellarg($nginx_cache_reject_extension) . ' ' .
-            '--domains=' . escapeshellarg($domain_list) . ' ' .
-            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg($NPPP_DYNAMIC_USER_AGENT) . ' ' .
-            '-- ' .
-            escapeshellarg($fdomain);
+        $command = nppp_wget_build_command([
+            'safexec'      => $use_safexec ? $safexec_path : '',
+            'nohup'        => true,
+            'verbosity'    => 'log',
+            'recursive'    => true,
+            'delete_after' => true,
+            'ignore_case'  => true,
+            'tries'        => 2,
+            'read_timeout' => $nginx_cache_read_timeout,
+            'use_proxy'    => $use_proxy,
+            'http_proxy'   => $http_proxy,
+            'https_proxy'  => $https_proxy,
+            'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+            'limit_rate'   => (int) $nginx_cache_limit_rate,
+            'wait'         => (int) $nginx_cache_wait,
+            'reject_regex' => $nginx_cache_reject_regex,
+            'reject_ext'   => $nginx_cache_reject_extension,
+            'domains'      => $domain_list,
+            'user_agent'   => $NPPP_DYNAMIC_USER_AGENT,
+            'urls'         => escapeshellarg($fdomain),
+        ]);
 
         // Same gate as above: held back behind a still-running nginx purge queue.
+        nppp_wget_mark_started();
         $command = function_exists('nppp_http_purge_gate_command')
             ? nppp_http_purge_gate_command($command, $log_path)
             : $command . ' > ' . escapeshellarg($log_path) . ' 2>&1 < /dev/null & echo $!';
@@ -1278,24 +1310,21 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
 
     // PATCH: CVE ID: CVE-2025-6213
     // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-    $command_desktop =
-        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-        'nohup wget ' .
-        '--quiet --no-config --no-cookies --delete-after ' .
-        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
-        '-e robots=off ' .
-        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--domains=' . escapeshellarg($domain_list) . ' ' .
-        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
-        '-- ' .
-        $url_shell_arguments . ' ' .
-        '>/dev/null 2>&1 & echo $!';
+    $command_desktop = nppp_wget_build_command([
+        'safexec'      => $use_safexec ? $safexec_path : '',
+        'nohup'        => true,
+        'delete_after' => true,
+        'tries'        => 2,
+        'read_timeout' => $nginx_cache_read_timeout,
+        'use_proxy'    => $use_proxy,
+        'http_proxy'   => $http_proxy,
+        'https_proxy'  => $https_proxy,
+        'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+        'limit_rate'   => (int) $nginx_cache_limit_rate,
+        'domains'      => $domain_list,
+        'user_agent'   => NPPP_USER_AGENT,
+        'urls'         => $url_shell_arguments,
+    ]) . ' >/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
     $output_desktop = shell_exec($command_desktop);
@@ -1325,24 +1354,21 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
 
         // PATCH: CVE ID: CVE-2025-6213
         // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-        $command_mobile =
-            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-            'nohup wget ' .
-            '--quiet --no-config --no-cookies --delete-after ' .
-            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
-            '-e robots=off ' .
-            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--domains=' . escapeshellarg($domain_list) . ' ' .
-            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
-            '-- ' .
-            $url_shell_arguments . ' ' .
-            '>/dev/null 2>&1 & echo $!';
+        $command_mobile = nppp_wget_build_command([
+            'safexec'      => $use_safexec ? $safexec_path : '',
+            'nohup'        => true,
+            'delete_after' => true,
+            'tries'        => 2,
+            'read_timeout' => $nginx_cache_read_timeout,
+            'use_proxy'    => $use_proxy,
+            'http_proxy'   => $http_proxy,
+            'https_proxy'  => $https_proxy,
+            'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+            'limit_rate'   => (int) $nginx_cache_limit_rate,
+            'domains'      => $domain_list,
+            'user_agent'   => $nppp_mobile_ua,
+            'urls'         => $url_shell_arguments,
+        ]) . ' >/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
         $output_mobile = shell_exec($command_mobile);
@@ -1590,24 +1616,21 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
 
     // PATCH: CVE ID: CVE-2025-6213
     // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-    $command_desktop =
-        ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-        'nohup wget ' .
-        '--quiet --no-config --no-cookies --delete-after ' .
-        '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-        '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
-        '-e robots=off ' .
-        '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-        '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-        '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-        '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-        '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-        '--domains=' . escapeshellarg($domain_list) . ' ' .
-        '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-        '--user-agent=' . escapeshellarg(NPPP_USER_AGENT) . ' ' .
-        '-- ' .
-        escapeshellarg($current_page_url) . ' ' .
-        '>/dev/null 2>&1 & echo $!';
+    $command_desktop = nppp_wget_build_command([
+        'safexec'      => $use_safexec ? $safexec_path : '',
+        'nohup'        => true,
+        'delete_after' => true,
+        'tries'        => 2,
+        'read_timeout' => $nginx_cache_read_timeout,
+        'use_proxy'    => $use_proxy,
+        'http_proxy'   => $http_proxy,
+        'https_proxy'  => $https_proxy,
+        'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+        'limit_rate'   => (int) $nginx_cache_limit_rate,
+        'domains'      => $domain_list,
+        'user_agent'   => NPPP_USER_AGENT,
+        'urls'         => escapeshellarg($current_page_url),
+    ]) . ' >/dev/null 2>&1 & echo $!';
 
     // Trigger desktop preload and get PID
     // Guard — shell_exec must be available to spawn wget
@@ -1642,24 +1665,21 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
 
         // PATCH: CVE ID: CVE-2025-6213
         // https://github.com/psaux-it/nginx-fastcgi-cache-purge-and-preload/security/advisories/GHSA-636g-ww4c-2j54
-        $command_mobile =
-            ($use_safexec ? escapeshellarg($safexec_path) . ' ' : '') .
-            'nohup wget ' .
-            '--quiet --no-config --no-cookies --delete-after ' .
-            '--no-dns-cache --no-check-certificate --prefer-family=IPv4 --retry-on-http-error=503,429 --waitretry=10 ' .
-            '--dns-timeout=10 --connect-timeout=5 --read-timeout=' . $nginx_cache_read_timeout . ' --tries=2 ' .
-            '-e robots=off ' .
-            '-e ' . escapeshellarg('use_proxy=' . $use_proxy) . ' ' .
-            '-e ' . escapeshellarg('http_proxy='  . $http_proxy) . ' ' .
-            '-e ' . escapeshellarg('https_proxy=' . $https_proxy) . ' ' .
-            '-P ' . escapeshellarg($use_safexec ? '/tmp' : $tmp_path) . ' ' .
-            '--limit-rate=' . ((int)$nginx_cache_limit_rate) . 'k ' .
-            '--domains=' . escapeshellarg($domain_list) . ' ' .
-            '--header=' . escapeshellarg(NPPP_HEADER_ACCEPT) . ' ' .
-            '--user-agent=' . escapeshellarg($nppp_mobile_ua) . ' ' .
-            '-- ' .
-            escapeshellarg($current_page_url) . ' ' .
-            '>/dev/null 2>&1 & echo $!';
+        $command_mobile = nppp_wget_build_command([
+            'safexec'      => $use_safexec ? $safexec_path : '',
+            'nohup'        => true,
+            'delete_after' => true,
+            'tries'        => 2,
+            'read_timeout' => $nginx_cache_read_timeout,
+            'use_proxy'    => $use_proxy,
+            'http_proxy'   => $http_proxy,
+            'https_proxy'  => $https_proxy,
+            'dir'          => $use_safexec ? '/tmp' : $tmp_path,
+            'limit_rate'   => (int) $nginx_cache_limit_rate,
+            'domains'      => $domain_list,
+            'user_agent'   => $nppp_mobile_ua,
+            'urls'         => escapeshellarg($current_page_url),
+        ]) . ' >/dev/null 2>&1 & echo $!';
 
         // Trigger preload for mobile
         $output_mobile = shell_exec($command_mobile);

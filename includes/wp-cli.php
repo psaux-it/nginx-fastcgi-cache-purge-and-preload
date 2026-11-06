@@ -1635,7 +1635,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                             $reason_text = __( 'wget binary not found or shell_exec constrained.', 'fastcgi-cache-purge-and-preload-nginx' );
                             break;
                         case 'wget2':
-                            $reason_text = __( 'GNU Wget2 is incompatible with NPP background worker.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            $reason_text = __( 'GNU Wget2 older than 2.1.0 is incompatible with NPP background worker.', 'fastcgi-cache-purge-and-preload-nginx' );
                             break;
                         case 'busybox_toybox':
                             $reason_text = __( 'BusyBox/ToyBox wget lacks required arguments.', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -1650,7 +1650,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                             $reason_text = __( 'Unknown wget compatibility issue.', 'fastcgi-cache-purge-and-preload-nginx' );
                     }
                     /* translators: %s: reason why preload is locked (e.g., missing or outdated wget) */
-                    WP_CLI::error( sprintf( __( 'Preload Locked: %s GNU Wget 1.16+ required.', 'fastcgi-cache-purge-and-preload-nginx' ), $reason_text ) );
+                    WP_CLI::error( sprintf( __( 'Preload Locked: %s GNU Wget 1.16+ or GNU Wget2 2.1.0+ required.', 'fastcgi-cache-purge-and-preload-nginx' ), $reason_text ) );
                 }
             }
 

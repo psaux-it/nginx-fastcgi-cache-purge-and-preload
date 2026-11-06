@@ -161,7 +161,18 @@ if (! function_exists('nppp_classify_wget_version_output')) {
         $first_line = trim((string) strtok($version_output, "\n"));
 
         if (stripos($first_line, 'GNU Wget2') !== false || stripos($version_output, 'GNU Wget2') !== false) {
-            return ['ok' => false, 'reason' => 'wget2'];
+            // GNU Wget2 is supported from 2.1.0 (flags translated by includes/compat-wget.php).
+            $v2 = '';
+            if (preg_match('/GNU\s+Wget2\s+([0-9]+(?:\.[0-9]+){1,2})/i', $first_line, $m2)) {
+                $v2 = $m2[1];
+            }
+            if ($v2 === '') {
+                return ['ok' => false, 'reason' => 'unknown_version'];
+            }
+            if (version_compare($v2, '2.1.0', '<')) {
+                return ['ok' => false, 'reason' => 'wget2'];
+            }
+            return ['ok' => true, 'reason' => 'ok', 'flavor' => 'wget2'];
         }
 
         if (stripos($version_output, 'busybox') !== false || stripos($version_output, 'toybox') !== false) {
@@ -185,7 +196,7 @@ if (! function_exists('nppp_classify_wget_version_output')) {
             return ['ok' => false, 'reason' => 'unsupported_version'];
         }
 
-        return ['ok' => true, 'reason' => 'ok'];
+        return ['ok' => true, 'reason' => 'ok', 'flavor' => 'wget'];
     }
 }
 
@@ -1132,10 +1143,10 @@ function nppp_pre_checks_critical() {
                 }
 
                 if ($reason === 'wget2') {
-                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Your system provides GNU Wget2 (often via wget shim), which is not supported.', 'fastcgi-cache-purge-and-preload-nginx');
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Your system provides a GNU Wget2 (often via wget shim) older than 2.1.0, which is not supported. Install GNU Wget 1.x or GNU Wget2 2.1.0+.', 'fastcgi-cache-purge-and-preload-nginx');
                 }
 
-                return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Older GNU Wget and Wget2 are not supported.', 'fastcgi-cache-purge-and-preload-nginx');
+                return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16). Older GNU Wget and Wget2 older than 2.1.0 are not supported.', 'fastcgi-cache-purge-and-preload-nginx');
             }
         }
     }
