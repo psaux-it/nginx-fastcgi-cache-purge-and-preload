@@ -140,7 +140,7 @@
 
 // Metadata
 #define SAFEXEC_NAME     "safexec"
-#define SAFEXEC_VERSION  "1.9.7"
+#define SAFEXEC_VERSION  "1.9.8"
 #define SAFEXEC_AUTHOR   "Hasan Calisir"
 
 // safexec-detected failure before exec; distinct from normal rg statuses 0/1/2.
