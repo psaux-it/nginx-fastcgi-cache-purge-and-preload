@@ -2726,7 +2726,7 @@ function nppp_http_purge_gate_pending(): ?array {
 function nppp_http_purge_gate_snippet( array $pending, bool $hold = false ): string {
     $max = nppp_http_purge_gate_max_wait();
 
-    $poll = ( function_exists( 'nppp_wget_bin' ) ? nppp_wget_bin() : 'wget' ) . ' -q -O- --no-config --no-check-certificate ' . nppp_wget_no_proxy_flag() . ' -T 3 -t 1'
+    $poll = ( function_exists( 'nppp_wget_bin' ) ? nppp_wget_bin() : 'wget' ) . ' -q -O- --no-config --no-check-certificate ' . ( function_exists( 'nppp_wget_no_proxy_flag' ) ? nppp_wget_no_proxy_flag() : '-e use_proxy=no' ) . ' -T 3 -t 1'
           . ' --header=' . escapeshellarg( 'Host: ' . (string) ( $pending['host'] ?? '' ) )
           . ' ' . escapeshellarg( (string) $pending['status_url'] ) . ' 2>/dev/null';
 
