@@ -307,7 +307,7 @@ function nppp_preload_urls_fire_and_forget(array $urls): void {
 
     // safexec
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec  = nppp_is_safexec_usable($safexec_path ?: '', false);
+    $use_safexec  = nppp_wget_use_safexec($safexec_path ?: '', false);
 
     // Validate all URLs and collect pre-escaped shell args.
     // URLs from nppp_get_related_urls_for_single() pass filter_var() upstream,

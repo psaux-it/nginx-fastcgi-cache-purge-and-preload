@@ -42,6 +42,13 @@
  *                            nppp-wget.start right before wget2 starts, so a crawl held back by the Purge All
  *                            gate does not count the wait as crawl time.
  *
+ *  13. Binary name         Debian / Ubuntu / Arch install GNU Wget2 as `wget2` (no `wget`); Fedora's wget2-wget and
+ *                            distro alternatives provide a `wget` symlink. nppp_wget_select_binary() keeps `wget`
+ *                            when it is usable and falls back to `wget2`; the Preload setting "Wget Binary" can force
+ *                            one. Every command the plugin builds uses nppp_wget_bin(). safexec runs `wget2` from
+ *                            NPPP_SAFEXEC_WGET2_MIN on (the release that also adds the stdbuf wrapper); an older
+ *                            safexec refuses that name, so such a crawl runs without it (nppp_wget_use_safexec()).
+ *
  * wget2 versions differ (measured):
  *   - chatter: 2.1.0 "Adding URL", 2.2.1 "Enqueue", 2.3.0 "Enqueuing" (all dropped by the log reader);
  *   - 2.1.0 and 2.2.1 request /robots.txt even with --no-robots --no-follow-sitemaps (2.3.0 does not):
@@ -81,6 +88,73 @@ function nppp_wget_flavor(): string {
 
 function nppp_wget_is_v2(): bool {
     return nppp_wget_flavor() === 'wget2';
+}
+
+/** First safexec release whose NPP build allowlists the `wget2` command (ships together with the stdbuf wrapper). */
+if ( ! defined( 'NPPP_SAFEXEC_WGET2_MIN' ) ) {
+    define( 'NPPP_SAFEXEC_WGET2_MIN', '1.9.8' );
+}
+
+/**
+ * The command that runs the crawl: 'wget' (also a `wget` that is really Wget2: Fedora wget2-wget, symlink) or
+ * 'wget2' (Debian / Ubuntu / Arch ship GNU Wget2 as `wget2` and leave `wget` to GNU Wget 1.x or nothing).
+ * Chosen once by nppp_wget_select_binary() (pre-checks.php) together with the compatibility verdict.
+ */
+function nppp_wget_bin(): string {
+    static $bin = null;
+    if ( $bin !== null ) {
+        return $bin;
+    }
+    $compat = function_exists( 'nppp_get_wget_compatibility' ) ? nppp_get_wget_compatibility() : [];
+    $bin    = ( is_array( $compat ) && ( $compat['bin'] ?? '' ) === 'wget2' ) ? 'wget2' : 'wget';
+    return $bin;
+}
+
+/**
+ * Can this safexec run the selected command? `wget` always (the only name every safexec release knows);
+ * `wget2` only from NPPP_SAFEXEC_WGET2_MIN on: an older safexec refuses the name and the crawl would not start.
+ */
+function nppp_wget_safexec_supported( string $safexec ): bool {
+    if ( nppp_wget_bin() === 'wget' ) {
+        return true;
+    }
+    $ver = nppp_wget_safexec_version( $safexec );
+    return $ver !== '' && version_compare( $ver, NPPP_SAFEXEC_WGET2_MIN, '>=' );
+}
+
+/**
+ * Drop-in for nppp_is_safexec_usable() at every place that starts a crawl: the unchanged safexec check, plus
+ * "and it can run the selected command". Log-only INFO line (same channel as the other INFO SAFEXEC lines) when
+ * safexec is fine but too old for `wget2`, so the missing hardening is never silent.
+ */
+function nppp_wget_use_safexec( $safexec_path, bool $notify = true ): bool {
+    $path = is_string( $safexec_path ) ? $safexec_path : '';
+    if ( ! nppp_is_safexec_usable( $path, $notify ) ) {
+        return false;
+    }
+    if ( nppp_wget_safexec_supported( $path ) ) {
+        return true;
+    }
+    $quiet = ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() )
+        || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() )
+        || ( function_exists( 'wp_doing_rest' ) && wp_doing_rest() )
+        || ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+        || ( defined( 'WP_CLI' ) && WP_CLI );
+    if ( $notify && ! $quiet && function_exists( 'nppp_display_admin_notice' ) ) {
+        $ver = nppp_wget_safexec_version( $path );
+        nppp_display_admin_notice(
+            'info',
+            sprintf(
+                /* translators: 1: installed safexec version 2: minimum safexec version that can run wget2 */
+                __( 'INFO SAFEXEC: safexec %1$s cannot run the wget2 command (safexec %2$s or newer can). Starting preload with wget2 as the PHP-FPM user. Update safexec to keep the hardening.', 'fastcgi-cache-purge-and-preload-nginx' ),
+                $ver !== '' ? $ver : __( '(unknown version)', 'fastcgi-cache-purge-and-preload-nginx' ),
+                NPPP_SAFEXEC_WGET2_MIN
+            ),
+            true,
+            false
+        );
+    }
+    return false;
 }
 
 /* ============================================================================
@@ -254,7 +328,8 @@ function nppp_wget_stdbuf_available( string $safexec ): bool {
  *   urls           string  already shell-escaped URL argument(s)
  */
 function nppp_wget_build_command( array $o ): string {
-    $v2 = nppp_wget_is_v2();
+    $v2  = nppp_wget_is_v2();
+    $bin = nppp_wget_bin();
 
     $o = array_merge( [
         'safexec'      => '',
@@ -281,6 +356,12 @@ function nppp_wget_build_command( array $o ): string {
         'user_agent'   => '',
         'urls'         => '',
     ], $o );
+
+    // Never hand safexec a command it refuses (an old safexec rejects `wget2`): callers already pass '' through
+    // nppp_wget_use_safexec(). Decided before the stdbuf choice below, which is a safexec prelude wrapper.
+    if ( $o['safexec'] !== '' && ! nppp_wget_safexec_supported( (string) $o['safexec'] ) ) {
+        $o['safexec'] = '';
+    }
 
     $t = [];
 
@@ -376,7 +457,7 @@ function nppp_wget_build_command( array $o ): string {
     $core = ( $o['safexec'] !== '' ? escapeshellarg( (string) $o['safexec'] ) . ' ' : '' )
           . ( $o['nohup'] ? 'nohup ' : '' )
           . ( $stdbuf ? 'stdbuf -oL -eL ' : '' )
-          . 'wget ' . implode( ' ', $t ) . ' -- ' . $o['urls'];
+          . $bin . ' ' . implode( ' ', $t ) . ' -- ' . $o['urls'];
 
     if ( $v2 && $o['dir'] !== '' ) {
         // "mkdir -p DIR; cd DIR && exec CMD": wget1 -P creates a missing directory (a Purge All removes the

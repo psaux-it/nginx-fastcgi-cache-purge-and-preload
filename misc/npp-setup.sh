@@ -889,7 +889,7 @@ fuse-umount() {
       # wget2 has no -P (the crawl runs from the cache dir via "cd DIR && exec wget"): match on the process CWD
       if (( "${#PIDS[@]}" == 0 )) || [[ -z "${PIDS[0]}" ]]; then
         PIDS=()
-        for _p in $(pgrep -f "wget .*--recursive .*--delete-after" | grep -v "cpulimit"); do
+        for _p in $(pgrep -f "wget2? .*--recursive .*--delete-after" | grep -v "cpulimit"); do
           [[ "$(readlink "/proc/${_p}/cwd" 2>/dev/null)" == "${load_path%/}" ]] && PIDS+=("${_p}")
         done
       fi

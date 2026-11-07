@@ -277,7 +277,7 @@ function nppp_run_toolset_probe(array $commands) {
     $script = 'for c in ' . implode(' ', $commands)
             . '; do command -v "$c" >/dev/null 2>&1 || echo "$c"; done; '
             . 'echo ' . $wget_mark . '; '
-            . 'if command -v wget >/dev/null 2>&1; then wget --version 2>&1; fi; '
+            . nppp_wget_probe_script()
             . 'echo ' . $sentinel;
 
     // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
@@ -291,8 +291,9 @@ function nppp_run_toolset_probe(array $commands) {
     }
 
     return [
-        'missing'     => array_values(array_intersect($commands, array_slice($lines, 0, $mark_at))),
-        'wget_output' => implode("\n", array_slice($lines, $mark_at + 1, $end_at - $mark_at - 1)),
+        'missing'      => array_values(array_intersect($commands, array_slice($lines, 0, $mark_at))),
+        // ['wget' => ?text, 'wget2' => ?text]: the `--version` text of each candidate, null = command does not exist.
+        'wget_outputs' => nppp_wget_parse_binary_sections(array_slice($lines, $mark_at + 1, $end_at - $mark_at - 1)),
     ];
 }
 
@@ -309,6 +310,12 @@ function nppp_shell_toolset_state() {
     // produced by the same probe, so the two caches live and die together.
     $missing_commands = get_transient($transient_key);
     $wget_compat      = get_transient($compat_key);
+    $wget_pref        = nppp_wget_binary_preference();
+
+    // A verdict measured under another binary preference (Preload settings) is stale.
+    if (is_array($wget_compat) && ($wget_compat['pref'] ?? 'auto') !== $wget_pref) {
+        $wget_compat = false;
+    }
 
     if (false === $missing_commands || false === $wget_compat) {
         // Set env
@@ -320,7 +327,7 @@ function nppp_shell_toolset_state() {
         if (!function_exists('shell_exec')) {
             // No shell at all: every command is unusable.
             $missing_commands = $commands_to_check;
-            $wget_compat      = ['ok' => false, 'reason' => 'missing'];
+            $wget_compat      = ['ok' => false, 'reason' => 'missing', 'bin' => 'wget', 'pref' => $wget_pref];
         } else {
             // One shell for the whole list AND the wget version, instead of one fork per command.
             $probe = nppp_run_toolset_probe($commands_to_check);
@@ -332,9 +339,15 @@ function nppp_shell_toolset_state() {
             }
 
             $missing_commands = $probe['missing'];
-            $wget_compat      = in_array('wget', $missing_commands, true)
-                ? ['ok' => false, 'reason' => 'missing']
-                : nppp_classify_wget_version_output($probe['wget_output']);
+            // `wget` or `wget2`, whichever the preference and the system allow (see nppp_wget_select_binary()).
+            $wget_compat      = nppp_wget_select_binary($probe['wget_outputs'], $wget_pref);
+
+            // The wget requirement is met by either command: "wget" is only reported missing when NO candidate
+            // exists. A candidate that exists but is unusable (too old, not GNU, not the selected one) is
+            // explained by the wget compatibility message; "wget not found" would be wrong.
+            if (($wget_compat['reason'] ?? '') !== 'missing') {
+                $missing_commands = array_values(array_diff($missing_commands, ['wget']));
+            }
         }
 
         // Cache for 60 seconds: short enough to follow the real system state
@@ -452,7 +465,7 @@ function nppp_shell_toolset_check($global_, $preload) {
         return false;
     }
 
-    // Preload requires GNU Wget 1.x compatibility (>=1.16).
+    // Preload requires GNU Wget 1.x (>=1.16) or GNU Wget2 (>=2.1.0), as `wget` or `wget2`.
     if ($preload && function_exists('nppp_get_wget_compatibility')) {
         $compat = nppp_get_wget_compatibility();
         if (empty($compat['ok'])) {

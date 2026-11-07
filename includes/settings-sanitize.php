@@ -725,6 +725,30 @@ function nppp_nginx_cache_settings_sanitize($input) {
         $sanitized_input['nginx_cache_pctnorm_mode'] = in_array($mode, $allowed, true) ? $mode : 'off';
     }
 
+    // Wget binary preference (auto | wget | wget2). An absent or invalid value is not stored: the form merge keeps
+    // the stored one. Switching to a binary that is not usable on this server is refused, it would lock Preload
+    // (and switch its schedule off).
+    if (isset($input['nginx_cache_wget_binary']) && is_string($input['nginx_cache_wget_binary'])) {
+        $nppp_wb = sanitize_text_field($input['nginx_cache_wget_binary']);
+        if (in_array($nppp_wb, array('auto', 'wget', 'wget2'), true)) {
+            $nppp_wb_ok  = true;
+            $nppp_wb_old = (isset($nppp_vc_stored['nginx_cache_wget_binary']) && is_string($nppp_vc_stored['nginx_cache_wget_binary']))
+                ? $nppp_vc_stored['nginx_cache_wget_binary'] : 'auto';
+            if ($nppp_wb !== 'auto' && $nppp_wb !== $nppp_wb_old && function_exists('nppp_wget_binary_choice_check')) {
+                $nppp_wb_chk = nppp_wget_binary_choice_check($nppp_wb);
+                $nppp_wb_ok  = !empty($nppp_wb_chk['ok']) || empty($nppp_wb_chk['measured']);
+            }
+            if ($nppp_wb_ok) {
+                $sanitized_input['nginx_cache_wget_binary'] = $nppp_wb;
+            } else {
+                /* translators: %s: wget or wget2 */
+                $nppp_wb_msg = sprintf(__('The "%s" binary is not installed or not compatible on this server (GNU Wget 1.16+ or GNU Wget2 2.1.0+ required). Choose Auto or an installed binary.', 'fastcgi-cache-purge-and-preload-nginx'), $nppp_wb);
+                add_settings_error('nppp_nginx_cache_settings_group', 'invalid-wget-binary', $nppp_wb_msg, 'error');
+                nppp_log_error_message('ERROR OPTION: ' . $nppp_wb_msg);
+            }
+        }
+    }
+
     // Sanitize and validate cache limit rate
     if (!empty($input['nginx_cache_limit_rate'])) {
         // Check if the input is numeric to prevent non-numeric strings from passing through

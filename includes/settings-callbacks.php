@@ -671,6 +671,55 @@ function nppp_nginx_cache_autopurge_triggers_callback() {
     <?php
 }
 
+// Wget Binary callback: Auto / wget / wget2 (GNU Wget 1.x as `wget`, GNU Wget2 as `wget2` or behind the `wget` name).
+function nppp_nginx_cache_wget_binary_callback() {
+    $opts    = get_option('nginx_cache_settings', array());
+    $current = (is_array($opts) && isset($opts['nginx_cache_wget_binary']) && is_string($opts['nginx_cache_wget_binary'])) ? $opts['nginx_cache_wget_binary'] : 'auto';
+    if (!in_array($current, array('auto', 'wget', 'wget2'), true)) {
+        $current = 'auto';
+    }
+
+    // Measured now (one shell) so the options can say what this server really has.
+    $st       = function_exists('nppp_wget_binary_choice_state') ? nppp_wget_binary_choice_state() : array('measured' => false);
+    $measured = !empty($st['measured']);
+
+    // The command Preload really runs; none when no usable wget exists (Preload is locked then).
+    $compat = function_exists('nppp_get_wget_compatibility') ? nppp_get_wget_compatibility() : array();
+    $in_use = (!empty($compat['ok']) && function_exists('nppp_wget_bin')) ? nppp_wget_bin() : '';
+
+    $choices = array(
+        'auto'  => __('Auto (recommended)', 'fastcgi-cache-purge-and-preload-nginx'),
+        'wget'  => 'wget',
+        'wget2' => 'wget2',
+    );
+
+    echo "<select id='nginx_cache_wget_binary' name='nginx_cache_settings[nginx_cache_wget_binary]'>";
+    foreach ($choices as $value => $label) {
+        $disabled = false;
+        if ($measured && $value !== 'auto') {
+            if (!empty($st[$value]['ok'])) {
+                if (!empty($st['versions'][$value])) {
+                    $label .= ' (' . $st['versions'][$value] . ')';
+                }
+            } else {
+                $label .= ' (' . (($st['sections'][$value] ?? null) === null
+                    ? __('not installed', 'fastcgi-cache-purge-and-preload-nginx')
+                    : __('not compatible', 'fastcgi-cache-purge-and-preload-nginx')) . ')';
+                // A choice that cannot be used is not selectable; the saved one stays so the form keeps posting it.
+                $disabled = ($value !== $current);
+            }
+        }
+        echo "<option value='" . esc_attr($value) . "'" . selected($current, $value, false) . ($disabled ? ' disabled' : '') . '>' . esc_html($label) . '</option>';
+    }
+    echo '</select>';
+
+    echo '<p class="description">' . esc_html(sprintf(
+        /* translators: %s: the command Preload runs (wget or wget2), or "none" */
+        __('Currently used for Preload: %s', 'fastcgi-cache-purge-and-preload-nginx'),
+        $in_use !== '' ? $in_use : __('none (no usable wget, Preload is locked)', 'fastcgi-cache-purge-and-preload-nginx')
+    )) . '</p>';
+}
+
 // Percent encode URL Normalization callback
 function nppp_nginx_cache_pctnorm_mode_callback() {
     $opts    = get_option('nginx_cache_settings', array());

@@ -305,7 +305,7 @@ function nppp_check_preload_status() {
         $wget_compat = nppp_get_wget_compatibility();
         $wget_compatible = !empty($wget_compat['ok']);
     } else {
-        $wget_status = nppp_check_command_status('wget');
+        $wget_status = nppp_check_command_status(function_exists('nppp_wget_bin') ? nppp_wget_bin() : 'wget');
         $wget_compatible = ($wget_status === 'Installed');
     }
 
@@ -3407,7 +3407,7 @@ function nppp_my_status_html() {
                                 <td class="check"><?php esc_html_e('wget (Required)', 'fastcgi-cache-purge-and-preload-nginx'); ?></td>
                                 <td class="status" id="npppwgetStatus">
                                     <span class="dashicons"></span>
-                                    <span><?php echo esc_html(nppp_check_command_status('wget')); ?></span>
+                                    <span><?php echo esc_html(nppp_check_command_status(function_exists('nppp_wget_bin') ? nppp_wget_bin() : 'wget')); ?></span>
                                 </td>
                             </tr>
                             <tr>

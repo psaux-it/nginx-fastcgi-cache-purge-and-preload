@@ -200,18 +200,174 @@ if (! function_exists('nppp_classify_wget_version_output')) {
     }
 }
 
+// Which wget binary the plugin may use: 'auto' (default), 'wget' or 'wget2'.
+// Read from the plugin settings (nginx_cache_wget_binary), overridable with the nppp_wget_binary_preference filter.
+// An absent value (install upgraded from before the setting existed) means 'auto'.
+if (! function_exists('nppp_wget_binary_preference')) {
+    function nppp_wget_binary_preference(): string {
+        $opts = get_option('nginx_cache_settings', []);
+        $pref = (is_array($opts) && isset($opts['nginx_cache_wget_binary']) && is_string($opts['nginx_cache_wget_binary'])) ? $opts['nginx_cache_wget_binary'] : 'auto';
+        $pref = apply_filters('nppp_wget_binary_preference', $pref);
+        return (is_string($pref) && in_array($pref, ['auto', 'wget', 'wget2'], true)) ? $pref : 'auto';
+    }
+}
+
+// Pick the command to run from the `--version` text of each candidate (null = that command does not exist).
+// Pure function: the single-shell toolset probe, the standalone fallback and the Settings page share it.
+//
+//   auto   `wget` when it is a usable GNU Wget (1.x >= 1.16, or a Wget2 >= 2.1.0 behind the name: Fedora
+//          wget2-wget, a symlink), else `wget2`. A server that already works with `wget` keeps using it.
+//   wget   only the `wget` command.
+//   wget2  a `wget` that really is Wget2 (symlink / shim: keeps the name every safexec release accepts), else the
+//          `wget2` command.
+//
+// Result = nppp_classify_wget_version_output() plus 'bin' (command to run: 'wget' or 'wget2') and 'pref'.
+// 'selected_missing' = the binary chosen in the settings does not exist on this server.
+if (! function_exists('nppp_wget_select_binary')) {
+    function nppp_wget_select_binary(array $out, string $pref = 'auto'): array {
+        $w   = array_key_exists('wget', $out)  ? $out['wget']  : null;
+        $w2  = array_key_exists('wget2', $out) ? $out['wget2'] : null;
+        $cw  = is_string($w)  ? nppp_classify_wget_version_output($w)  : null;
+        $cw2 = is_string($w2) ? nppp_classify_wget_version_output($w2) : null;
+        // A command named wget2 must really be GNU Wget2.
+        if ($cw2 !== null && ($cw2['flavor'] ?? '') !== 'wget2' && !empty($cw2['ok'])) {
+            $cw2 = ['ok' => false, 'reason' => 'non_gnu'];
+        }
+        $w_is_v2 = ($cw !== null && !empty($cw['ok']) && ($cw['flavor'] ?? '') === 'wget2');
+
+        $done = static function (string $bin, array $c) use ($pref): array {
+            $c['bin']  = $bin;
+            $c['pref'] = $pref;
+            return $c;
+        };
+
+        if ($pref === 'wget') {
+            return $cw === null ? $done('wget', ['ok' => false, 'reason' => 'selected_missing']) : $done('wget', $cw);
+        }
+        if ($pref === 'wget2') {
+            if ($w_is_v2) {
+                return $done('wget', $cw);
+            }
+            if ($cw2 !== null) {
+                return $done('wget2', $cw2);
+            }
+            return $done('wget2', ['ok' => false, 'reason' => 'selected_missing']);
+        }
+
+        // auto
+        if ($cw !== null && !empty($cw['ok'])) {
+            return $done('wget', $cw);
+        }
+        if ($cw2 !== null && !empty($cw2['ok'])) {
+            return $done('wget2', $cw2);
+        }
+        if ($cw !== null) {
+            return $done('wget', $cw);
+        }
+        if ($cw2 !== null) {
+            return $done('wget2', $cw2);
+        }
+        return $done('wget', ['ok' => false, 'reason' => 'missing']);
+    }
+}
+
+// Split the "__NPPP_BIN_wget__ / __NPPP_BIN_wget2__" marked probe output into ['wget' => ?string, 'wget2' => ?string].
+// Stops at the __NPPP_END__ sentinel when the caller passes the raw lines.
+if (! function_exists('nppp_wget_parse_binary_sections')) {
+    function nppp_wget_parse_binary_sections(array $lines): array {
+        $out = ['wget' => null, 'wget2' => null];
+        $cur = null;
+        foreach ($lines as $l) {
+            $l = rtrim((string) $l);
+            if ($l === '__NPPP_END__') {
+                break;
+            }
+            if (preg_match('/^__NPPP_BIN_(wget2?)__$/', $l, $m)) {
+                $cur = $m[1];
+                $out[$cur] = '';
+                continue;
+            }
+            if ($cur !== null) {
+                $out[$cur] .= $l . "\n";
+            }
+        }
+        return $out;
+    }
+}
+
+// Shell snippet: for each wget candidate that exists print a marker line, then its `--version` text.
+if (! function_exists('nppp_wget_probe_script')) {
+    function nppp_wget_probe_script(): string {
+        return 'for b in wget wget2; do if command -v "$b" >/dev/null 2>&1; then echo "__NPPP_BIN_${b}__"; "$b" --version 2>&1; fi; done; ';
+    }
+}
+
+// Measure both candidates now (Settings page hints, settings validation). Not cached: it only runs when someone
+// looks at / saves the setting. 'measured' = false when the shell could not be used (callers fail open).
+if (! function_exists('nppp_wget_binary_choice_state')) {
+    function nppp_wget_binary_choice_state(): array {
+        $none = ['measured' => false, 'sections' => ['wget' => null, 'wget2' => null],
+                 'auto' => null, 'wget' => null, 'wget2' => null, 'versions' => ['wget' => '', 'wget2' => '']];
+        if (!function_exists('shell_exec')) {
+            return $none;
+        }
+        if (function_exists('nppp_prepare_request_env')) {
+            nppp_prepare_request_env(true);
+        }
+        // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+        $raw   = (string) shell_exec(nppp_wget_probe_script() . 'echo __NPPP_END__');
+        $lines = array_map('rtrim', explode("\n", $raw));
+        if (!in_array('__NPPP_END__', $lines, true)) {
+            return $none;
+        }
+        $sections = nppp_wget_parse_binary_sections($lines);
+        $versions = [];
+        foreach (['wget', 'wget2'] as $b) {
+            $versions[$b] = is_string($sections[$b]) ? trim((string) strtok($sections[$b], "\n")) : '';
+        }
+        return [
+            'measured' => true,
+            'sections' => $sections,
+            'auto'     => nppp_wget_select_binary($sections, 'auto'),
+            'wget'     => nppp_wget_select_binary($sections, 'wget'),
+            'wget2'    => nppp_wget_select_binary($sections, 'wget2'),
+            'versions' => $versions,
+        ];
+    }
+}
+
+// Can this preference be used right now? ['ok' => bool, 'measured' => bool]. Fails open when not measurable.
+if (! function_exists('nppp_wget_binary_choice_check')) {
+    function nppp_wget_binary_choice_check(string $pref): array {
+        if (!in_array($pref, ['auto', 'wget', 'wget2'], true)) {
+            return ['ok' => false, 'measured' => true];
+        }
+        $st = nppp_wget_binary_choice_state();
+        if (empty($st['measured'])) {
+            return ['ok' => true, 'measured' => false];
+        }
+        return ['ok' => !empty($st[$pref]['ok']), 'measured' => true];
+    }
+}
+
 // Detect wget compatibility required by NPP.
 if (! function_exists('nppp_get_wget_compatibility')) {
     function nppp_get_wget_compatibility(): array {
         $transient_key = 'nppp_wget_compatibility_' . md5('nppp');
-        $cached = get_transient($transient_key);
+        $pref          = nppp_wget_binary_preference();
+        // A verdict measured under another binary preference is stale (a verdict cached by an older plugin
+        // version has no 'pref' and counts as 'auto', which is what it was measured under).
+        $is_valid = static function ($c) use ($pref): bool {
+            return is_array($c) && array_key_exists('ok', $c) && array_key_exists('reason', $c) && (($c['pref'] ?? 'auto') === $pref);
+        };
 
-        if (is_array($cached) && array_key_exists('ok', $cached) && array_key_exists('reason', $cached)) {
+        $cached = get_transient($transient_key);
+        if ($is_valid($cached)) {
             return $cached;
         }
 
         if (!function_exists('shell_exec')) {
-            $cached = ['ok' => false, 'reason' => 'missing'];
+            $cached = ['ok' => false, 'reason' => 'missing', 'bin' => 'wget', 'pref' => $pref];
             set_transient($transient_key, $cached, 300);
             return $cached;
         }
@@ -221,20 +377,14 @@ if (! function_exists('nppp_get_wget_compatibility')) {
         if (function_exists('nppp_is_dockerized')) {
             nppp_is_dockerized();
             $cached = get_transient($transient_key);
-            if (is_array($cached) && array_key_exists('ok', $cached) && array_key_exists('reason', $cached)) {
+            if ($is_valid($cached)) {
                 return $cached;
             }
         }
 
-        // Fallback (probe could not measure): the original standalone check.
-        $binary = trim((string) shell_exec('command -v wget 2>/dev/null'));
-        if ($binary === '') {
-            $cached = ['ok' => false, 'reason' => 'missing'];
-            set_transient($transient_key, $cached, 300);
-            return $cached;
-        }
-
-        $cached = nppp_classify_wget_version_output((string) shell_exec('wget --version 2>&1'));
+        // Fallback (probe could not measure): one shell, both candidates.
+        $raw    = (string) shell_exec(nppp_wget_probe_script() . 'echo __NPPP_END__');
+        $cached = nppp_wget_select_binary(nppp_wget_parse_binary_sections(explode("\n", $raw)), $pref);
         set_transient($transient_key, $cached, 300);
 
         return $cached;
@@ -1127,7 +1277,11 @@ function nppp_pre_checks_critical() {
                 $reason = isset($wget_compat['reason']) ? $wget_compat['reason'] : '';
 
                 if ($reason === 'missing') {
-                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16), but Wget is not installed.', 'fastcgi-cache-purge-and-preload-nginx');
+                    return __('GLOBAL ERROR WGET: Preload action requires GNU Wget 1.x (>=1.16) or GNU Wget2 (>=2.1.0), but neither "wget" nor "wget2" is installed.', 'fastcgi-cache-purge-and-preload-nginx');
+                }
+
+                if ($reason === 'selected_missing') {
+                    return __('GLOBAL ERROR WGET: The wget binary selected in the Preload settings is not installed on this server. Install it or set Wget Binary to Auto.', 'fastcgi-cache-purge-and-preload-nginx');
                 }
 
                 if ($reason === 'busybox_toybox') {
@@ -1836,7 +1990,7 @@ if ( ! function_exists( 'nppp_render_cron_notice_html' ) ) {
                 <span style="font-size:13px; color:#7f1d1d;">
                     <?php esc_html_e( 'WordPress\' automatic scheduler is off — NPP\'s preload schedule, index updater, mobile preload and scheduled post publishing only run when something actually calls', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     <code>wp-cron.php</code>. <?php esc_html_e( 'Point a real system cron at it, for example:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
-                    <pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wget -q -O /dev/null <?php echo esc_url( $nppp_cron_url ); ?> >/dev/null 2>&1</pre>
+                    <pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * <?php echo esc_html( function_exists( 'nppp_wget_bin' ) ? nppp_wget_bin() : 'wget' ); ?> -q -O /dev/null <?php echo esc_url( $nppp_cron_url ); ?> >/dev/null 2>&1</pre>
                     <?php esc_html_e( 'or, if WP-CLI is available on the server:', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                     <pre style="margin:6px 0; padding:8px; background:#f6f7f7; overflow-x:auto;">*/5 * * * * wp cron event run --due-now --quiet --allow-root --path=<?php echo esc_html( $nppp_wp_path ); ?></pre>
                     <?php esc_html_e( 'For just the preload schedule specifically, NPP\'s own REST endpoint (Settings → REST API) is a narrower alternative.', 'fastcgi-cache-purge-and-preload-nginx' ); ?>

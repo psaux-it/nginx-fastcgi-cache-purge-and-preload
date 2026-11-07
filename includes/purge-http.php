@@ -2726,7 +2726,7 @@ function nppp_http_purge_gate_pending(): ?array {
 function nppp_http_purge_gate_snippet( array $pending, bool $hold = false ): string {
     $max = nppp_http_purge_gate_max_wait();
 
-    $poll = 'wget -q -O- --no-config --no-check-certificate ' . nppp_wget_no_proxy_flag() . ' -T 3 -t 1'
+    $poll = ( function_exists( 'nppp_wget_bin' ) ? nppp_wget_bin() : 'wget' ) . ' -q -O- --no-config --no-check-certificate ' . nppp_wget_no_proxy_flag() . ' -T 3 -t 1'
           . ' --header=' . escapeshellarg( 'Host: ' . (string) ( $pending['host'] ?? '' ) )
           . ' ' . escapeshellarg( (string) $pending['status_url'] ) . ' 2>/dev/null';
 
@@ -3159,13 +3159,14 @@ function nppp_http_purge_purged_all_waiter_command( array $pending, string $toke
     // The gate snippet (queue polling) and the final POST both use wget. Without it the waiter
     // could never fire, yet a spawned waiter pushes the cron fail-safe to its slow interval:
     // report "no waiter" so the cron keeps polling at the short interval instead.
-    if ( trim( (string) shell_exec( 'command -v wget 2>/dev/null' ) ) === '' ) {
+    $wget_bin = function_exists( 'nppp_wget_bin' ) ? nppp_wget_bin() : 'wget';
+    if ( trim( (string) shell_exec( 'command -v ' . $wget_bin . ' 2>/dev/null' ) ) === '' ) {
         return null;
     }
 
     $post   = 'action=' . NPPP_PURGED_ALL_WAKE_ACTION . '&token=' . rawurlencode( $token );
     $script = nppp_http_purge_gate_snippet( $pending ) . "\n"
-        . 'wget -q -O /dev/null --no-check-certificate --no-config --no-cookies --prefer-family=IPv4 '
+        . $wget_bin . ' -q -O /dev/null --no-check-certificate --no-config --no-cookies --prefer-family=IPv4 '
         . '--dns-timeout=10 --connect-timeout=5 --read-timeout=60 --tries=3 --waitretry=5 --max-redirect=2 '
         . '--post-data ' . escapeshellarg( $post ) . ' ' . escapeshellarg( admin_url( 'admin-ajax.php' ) );
 

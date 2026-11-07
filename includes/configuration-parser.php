@@ -116,22 +116,27 @@ function nppp_check_safexec_version() {
 
 // Function to check wget version
 function nppp_check_wget_version() {
+    // Version of the command the plugin actually runs (`wget` or `wget2`). Cached as "<bin>|<version>" under the
+    // historical key, so every place that clears it keeps working and a changed binary (Settings > Wget Binary,
+    // wget2 installed / removed) is never shown with a stale version. A value without the prefix (cached by an
+    // older plugin version) counts as stale and is measured again.
+    $bin           = function_exists('nppp_wget_bin') ? nppp_wget_bin() : 'wget';
     $transient_key = 'nppp_wget_version_' . md5('nppp');
     $cached = get_transient($transient_key);
-    if ($cached !== false) {
-        return $cached;
+    if (is_string($cached) && strpos($cached, $bin . '|') === 0) {
+        return substr($cached, strlen($bin) + 1);
     }
 
     $installed_version = 'Not Installed';
 
-    if (nppp_get_command_output('command -v wget')) {
-        $line = nppp_get_command_output("wget --version 2>&1 | head -n1 | awk '{print (\$2 == \"Wget2\" ? \"Wget2 \" : \"\") \$3}'");
+    if (nppp_get_command_output('command -v ' . $bin)) {
+        $line = nppp_get_command_output($bin . " --version 2>&1 | head -n1 | awk '{print (\$2 == \"Wget2\" ? \"Wget2 \" : \"\") \$3}'");
         if (!empty($line)) {
             $installed_version = trim($line);
         }
     }
 
-    set_transient($transient_key, $installed_version, MONTH_IN_SECONDS);
+    set_transient($transient_key, $bin . '|' . $installed_version, MONTH_IN_SECONDS);
     return $installed_version;
 }
 

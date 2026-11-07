@@ -342,7 +342,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         $shell_exec    = (string) nppp_shell_exec();
         $regex_probe   = (string) nppp_probe_cache_key_regex();
-        $cmd_wget      = (string) nppp_check_command_status( 'wget' );
+        $cmd_wget      = (string) nppp_check_command_status( function_exists( 'nppp_wget_bin' ) ? nppp_wget_bin() : 'wget' );
         $cmd_safexec   = (string) nppp_check_command_status( 'safexec' );
         $cmd_rg        = (string) nppp_check_command_status( 'rg' );
         $cmd_cpulimit  = (string) nppp_check_command_status( 'cpulimit' );
@@ -544,6 +544,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 [ 'Field' => __( 'Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),                                                          'Value' => $settings['nginx_cache_preload_enable_proxy']    ?? 'no' ],
                 [ 'Field' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
                 [ 'Field' => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_pctnorm_mode']            ?? 'off' ],
+                [ 'Field' => __( 'Wget Binary', 'fastcgi-cache-purge-and-preload-nginx' ), 'Value' => ( $settings['nginx_cache_wget_binary'] ?? 'auto' ) . ( function_exists( 'nppp_wget_bin' ) ? ' (' . nppp_wget_bin() . ')' : '' ) ],
 
                 $sep( _x( 'AUTO-PURGE TRIGGERS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
                 [ 'Field' => __( 'Auto-Purge Posts', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $settings['nppp_autopurge_posts']                ?? 'no' ],
@@ -1276,12 +1277,35 @@ class NPPP_CLI_Command extends WP_CLI_Command {
 
         $settings = get_option( 'nginx_cache_settings', [] );
         // Optional keys are allowed before they exist: defaults are only merged on activation.
-        if ( ! array_key_exists( $key, $settings ) && ! $is_optional_key ) {
+        // nginx_cache_wget_binary is absent on installs upgraded from before it existed: absent means "auto".
+        if ( ! array_key_exists( $key, $settings ) && ! $is_optional_key && $key !== 'nginx_cache_wget_binary' ) {
             WP_CLI::error( sprintf(
                 /* translators: %s: The unknown settings key name */
                 __( 'Unknown setting key: "%s". Run `wp npp settings get` to list valid keys.', 'fastcgi-cache-purge-and-preload-nginx' ),
                 $key
             ) );
+        }
+
+        // Enum setting: wget binary (auto | wget | wget2). A binary that is not usable here is refused: Preload would
+        // lock. The cached wget verdict carries the preference it was measured under, so it needs no clearing.
+        if ( $key === 'nginx_cache_wget_binary' ) {
+            if ( ! in_array( $value, [ 'auto', 'wget', 'wget2' ], true ) ) {
+                /* translators: 1: Settings key name 2: Comma-separated list of allowed values */
+                WP_CLI::error( sprintf( __( 'Value for "%1$s" must be one of: %2$s.', 'fastcgi-cache-purge-and-preload-nginx' ), $key, 'auto, wget, wget2' ) );
+            }
+            if ( $value !== 'auto' && function_exists( 'nppp_wget_binary_choice_check' ) ) {
+                $wget_chk = nppp_wget_binary_choice_check( $value );
+                if ( ! empty( $wget_chk['measured'] ) && empty( $wget_chk['ok'] ) ) {
+                    /* translators: %s: wget or wget2 */
+                    WP_CLI::error( sprintf( __( 'The "%s" binary is not installed or not compatible on this server (GNU Wget 1.16+ or GNU Wget2 2.1.0+ required).', 'fastcgi-cache-purge-and-preload-nginx' ), $value ) );
+                }
+            }
+            $settings[ $key ] = $value;
+            update_option( 'nginx_cache_settings', $settings );
+
+            /* translators: 1: Settings key name 2: New value */
+            WP_CLI::success( sprintf( __( 'Updated "%1$s" → "%2$s".', 'fastcgi-cache-purge-and-preload-nginx' ), $key, $value ) );
+            return;
         }
 
         // Enum settings: pctnorm mode.
@@ -1632,7 +1656,10 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                     $reason_text = '';
                     switch ( $reason ) {
                         case 'missing':
-                            $reason_text = __( 'wget binary not found or shell_exec constrained.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            $reason_text = __( 'wget / wget2 binary not found or shell_exec constrained.', 'fastcgi-cache-purge-and-preload-nginx' );
+                            break;
+                        case 'selected_missing':
+                            $reason_text = __( 'The wget binary selected in the Preload settings is not installed.', 'fastcgi-cache-purge-and-preload-nginx' );
                             break;
                         case 'wget2':
                             $reason_text = __( 'GNU Wget2 older than 2.1.0 is incompatible with NPP background worker.', 'fastcgi-cache-purge-and-preload-nginx' );
@@ -1710,6 +1737,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_varnish_only_enabled'           => __( 'Varnish-only mode', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_wget_binary'             => __( 'Wget Binary', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_preload_enable_proxy'    => __( 'Use Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_preload_proxy_host'      => __( 'Proxy Host', 'fastcgi-cache-purge-and-preload-nginx' ),

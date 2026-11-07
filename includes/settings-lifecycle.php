@@ -242,6 +242,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_schedule'                => 'no',
         'nginx_cache_api'                     => 'no',
         'nginx_cache_pctnorm_mode'            => 'off',
+        'nginx_cache_wget_binary'             => 'auto',
         'nppp_http_purge_enabled'             => 'no',
         'nppp_rg_purge_enabled'               => 'no',
         'nppp_http_purge_suffix'              => 'npp_purge_single',

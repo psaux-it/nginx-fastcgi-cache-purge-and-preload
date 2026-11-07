@@ -50,11 +50,11 @@ function nppp_check_network_env(): array {
         // wget2 exits 0 on DNS / connection failures and -q hides every message, so the exit code alone cannot tell
         // "network down" from "reachable". Run without -q and require a real HTTP response line as well. --tries=2:
         // wget2 retries a refused connection 20 times by default, which would block the admin request for minutes.
-        $output = shell_exec('wget --no-check-certificate --tries=2 -O /dev/null ' . escapeshellarg($url) . ' 2>&1; echo $?');
+        $output = shell_exec(nppp_wget_bin() . ' --no-check-certificate --tries=2 -O /dev/null ' . escapeshellarg($url) . ' 2>&1; echo $?');
         $lines  = explode("\n", trim((string) $output));
         $ok     = trim((string) end($lines)) === '0' && (bool) preg_match('/^HTTP response [23]\d\d\b/m', (string) $output);
     } else {
-        $output = shell_exec('wget -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
+        $output = shell_exec(nppp_wget_bin() . ' -q --no-check-certificate --server-response --spider ' . escapeshellarg($url) . ' 2>&1; echo $?');
         $lines = explode("\n", trim((string) $output));
         $ok = trim((string) end($lines)) === '0';
     }
@@ -304,7 +304,7 @@ function nppp_detect_premature_process(
 
     // Check safexec availability
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', false);
+    $use_safexec = nppp_wget_use_safexec($safexec_path ?: '', false);
 
     // Probe the START PAGE only (no --recursive) and write nothing to disk (-O /dev/null).
     // The probe has to prove that wget can start and reach the site (bad regex = exit 1,
@@ -716,7 +716,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
 
             // Check safexec available
             $safexec_path = nppp_find_safexec_path();
-            $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+            $use_safexec = nppp_wget_use_safexec($safexec_path ?: '', true);
 
             // Start cache preloading for whole website (Preload All)
             // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -988,7 +988,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
 
         // Check safexec available
         $safexec_path = nppp_find_safexec_path();
-        $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+        $use_safexec = nppp_wget_use_safexec($safexec_path ?: '', true);
 
         // Start cache preloading for whole website (Preload All)
         // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.
@@ -1281,7 +1281,7 @@ function nppp_preload_single_locked($current_page_url, $PIDFILE, $tmp_path, $ngi
 
     // Check safexec available
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+    $use_safexec = nppp_wget_use_safexec($safexec_path ?: '', true);
 
     // DYNAMIC FEED DISCOVERY FOR SINGLE PRELOAD
     $preload_urls = [ $current_page_url ]; // Target list starts with the page itself
@@ -1602,7 +1602,7 @@ function nppp_preload_cache_on_update($current_page_url, $found = false, $is_man
 
     // Check safexec available
     $safexec_path = nppp_find_safexec_path();
-    $use_safexec = nppp_is_safexec_usable($safexec_path ?: '', true);
+    $use_safexec = nppp_wget_use_safexec($safexec_path ?: '', true);
 
     // Start cache preloading for single post/page (when Auto Purge & Auto Preload enabled both)
     // 1. Some wp security plugins or manual security implementation on server side can block recursive wget requests so we use custom user-agent and robots=off to prevent this as much as possible.

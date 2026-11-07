@@ -702,6 +702,22 @@ function nppp_nginx_cache_settings_page() {
                         </tr>
                         <tr valign="top">
                             <th scope="row">
+                                <span class="dashicons dashicons-download"></span>
+                                <?php echo esc_html__( 'Wget Binary', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
+                            </th>
+                            <td>
+                                <?php nppp_nginx_cache_wget_binary_callback(); ?>
+                                <p class="description"><?php echo esc_html__( 'Which command Preload runs: GNU Wget 1.x (wget) or GNU Wget2 (wget2). Debian, Ubuntu and Arch install Wget2 as "wget2"; Fedora and some distros provide it as "wget".', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php echo esc_html__( 'Auto uses "wget" when it is a supported GNU Wget and falls back to "wget2" otherwise. Choose a binary only to force one when both are installed.', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                                <p class="description"><?php
+                                    /* translators: %s: first safexec version that can run wget2 */
+                                    echo esc_html( sprintf( __( 'safexec %s or newer can run wget2. With an older safexec a wget2 Preload runs as the PHP-FPM user, without safexec isolation.', 'fastcgi-cache-purge-and-preload-nginx' ), defined( 'NPPP_SAFEXEC_WGET2_MIN' ) ? NPPP_SAFEXEC_WGET2_MIN : '1.9.8' ) );
+                                ?></p>
+                                <p class="description"><?php echo esc_html__( 'Default: Auto', 'fastcgi-cache-purge-and-preload-nginx' ); ?></p>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <th scope="row">
                                 <span class="dashicons dashicons-dashboard"></span>
                                 <?php echo esc_html__( 'CPU Usage Limit (%)', 'fastcgi-cache-purge-and-preload-nginx' ); ?>
                             </th>
