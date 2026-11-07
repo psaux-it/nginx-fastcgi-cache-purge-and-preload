@@ -31,8 +31,9 @@ function nppp_nginx_cache_settings_init() {
         return;
     }
 
-    // Register settings
-    register_setting('nppp_nginx_cache_settings_group', 'nginx_cache_settings', 'nppp_nginx_cache_settings_sanitize');
+    // Intentionally no register_setting(): the form posts to admin-post.php and the handler
+    // sanitizes explicitly. Registering would also whitelist the option for options.php,
+    // and attach the form sanitizer to every update_option() made while this page renders.
 
     // Add settings section and fields
     add_settings_section('nppp_nginx_cache_settings_section', 'FastCGI Cache Purge & Preload Settings', 'nppp_nginx_cache_settings_section_callback', 'nppp_nginx_cache_settings_group');
