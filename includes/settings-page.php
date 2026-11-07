@@ -1242,8 +1242,18 @@ function nppp_handle_nginx_cache_settings_submission() {
         // This is a pre-check to catch sanitization errors early, before calling update_option, to ensure proper redirection
         $new_settings = nppp_nginx_cache_settings_sanitize($nginx_cache_settings);
 
-        // Check if there are any settings errors
-        $errors = get_settings_errors('nppp_nginx_cache_settings_group');
+        // get_settings_errors() does not look at the entry type, and sanitize also raises
+        // non-blocking notices (e.g. a port typed into Proxy Host). Only 'error' entries abort the save.
+        $all_notices = get_settings_errors('nppp_nginx_cache_settings_group');
+        $errors  = array();
+        $notices = array();
+        foreach ($all_notices as $entry) {
+            if (isset($entry['type']) && $entry['type'] !== 'error') {
+                $notices[] = $entry['message'];
+            } else {
+                $errors[] = $entry;
+            }
+        }
 
         // If there are no sanitize errors, proceed to update the settings
         if (empty($errors)) {
@@ -1282,12 +1292,29 @@ function nppp_handle_nginx_cache_settings_submission() {
             delete_transient('nppp_wget_version_' . md5($static_key_base));
             delete_transient('nppp_rg_version_' . md5($static_key_base));
 
-            // Update the settings
-            update_option('nginx_cache_settings', $merged);
+            // Update the settings. $merged is already sanitized and in stored form (base64 regex),
+            // so it must not go through the sanitize filter a second time.
+            if (function_exists('nppp_update_settings_without_sanitize')) {
+                nppp_update_settings_without_sanitize($merged);
+            } else {
+                update_option('nginx_cache_settings', $merged);
+            }
+
+            // The Cache Status Path now lives in nginx_cache_settings; drop the legacy standalone
+            // option only after the save went through (sanitize runs before the abort decision).
+            if (isset($nginx_cache_settings['nppp_http_purge_queue_status_path'])
+                && is_string($nginx_cache_settings['nppp_http_purge_queue_status_path'])) {
+                delete_option('nppp_http_purge_queue_status_path');
+            }
+
+            $success_message = __('Plugin cache (partially) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx');
+            if (!empty($notices)) {
+                $success_message .= ' ' . implode(' ', $notices);
+            }
 
             // Redirect with success message
             wp_safe_redirect(add_query_arg(array(
-                'status_message' => urlencode(__('Plugin cache (partially) cleared, settings saved successfully!', 'fastcgi-cache-purge-and-preload-nginx')),
+                'status_message' => urlencode($success_message),
                 'message_type' => 'success',
                 'redirect_nonce' => wp_create_nonce('nppp_redirect_nonce')
             ), admin_url('options-general.php?page=nginx_cache_settings')));
