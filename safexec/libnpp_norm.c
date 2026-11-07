@@ -17,10 +17,21 @@
  *   - gnutls_record_send() (GnuTLS; resolved lazily if libgnutls is loaded later)
  *
  * Wget-only fast path:
- *   Define WGET_FASTPATH to interpose only:
- *     - write()
- *     - SSL_write()
- *     - gnutls_record_send()
+ *   Define WGET_FASTPATH to interpose only what GNU Wget 1.x and GNU Wget2 use:
+ *     - write()                 (Wget 1.x, plain HTTP)
+ *     - send(), sendto()        (Wget2, plain HTTP: libwget wget_tcp_write())
+ *     - SSL_write()             (OpenSSL builds)
+ *     - gnutls_record_send()    (GnuTLS builds, HTTP/1.1 over TLS)
+ *     - nghttp2_submit_request(), nghttp2_submit_request2()
+ *                               (Wget2, HTTP/2 over TLS, see below)
+ *
+ * HTTP/2 (Wget2)
+ * --------------
+ * h2 has no request-line: the target travels in the HPACK-compressed ":path"
+ * pseudo-header, invisible to the byte-level hooks. Wget2 negotiates h2 by
+ * default, so nghttp2_submit_request() is hooked instead: it passes nghttp2 a
+ * copy of the header array with a normalized ":path" value (NO_COPY_VALUE
+ * cleared so nghttp2 copies it) and leaves everything else untouched.
  *
  * Runtime configuration
  * ---------------------
@@ -70,7 +81,7 @@
  *   request-lines when fetching from origin servers.
  *
  * Author:  Hasan Calisir
- * Version: 0.3.2 (2025)
+ * Version: 0.3.3 (2025)
  */
 
 #define _GNU_SOURCE
@@ -95,8 +106,9 @@
  * Define WGET_FASTPATH to hook only what Wget uses: write/SSL_write/gnutls_record_send.
  */
 #ifdef WGET_FASTPATH
-#  define PCT_WANT_SEND     0
-#  define PCT_WANT_SENDTO   0
+/* Wget2 sends plain-HTTP requests with send() / sendto(MSG_FASTOPEN), not write(). */
+#  define PCT_WANT_SEND     1
+#  define PCT_WANT_SENDTO   1
 #  define PCT_WANT_SENDMSG  0
 #  define PCT_WANT_WRITEV   0
 #  define PCT_WANT_CLOSE    0
@@ -109,8 +121,9 @@
 #endif
 
 /* Always keep write() + TLS paths */
-#define PCT_WANT_WRITE  1
-#define PCT_WANT_TLS    1
+#define PCT_WANT_WRITE    1
+#define PCT_WANT_TLS      1
+#define PCT_WANT_NGHTTP2  1   /* HTTP/2 :path (Wget2) */
 
 /* ======= Constants ======= */
 #ifndef REQ_LINE_SCAN_CAP
@@ -150,6 +163,23 @@ static int     (*real_SSL_write)(void*, const void*, int) = NULL;
 static ssize_t (*real_gnutls_record_send)(void*, const void*, size_t) = NULL;
 #endif
 
+#if PCT_WANT_NGHTTP2
+/* ABI-compatible copy of nghttp2_nv (avoids a build dependency on nghttp2 headers). */
+typedef struct {
+    unsigned char *name;
+    unsigned char *value;
+    size_t         namelen;
+    size_t         valuelen;
+    unsigned char  flags;
+} pct_nv;
+#define PCT_NV_NO_COPY_VALUE 0x04
+#define PCT_NGHTTP2_ERR_CALLBACK_FAILURE (-902)
+typedef int32_t (*pct_submit_request_fn)(void*, const void*, const pct_nv*, size_t,
+                                         const void*, void*);
+static pct_submit_request_fn real_nghttp2_submit_request  = NULL;
+static pct_submit_request_fn real_nghttp2_submit_request2 = NULL;
+#endif
+
 static pthread_once_t resolve_once = PTHREAD_ONCE_INIT;
 
 static void resolve_syms(void) {
@@ -174,6 +204,10 @@ static void resolve_syms(void) {
 #if PCT_WANT_TLS
     real_SSL_write          = dlsym(RTLD_NEXT, "SSL_write");
     real_gnutls_record_send = dlsym(RTLD_NEXT, "gnutls_record_send");
+#endif
+#if PCT_WANT_NGHTTP2
+    real_nghttp2_submit_request  = (pct_submit_request_fn)dlsym(RTLD_NEXT, "nghttp2_submit_request");
+    real_nghttp2_submit_request2 = (pct_submit_request_fn)dlsym(RTLD_NEXT, "nghttp2_submit_request2");
 #endif
 }
 
@@ -206,6 +240,15 @@ static inline void resolve_tls_if_needed(void) {
         real_SSL_write = dlsym(RTLD_NEXT, "SSL_write");
     if (!real_gnutls_record_send)
         real_gnutls_record_send = dlsym(RTLD_NEXT, "gnutls_record_send");
+}
+#endif
+
+#if PCT_WANT_NGHTTP2
+static inline void resolve_nghttp2_if_needed(void) {
+    if (!real_nghttp2_submit_request)
+        real_nghttp2_submit_request = (pct_submit_request_fn)dlsym(RTLD_NEXT, "nghttp2_submit_request");
+    if (!real_nghttp2_submit_request2)
+        real_nghttp2_submit_request2 = (pct_submit_request_fn)dlsym(RTLD_NEXT, "nghttp2_submit_request2");
 }
 #endif
 
@@ -324,18 +367,9 @@ static inline void ensure_triplet_map(void) {
     (void)pthread_once(&argv_once, init_argv_triplet_map);
 }
 
-/* repaint %xx in request-target (first line) from captured map */
-static void repaint_triplets_from_url(unsigned char *line, size_t line_len) {
-    if (g_trip_count == 0) return;
-
-    const unsigned char *sp1 = memchr(line, ' ', line_len);
-    if (!sp1) return;
-    size_t rem = line_len - (size_t)(sp1 - line) - 1;
-    const unsigned char *sp2 = memchr(sp1 + 1, ' ', rem);
-    if (!sp2) return;
-
-    unsigned char *q = (unsigned char *)(sp1 + 1);
-    unsigned char *end = (unsigned char *)sp2;
+/* repaint %xx in [q,end) from the captured map (shared by the HTTP/1 request-line
+ * path and the HTTP/2 ":path" path) */
+static void repaint_triplets_span(unsigned char *q, unsigned char *end) {
     size_t idx = 0;
 
     while (q + 2 < end) {
@@ -354,6 +388,19 @@ static void repaint_triplets_from_url(unsigned char *line, size_t line_len) {
             q++;
         }
     }
+}
+
+/* repaint %xx in request-target (first line) from captured map */
+static void repaint_triplets_from_url(unsigned char *line, size_t line_len) {
+    if (g_trip_count == 0) return;
+
+    const unsigned char *sp1 = memchr(line, ' ', line_len);
+    if (!sp1) return;
+    size_t rem = line_len - (size_t)(sp1 - line) - 1;
+    const unsigned char *sp2 = memchr(sp1 + 1, ' ', rem);
+    if (!sp2) return;
+
+    repaint_triplets_span((unsigned char *)(sp1 + 1), (unsigned char *)sp2);
 }
 
 /* ======= Small helpers (ctype-safe) ======= */
@@ -395,20 +442,11 @@ static inline int target_has_percent(const unsigned char *p, size_t line_len) {
     return 0;
 }
 
-/* Case-adjust %xx in request-target (between first and second space).
+/* Case-adjust %xx in [q,end).
  * mode > 0 => UPPERCASE, mode < 0 => lowercase, mode == 0 => off
  */
-static inline void case_triplets_in_target(unsigned char *line, size_t line_len, int mode) {
+static inline void case_triplets_span(unsigned char *q, unsigned char *end, int mode) {
     if (mode == 0) return; /* off */
-
-    const unsigned char *sp1 = memchr(line, ' ', line_len);
-    if (!sp1) return;
-    size_t rem = line_len - (size_t)(sp1 - line) - 1;
-    const unsigned char *sp2 = memchr(sp1 + 1, ' ', rem);
-    if (!sp2) return;
-
-    unsigned char *q = (unsigned char *)(sp1 + 1);
-    unsigned char *end = (unsigned char *)sp2;
 
     while (q + 2 < end) {
         if (*q == '%' && is_hex_uc(*(q+1)) && is_hex_uc(*(q+2))) {
@@ -424,6 +462,19 @@ static inline void case_triplets_in_target(unsigned char *line, size_t line_len,
             q++;
         }
     }
+}
+
+/* Case-adjust %xx in request-target (between first and second space). */
+static inline void case_triplets_in_target(unsigned char *line, size_t line_len, int mode) {
+    if (mode == 0) return; /* off */
+
+    const unsigned char *sp1 = memchr(line, ' ', line_len);
+    if (!sp1) return;
+    size_t rem = line_len - (size_t)(sp1 - line) - 1;
+    const unsigned char *sp2 = memchr(sp1 + 1, ' ', rem);
+    if (!sp2) return;
+
+    case_triplets_span((unsigned char *)(sp1 + 1), (unsigned char *)sp2, mode);
 }
 
 /* Create a normalized copy of the buffer when it contains a full request-line.
@@ -646,5 +697,90 @@ ssize_t gnutls_record_send(void *session, const void *data, size_t data_size) {
         return r;
     }
     return real_gnutls_record_send(session, data, data_size);
+}
+#endif
+
+/* ======= HTTP/2 (nghttp2) =======
+ * Return a heap copy of nva with a normalized ":path" value (*valbuf = that
+ * value copy; free() both after the call), or NULL to pass the original
+ * through. NO_COPY_VALUE is cleared on the edited entry so nghttp2 copies it.
+ */
+#if PCT_WANT_NGHTTP2
+static pct_nv *nv_with_normalized_path(const pct_nv *nva, size_t nvlen, unsigned char **valbuf)
+{
+    if (!nva || nvlen == 0) return NULL;
+
+    /* CWE-190: refuse nvlen values whose nvlen * sizeof(pct_nv) would wrap
+     * (unreachable today, Wget2 sizes nva itself); pass the request through. */
+    if (nvlen > SIZE_MAX / sizeof(pct_nv)) return NULL;
+
+    size_t i = 0;
+    for (; i < nvlen; i++) {
+        if (nva[i].namelen == 5 && nva[i].name && memcmp(nva[i].name, ":path", 5) == 0)
+            break;
+    }
+    if (i == nvlen) return NULL;
+
+    const unsigned char *v = nva[i].value;
+    size_t vl = nva[i].valuelen;
+    if (!v || vl < 3 || !memchr(v, '%', vl)) return NULL; /* FAST EXIT */
+
+    ensure_config();
+    if (pctnorm_case == 0) {
+        ensure_triplet_map();
+        if (g_trip_count == 0) return NULL;
+    }
+
+    unsigned char *vb = (unsigned char *)malloc(vl);
+    if (unlikely(!vb)) return NULL;
+    memcpy(vb, v, vl);
+    if (pctnorm_case == 0) repaint_triplets_span(vb, vb + vl);
+    else                   case_triplets_span(vb, vb + vl, pctnorm_case);
+
+    if (memcmp(vb, v, vl) == 0) { free(vb); return NULL; } /* already normalized */
+
+    pct_nv *copy = (pct_nv *)malloc(nvlen * sizeof *copy);
+    if (unlikely(!copy)) { free(vb); return NULL; }
+    memcpy(copy, nva, nvlen * sizeof *copy);
+    copy[i].value  = vb;
+    copy[i].flags &= (unsigned char)~PCT_NV_NO_COPY_VALUE;
+
+    *valbuf = vb;
+    return copy;
+}
+
+static int32_t submit_request_common(pct_submit_request_fn real, void *session, const void *pri,
+                                     const pct_nv *nva, size_t nvlen, const void *dp, void *ud)
+{
+    if (unlikely(!real)) { errno = ENOSYS; return PCT_NGHTTP2_ERR_CALLBACK_FAILURE; }
+
+    unsigned char *vb = NULL;
+    pct_nv *copy = nv_with_normalized_path(nva, nvlen, &vb);
+    if (copy) {
+        int32_t r = real(session, pri, copy, nvlen, dp, ud);
+        free(copy);
+        free(vb);
+        return r;
+    }
+    return real(session, pri, nva, nvlen, dp, ud);
+}
+
+int32_t nghttp2_submit_request(void *session, const void *pri_spec, const pct_nv *nva,
+                               size_t nvlen, const void *data_prd, void *stream_user_data)
+{
+    ensure_resolved();
+    resolve_nghttp2_if_needed();
+    return submit_request_common(real_nghttp2_submit_request, session, pri_spec,
+                                 nva, nvlen, data_prd, stream_user_data);
+}
+
+/* nghttp2 >= 1.62 spelling (data_prd is a nghttp2_data_provider2 *) */
+int32_t nghttp2_submit_request2(void *session, const void *pri_spec, const pct_nv *nva,
+                                size_t nvlen, const void *data_prd, void *stream_user_data)
+{
+    ensure_resolved();
+    resolve_nghttp2_if_needed();
+    return submit_request_common(real_nghttp2_submit_request2, session, pri_spec,
+                                 nva, nvlen, data_prd, stream_user_data);
 }
 #endif
