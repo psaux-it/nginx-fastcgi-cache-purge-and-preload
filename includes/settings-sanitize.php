@@ -510,7 +510,8 @@ function nppp_nginx_cache_settings_sanitize($input) {
 
     // Sanitize Mobile User Agent: strip tags, collapse whitespace, hard-cap at 512 chars.
     if ( ! empty( $input['nginx_cache_mobile_user_agent'] ) ) {
-        $raw_mobile_ua = sanitize_text_field( wp_unslash( $input['nginx_cache_mobile_user_agent'] ) );
+        // Input is already unslashed by the form handler; unslashing again would eat backslashes.
+        $raw_mobile_ua = sanitize_text_field( $input['nginx_cache_mobile_user_agent'] );
         if ( strlen( $raw_mobile_ua ) > 512 ) {
             add_settings_error(
                 'nppp_nginx_cache_settings_group',
@@ -624,8 +625,9 @@ function nppp_nginx_cache_settings_sanitize($input) {
                 'error'
             );
         }
-        // One-time migration: the value now lives in nginx_cache_settings.
-        delete_option( 'nppp_http_purge_queue_status_path' );
+        // One-time migration: the value now lives in nginx_cache_settings. The legacy standalone
+        // option is deleted by the form handler after a successful save, not here: this runs
+        // before the handler decides to abort on an unrelated error.
     } else {
         // Field not submitted: keep what is stored instead of wiping it.
         $stored_settings = get_option( 'nginx_cache_settings', [] );
@@ -818,7 +820,7 @@ function nppp_nginx_cache_settings_sanitize($input) {
             nppp_log_error_message($err);
         } else {
             if ($notice) {
-                add_settings_error('nppp_nginx_cache_settings_group','proxy-host-port-ignored',$notice,'notice');
+                add_settings_error('nppp_nginx_cache_settings_group','proxy-host-port-ignored',$notice,'info');
                 nppp_log_error_message($notice);
             }
             $sanitized_input['nginx_cache_preload_proxy_host'] = $host;
