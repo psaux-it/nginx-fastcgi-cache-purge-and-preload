@@ -18,8 +18,10 @@
  *                  docs) plus optional buckets: -DSAFEXEC_WITH_GS, _POPPLER,
  *                  _DB, _RSYNC_GIT.
  *   -DSAFEXEC_NPP  Hardened NPP build, the one this project ships: allowlist
- *                  is exactly wget and rg (SAFEXEC_WITH_* is ignored), "nohup"
- *                  is the only prelude wrapper, rg arguments are allowlisted,
+ *                  is exactly wget, wget2 and rg (SAFEXEC_WITH_* is ignored),
+ *                  "nohup" and "stdbuf" are the only prelude wrappers, rg
+ *                  arguments are allowlisted, wget2 arguments are allowlisted
+ *                  and plugin-loading options are refused for wget/wget2,
  *                  and a seccomp-BPF denylist is installed before exec
  *                  (Linux x86_64/aarch64, best effort).
  *   Install: chown root:root safexec && chmod 4755 safexec (avoid nosuid).
@@ -53,8 +55,10 @@
  *           mount (user_id=0 in /proc/self/mountinfo).
  *   wget    If /tmp is not writable by the final euid, "-P /tmp" is rewritten
  *           to /tmp/nppp-cache/<euid> (root-owned, sticky 01777 parent).
- *   wget/curl  Optionally preloads libnpp_norm.so to normalize percent-
- *           encoding. The .so must be a regular root:root file, not group/
+ *   wget, wget2, curl
+ *           Optionally preloads libnpp_norm.so to normalize percent-
+ *           encoding (HTTP/1.x request-line and, for wget2, the HTTP/2
+ *           ":path"). The .so must be a regular root:root file, not group/
  *           other-writable, named libnpp_norm.so, under /usr/lib, /lib,
  *           /usr/lib64 or /lib64. Sets LD_PRELOAD and PCTNORM_CASE.
  *   --kill  Linux only. Sends SIGTERM if the target is owned by 'nobody' and
@@ -185,10 +189,12 @@
 
 #ifdef SAFEXEC_NPP
 
-// NPP-restricted build: exactly wget + rg, no other bucket applies
+// NPP-restricted build: exactly wget + wget2 + rg, no other bucket applies
 // even if -DSAFEXEC_WITH_* was also passed at build time.
+// "wget2" is GNU Wget2, which Debian / Ubuntu / Arch install under that name.
 static const char *const ALLOWED_BINS[] = {
     "wget",
+    "wget2",
     "rg",
     NULL
 };
@@ -962,7 +968,7 @@ static void print_version(void) {
         "Copyright (C) 2025 %s.\n"
         "Used by: NPP – Nginx Cache Purge Preload for WordPress.\n"
 #ifdef SAFEXEC_NPP
-        "Build: NPP-restricted (allowlist limited to wget, rg)\n"
+        "Build: NPP-restricted (allowlist limited to wget, wget2, rg)\n"
 #endif
         ,
         SAFEXEC_NAME, SAFEXEC_VERSION, SAFEXEC_AUTHOR
@@ -1099,9 +1105,13 @@ static int is_shell_name(const char *b) {
 
 #ifdef SAFEXEC_NPP
 
-// NPP-restricted build: the plugin only ever passes "nohup" ahead of wget.
+// NPP-restricted build: the plugin only ever passes "nohup" and, for wget2,
+// "stdbuf -oL -eL" ahead of the tool. stdbuf runs after the privilege drop and
+// forces line buffering on the inherited stdout/stderr, so the live crawl log
+// is not block-buffered when wget2 runs as nobody and cannot re-open the log.
 static int is_wrapper_name(const char *b) {
-    return strcmp(b, "nohup") == 0;
+    return strcmp(b, "nohup")  == 0 ||
+           strcmp(b, "stdbuf") == 0;
 }
 
 // Diagnostic-only (NPP build): recognizes wrapper names that the unrestricted
@@ -1110,7 +1120,6 @@ static int is_wrapper_name(const char *b) {
 static int is_full_build_wrapper_name(const char *b) {
     return strcmp(b, "nice")    == 0 ||
            strcmp(b, "timeout") == 0 ||
-           strcmp(b, "stdbuf")  == 0 ||
            strcmp(b, "ionice")  == 0 ||
            strcmp(b, "taskset") == 0 ||
            strcmp(b, "setsid")  == 0 ||
@@ -1270,7 +1279,7 @@ static int find_target_prog_index(int argc, char **argv) {
             s_fprintf(stderr,
                 "Info: '%s' is only accepted as a prelude wrapper in the "
                 "unrestricted safexec build; this NPP-restricted build "
-                "accepts 'nohup' only.\n", b);
+                "accepts 'nohup' and 'stdbuf' only.\n", b);
         }
 #endif
         break;
@@ -1504,6 +1513,162 @@ static int npp_validate_rg_argv(int argc, char **argv, int prog_i) {
 
     if (path_count != 1 || argv[argc - 1][0] != '/') {
         s_fprintf(stderr, "Error: safexec: rg requires exactly one trailing absolute path\n");
+        return 0;
+    }
+    return 1;
+}
+
+/*
+ * NPP-restricted build: validate the options handed to wget / wget2.
+ *
+ * Wget2 dlopen()s native code from the command line (--local-plugin, --plugin,
+ * --plugin-dirs, --plugin-opt; --list-plugins / --plugin-help walk the same
+ * paths). Measured on wget2 2.1.0: the "no-" forms ("--no-local-plugin=PATH")
+ * still load, so matching the bare name is not enough. Neither the seccomp
+ * denylist nor the env scrub stops an option, so this check is what keeps an
+ * arbitrary argv from running native code as the dropped-to UID.
+ *
+ * Layer 1 (every wget/wget2 launch): refuse any long option that is,
+ *   abbreviates or "no-"-negates a plugin option (up to the "--" terminator).
+ * Layer 2 (binary is Wget2: named wget2*, or a "wget" resolving to it):
+ *   exact allowlist of what nppp_wget_build_command() emits; --no-config is
+ *   mandatory and URLs must follow "--". Add new options to the lists below.
+ *
+ * Wget 1.x has no plugins and stays unrestricted beyond layer 1.
+ * Returns 1 if arguments are safe, 0 otherwise.
+ */
+static const char *const NPP_WGET_PLUGIN_OPTS[] = {
+    "local-plugin", "plugin", "plugin-dirs", "plugin-opt", "plugin-help",
+    "list-plugins", NULL
+};
+
+/* 1 if n[0..nl) equals, or is an abbreviation (prefix) of, a plugin option name. */
+static int npp_name_may_be_wget_plugin_opt(const char *n, size_t nl) {
+    if (nl == 0) return 0;
+    for (int k = 0; NPP_WGET_PLUGIN_OPTS[k]; k++) {
+        if (nl <= strlen(NPP_WGET_PLUGIN_OPTS[k]) &&
+            strncasecmp(NPP_WGET_PLUGIN_OPTS[k], n, nl) == 0)
+            return 1;
+    }
+    return 0;
+}
+
+/* 1 if token a is "--<plugin option>[=value]", also behind any number of "no-". */
+static int npp_is_wget_plugin_opt(const char *a) {
+    if (!a || a[0] != '-' || a[1] != '-' || a[2] == '\0') return 0;
+    const char *n = a + 2;
+    for (;;) {
+        if (npp_name_may_be_wget_plugin_opt(n, strcspn(n, "="))) return 1;
+        if (strncasecmp(n, "no-", 3) != 0) return 0;
+        n += 3;
+    }
+}
+
+/* 1 if the pinned tool path is Wget2 itself, or resolves to it. */
+static int npp_tool_is_wget2(const char *abs_tool) {
+    if (strncmp(base_of(abs_tool), "wget2", 5) == 0) return 1;
+    char rp[PATH_MAX];
+    if (realpath(abs_tool, rp) && strncmp(base_of(rp), "wget2", 5) == 0) return 1;
+    return 0;
+}
+
+static int npp_validate_wget_argv(int argc, char **argv, int prog_i, const char *abs_tool) {
+    /* Layer 1: plugin options, up to the "--" that ends option parsing. */
+    for (int i = prog_i + 1; i < argc; i++) {
+        const char *a = argv[i];
+        if (!a) continue;
+        if (strcmp(a, "--") == 0) break;
+        if (npp_is_wget_plugin_opt(a)) {
+            s_fprintf(stderr,
+                "Error: safexec: wget option '%s' (plugin loading) is not allowed in the NPP-restricted build\n", a);
+            return 0;
+        }
+    }
+
+    if (!npp_tool_is_wget2(abs_tool)) return 1;
+
+    /* Layer 2: exact allowlist, only what NPP's PHP emits for wget2. */
+    static const char *const flag_no_value[] = {
+        "--quiet", "--recursive", "--no-cache", "--no-config", "--no-cookies",
+        "--delete-after", "--no-dns-cache", "--no-check-certificate",
+        "--ignore-case", "--no-robots", "--no-follow-sitemaps", "--no-proxy",
+        "--filter-urls",
+        NULL
+    };
+    /* Always "--name=value" in one token. */
+    static const char *const flag_eq_value[] = {
+        "--progress", "--prefer-family", "--retry-on-http-error", "--waitretry",
+        "--dns-timeout", "--connect-timeout", "--read-timeout", "--tries",
+        "--http-proxy", "--https-proxy", "--limit-rate", "--wait",
+        "--reject-regex", "--reject", "--domains", "--header", "--user-agent",
+        "--max-threads", "--compression", "--remote-encoding",
+        NULL
+    };
+    /* Short options whose value is the next token ("-O /dev/null", "-l inf"). */
+    static const char *const flag_sep_value[] = { "-O", "-o", "-l", NULL };
+
+    int saw_no_config = 0;
+    int saw_terminator = 0;
+    int operands = 0;
+
+    for (int i = prog_i + 1; i < argc; i++) {
+        const char *a = argv[i];
+        if (!a) continue;
+
+        if (saw_terminator) { operands++; continue; }
+        if (strcmp(a, "--") == 0) { saw_terminator = 1; continue; }
+
+        int matched = 0;
+
+        for (int k = 0; !matched && flag_no_value[k]; k++) {
+            if (strcmp(a, flag_no_value[k]) == 0) {
+                matched = 1;
+                if (strcmp(a, "--no-config") == 0) saw_no_config = 1;
+            }
+        }
+
+        if (!matched) {
+            size_t nl = strcspn(a, "=");
+            if (a[nl] == '=') {
+                for (int k = 0; flag_eq_value[k]; k++) {
+                    if (strlen(flag_eq_value[k]) == nl && strncmp(a, flag_eq_value[k], nl) == 0) {
+                        matched = 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!matched) {
+            for (int k = 0; flag_sep_value[k]; k++) {
+                if (strcmp(a, flag_sep_value[k]) == 0) {
+                    /* The value must not look like an option, so no parser (or a
+                     * later Wget2 release) can mistake it for one. */
+                    if (i + 1 >= argc || !argv[i + 1] || argv[i + 1][0] == '-' || argv[i + 1][0] == '\0') {
+                        s_fprintf(stderr,
+                            "Error: safexec: wget2 option '%s' requires a value that does not start with '-'\n", a);
+                        return 0;
+                    }
+                    i++;
+                    matched = 1;
+                    break;
+                }
+            }
+        }
+
+        if (!matched) {
+            s_fprintf(stderr,
+                "Error: safexec: wget2 option '%s' is not allowed in the NPP-restricted build\n", a);
+            return 0;
+        }
+    }
+
+    if (!saw_no_config) {
+        s_fprintf(stderr, "Error: safexec: wget2 requires --no-config in the NPP-restricted build\n");
+        return 0;
+    }
+    if (!saw_terminator || operands == 0) {
+        s_fprintf(stderr, "Error: safexec: wget2 requires '--' followed by at least one URL\n");
         return 0;
     }
     return 1;
@@ -2313,6 +2478,16 @@ int main(int argc, char *argv[]) {
      */
     struct passwd *pw = NULL;
 
+#ifdef SAFEXEC_NPP
+    /* wget / wget2: refuse plugin-loading options; strict allowlist for Wget2. */
+    if (is_prog(argv[prog_i], "wget") || is_prog(argv[prog_i], "wget2")) {
+        if (!npp_validate_wget_argv(argc, argv, prog_i, abs_tool)) {
+            FREE_PCT();
+            return SAFEXEC_LAUNCH_FAIL;
+        }
+    }
+#endif
+
     if (is_prog(argv[prog_i], "rg")) {
 #ifdef SAFEXEC_NPP
         if (!npp_validate_rg_argv(argc, argv, prog_i)) {
@@ -2409,8 +2584,11 @@ post_drop:
     }
 #endif
 
-    /* LD_PRELOAD shim injection: only for wget/curl, only if possible. */
-    if (pct_enable && (is_prog(argv[prog_i], "wget") || is_prog(argv[prog_i], "curl"))) {
+    /* LD_PRELOAD shim injection: only for wget/wget2/curl, only if possible.
+     * wget2 needs it too: it does not normalize %xx case in query strings. */
+    if (pct_enable && (is_prog(argv[prog_i], "wget") ||
+                       is_prog(argv[prog_i], "wget2") ||
+                       is_prog(argv[prog_i], "curl"))) {
         const char *so = pct_so ? pct_so : "/usr/lib/npp/libnpp_norm.so";
         if (is_secure_so(so)) {
             const char *case_val = (pct_case && *pct_case) ? pct_case : "upper";

@@ -97,6 +97,7 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.7-r1.aarch64.apk
 
 ### safexec (NPP-hardened build)
 - ✅ **Strict allowlist**: exactly `wget` and `rg`; only `nohup` accepted as a prelude wrapper
+- ✅ **Argument validation** (setuid-root mode): `rg` options are allowlisted; for `wget2` (also a `wget` that resolves to it) only the options NPP emits are accepted, `--no-config` is mandatory and URLs must follow `--`. Plugin-loading options (`--local-plugin`, `--plugin`, `--plugin-dirs`, `--plugin-opt`, `--plugin-help`, `--list-plugins`, including `--no-` forms) are refused for every `wget`/`wget2` launch, because Wget2 `dlopen()`s them
 - ✅ **Absolute path pinning**: tools resolve only under trusted system dirs; symlinks are followed only if the target stays inside them
 - ✅ **Never runs as root**
   - `wget` runs as `nobody`
@@ -110,12 +111,12 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.7-r1.aarch64.apk
 - 🔒 **Pass-through mode** if not installed setuid-root: the allowlist is still enforced, but there is no privilege drop, isolation or seccomp
 
 ### libnpp_norm.so
-- 🔄 Intercepts `send`, `write`, `SSL_write`, `gnutls_record_send`, etc.
+- 🔄 Intercepts `write`, `send`/`sendto`, `SSL_write`, `gnutls_record_send` and the HTTP/2 `nghttp2_submit_request()` (wget2 `:path`)
 - 🔄 Normalizes percent-encoded triplets (`%xx`) in HTTP request-lines
   - Configurable via `PCTNORM_CASE=upper|lower|off` (default: uppercase)
   - Optional “repaint” mode preserves original triplet case from the CLI URL
 - 🔄 Prevents cache-key inconsistencies caused by mixed-case encodings
-- ⚡ Injected for `wget` in this build (`curl` is not allowlisted here); TLS via OpenSSL & GnuTLS
+- ⚡ Injected for `wget` and `wget2` in this build (`curl` is not allowlisted here); TLS via OpenSSL & GnuTLS, HTTP/2 via nghttp2
 - ⚡ Linux-first (glibc/musl)
 
 ---
@@ -124,7 +125,7 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.7-r1.aarch64.apk
 
 | Variable                 | Description                                                              | Default |
 |--------------------------|--------------------------------------------------------------------------|---------|
-| **SAFEXEC_PCTNORM**      | Enable/disable preload of `libnpp_norm.so` for wget                      | `1`     |
+| **SAFEXEC_PCTNORM**      | Enable/disable preload of `libnpp_norm.so` for wget/wget2                    | `1`     |
 | **SAFEXEC_PCTNORM_SO**   | Path to normalization `.so` (must be `root:root`, non-writable, trusted) | —       |
 | **SAFEXEC_PCTNORM_CASE** | Percent triplet case: `upper`, `lower`, or `off`                         | `upper` |
 | **SAFEXEC_DETACH**       | Isolation mode: `auto`, `cgv2`, `rlimits`, `off`                         | `auto`  |
