@@ -480,7 +480,7 @@ function nppp_wget_build_command( array $o ): string {
 
 /** True when the command already replaces its shell with wget ("... && exec wget2 ..."): wget2 + dir. */
 function nppp_wget_command_has_exec( string $cmd ): bool {
-    return (bool) preg_match( '~^mkdir -p [^;]*; (?:date \+%s > [^;]*; )?cd .* && exec ~s', $cmd ) || strncmp( $cmd, 'cd ', 3 ) === 0;
+    return strncmp( $cmd, 'mkdir -p ', 9 ) === 0 || strncmp( $cmd, 'cd ', 3 ) === 0;
 }
 
 /** "-e use_proxy=no" for wget1, "--no-proxy" for wget2 (used by the purge-queue poll). */
