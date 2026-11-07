@@ -1,0 +1,6 @@
+# Every path answers 200 with a tiny HTML body so wget never sees an error.
+location / { try_files /page.html =200; }
+# Purge-queue status endpoint for the gate tests; the harness swaps / removes the file.
+location = /queue-status { default_type application/json; alias @WORK@/queue-status.json; }
+# Crawl fixture: index links to pages whose hrefs carry mixed-case triplets.
+location = /crawl/ { try_files /crawl/index.html =404; }

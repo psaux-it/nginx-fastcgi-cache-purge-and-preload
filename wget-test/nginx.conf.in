@@ -1,0 +1,34 @@
+# Rendered by run-wget-matrix.sh (@WORK@ / @SITE@ / @PORT_*@ are substituted).
+daemon off;
+pid @WORK@/nginx.pid;
+error_log @WORK@/error.log warn;
+events { worker_connections 256; }
+http {
+    # Oracle: the request-target exactly as nginx received it ($request_uri is the raw target:
+    # HTTP/1.1 request-line or HTTP/2 :path). Last field is $msec (timing for the gate tests).
+    log_format wire '$server_protocol|$scheme|$server_port|$request_method|$request_uri|$http_user_agent|$http_host|$msec';
+    access_log @WORK@/wire.log wire;
+    client_body_temp_path @WORK@/tmp/body; proxy_temp_path @WORK@/tmp/p; fastcgi_temp_path @WORK@/tmp/f;
+    uwsgi_temp_path @WORK@/tmp/u; scgi_temp_path @WORK@/tmp/s;
+    types { text/html html; application/json json; }
+    default_type text/html;
+    merge_slashes off;      # never pre-normalize: we observe what the client sent
+
+    server {                # plain HTTP/1.1
+        listen 127.0.0.1:@PORT_HTTP@;
+        root @SITE@;
+        include @WORK@/locations.conf;
+    }
+    server {                # TLS, HTTP/1.1 only (no ALPN h2)
+        listen 127.0.0.1:@PORT_H1S@ ssl;
+        ssl_certificate @WORK@/cert.pem; ssl_certificate_key @WORK@/key.pem;
+        root @SITE@;
+        include @WORK@/locations.conf;
+    }
+    server {                # TLS + ALPN h2 (Wget2 negotiates it by default)
+        listen 127.0.0.1:@PORT_H2@ ssl http2;
+        ssl_certificate @WORK@/cert.pem; ssl_certificate_key @WORK@/key.pem;
+        root @SITE@;
+        include @WORK@/locations.conf;
+    }
+}
