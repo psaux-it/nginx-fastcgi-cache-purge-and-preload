@@ -330,6 +330,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * NEW: Dashboard "Nginx Cache Traffic Hit Ratio" — Displays real visitor HIT/MISS ratios from Nginx (ngx_cache_purge v4) with a 24-hour trend excluding "Preload All" runs.
 * NEW: "Varnish Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends a PURGE request to the configured Varnish Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
 * NEW: "Varnish-Only Mode" — For setups where Nginx has no cache and Varnish is the only cache layer (Nginx → Varnish → Apache / PHP-FPM). Purge, Purge All and Preload go through Varnish only.
+* NEW: GNU Wget2 (2.1.0+) support for Preload alongside wget 1.x, including a new "Wget Binary" setting (Auto, wget, wget2) for distributions that ship it only as `wget2`. wget 1.x behavior is unchanged. Running wget2 under safexec requires safexec 1.9.8+.
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
 * Fixed: Deactivation no longer deletes the Fail2Ban worker's lock files, and clears worker state only once the worker is confirmed stopped, preventing a second worker after reactivation.
 * Fixed: Uninstall no longer touches a running Fail2Ban worker's files, sweeps all NPP transients and cron hook instances, and no longer creates the uploads directory.
@@ -353,11 +354,12 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All.
 * Changed: The dashboard widget's Settings area is now a collapsible panel with a compact tile grid and an on/off summary, replacing the long status table.
 * Changed: The "nppp_purged_urls" action now fires before the auto-preload of a single purge instead of after it, so outer cache layers are clean before the preload crawl requests the page.
+* Changed: Cloudflare APO Sync rewritten. Purges now run synchronously after Redis/Varnish and before any preload crawl starts, within a time budget; failed purges (rate limit, server or network errors) are queued and retried through a single cron event instead of being lost. Supports both Cloudflare plugin namespaces (4.14+ and 4.12.8-4.13.x) and never writes Cloudflare plugin settings.
 * Perf: Optimized ripgrep prefiltering and canonical key generation in FP3/FP4 scans to prevent multi-spelling regex slowdowns on percent-encoded slugs.
 * Perf: The Advanced tab now opens 2.3x–2.7x faster on large caches.
 * Perf: Environment checks now run in a single shell call, cutting the shell processes spawned per minute under continuous admin traffic from 5 to 2.
 * Updated: Confirmed compatibility with WordPress 7.1.4.
-* Tested: Tested with Nginx (1.31.6), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.7), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0) and aaPanel (8.0.6).
+* Tested: Tested with Nginx (1.31.8), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.8), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0), wget2 (2.3.0)  and aaPanel (8.0.6).
 
 = 2.1.8 (2026-09-25) =
 
