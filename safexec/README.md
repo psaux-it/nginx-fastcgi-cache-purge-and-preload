@@ -8,8 +8,8 @@
 > (`.deb`, `.rpm`, `.apk`, and the one-liner installer) is compiled with `-DSAFEXEC_NPP`,
 > a hardened build made specifically for the **NPP WordPress plugin**:
 >
-> - **Allowlist is fixed to exactly `wget` and `rg`.** Nothing else can be executed.
-> - **Prelude wrapper is limited to `nohup`.** `nice`, `timeout`, `stdbuf`, `ionice`,
+> - **Allowlist is fixed to exactly `wget`, `wget2` and `rg`.** Nothing else can be executed.
+> - **Prelude wrapper is limited to `nohup` and `stdbuf`.** `nice`, `timeout`, `ionice`,
 >   `taskset`, `setsid`, `chrt` and `time` are rejected.
 > - **Seccomp-BPF syscall denylist** is applied for extra hardening when installed setuid-root.
 >
@@ -96,8 +96,8 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.7-r1.aarch64.apk
 ## Features
 
 ### safexec (NPP-hardened build)
-- ✅ **Strict allowlist**: exactly `wget` and `rg`; only `nohup` accepted as a prelude wrapper
-- ✅ **Argument validation** (setuid-root mode): `rg` options are allowlisted; for `wget2` (also a `wget` that resolves to it) only the options NPP emits are accepted, `--no-config` is mandatory and URLs must follow `--`. Plugin-loading options (`--local-plugin`, `--plugin`, `--plugin-dirs`, `--plugin-opt`, `--plugin-help`, `--list-plugins`, including `--no-` forms) are refused for every `wget`/`wget2` launch, because Wget2 `dlopen()`s them
+- ✅ **Strict allowlist**: exactly `wget`, `wget2` and `rg`; only `nohup` and `stdbuf` accepted as prelude wrappers
+- ✅ **Argument validation** (setuid-root mode): `rg` options are allowlisted; for `wget2` (also a `wget` that resolves to it) only the options NPP emits are accepted, `--no-config` is mandatory and URLs must follow `--`. Plugin-loading options (`--local-plugin`, `--plugin`, `--plugin-dirs`, `--plugin-opt`, `--plugin-help`, `--list-plugins`, including `--no-` forms) are refused for every `wget`/`wget2` launch, because Wget2 `dlopen()`s them. GNU Wget 1.x has no plugin mechanism and is not restricted beyond that, so manual use such as `safexec wget -qO- URL` still works
 - ✅ **Absolute path pinning**: tools resolve only under trusted system dirs; symlinks are followed only if the target stays inside them
 - ✅ **Never runs as root**
   - `wget` runs as `nobody`
@@ -112,8 +112,8 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.7-r1.aarch64.apk
 
 ### libnpp_norm.so
 - 🔄 Intercepts `write`, `send`/`sendto`, `SSL_write`, `gnutls_record_send` and the HTTP/2 `nghttp2_submit_request()` (wget2 `:path`)
-- 🔄 Normalizes percent-encoded triplets (`%xx`) in HTTP request-lines
-  - Configurable via `PCTNORM_CASE=upper|lower|off` (default: uppercase)
+- 🔄 Normalizes percent-encoded triplets (`%xx`) in HTTP/1.x request-lines and in the HTTP/2 `:path` pseudo-header
+  - Configurable via `SAFEXEC_PCTNORM_CASE=upper|lower|off` (default: uppercase)
   - Optional “repaint” mode preserves original triplet case from the CLI URL
 - 🔄 Prevents cache-key inconsistencies caused by mixed-case encodings
 - ⚡ Injected for `wget` and `wget2` in this build (`curl` is not allowlisted here); TLS via OpenSSL & GnuTLS, HTTP/2 via nghttp2
@@ -125,7 +125,7 @@ sudo apk add --allow-untrusted --force-overwrite ./safexec-1.9.7-r1.aarch64.apk
 
 | Variable                 | Description                                                              | Default |
 |--------------------------|--------------------------------------------------------------------------|---------|
-| **SAFEXEC_PCTNORM**      | Enable/disable preload of `libnpp_norm.so` for wget/wget2                    | `1`     |
+| **SAFEXEC_PCTNORM**      | Enable/disable preload of `libnpp_norm.so` for wget/wget2                | `1`     |
 | **SAFEXEC_PCTNORM_SO**   | Path to normalization `.so` (must be `root:root`, non-writable, trusted) | —       |
 | **SAFEXEC_PCTNORM_CASE** | Percent triplet case: `upper`, `lower`, or `off`                         | `upper` |
 | **SAFEXEC_DETACH**       | Isolation mode: `auto`, `cgv2`, `rlimits`, `off`                         | `auto`  |
