@@ -331,24 +331,21 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * NEW: "Varnish Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends a PURGE request to the configured Varnish Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
 * NEW: "Varnish-Only Mode" — For setups where Nginx has no cache and Varnish is the only cache layer (Nginx → Varnish → Apache / PHP-FPM). Purge, Purge All and Preload go through Varnish only.
 * NEW: GNU Wget2 (2.1.0+) support for Preload alongside wget 1.x, including a new "Wget Binary" setting (Auto, wget, wget2) for distributions that ship it only as `wget2`. wget 1.x behavior is unchanged. Running wget2 under safexec requires safexec 1.9.8+.
+* NEW: HTTP Purge now works with ngx_cache_purge v2.3, v2.5/v3 and v4, including v4 generation mode, inline `PURGE` setups and Purge All with background queue status. It falls back to the filesystem purge whenever HTTP can't confirm the work is done.
 * Fixed: Reactivating the plugin now re-arms the scheduled preload (deactivation cleared the cron event but kept the schedule setting).
 * Fixed: Deactivation no longer deletes the Fail2Ban worker's lock files, and clears worker state only once the worker is confirmed stopped, preventing a second worker after reactivation.
 * Fixed: Uninstall no longer touches a running Fail2Ban worker's files, sweeps all NPP transients and cron hook instances, and no longer creates the uploads directory.
-* Fixed: Process liveness checks no longer count zombie (defunct) processes as running. Where PID 1 does not reap orphans.
-* Fixed: Process liveness detection now works on BusyBox/Alpine, where "ps -p" is not supported and a running preload was always reported as not running.
+* Fixed: Process liveness checks no longer count zombie (defunct) processes as running (where PID 1 does not reap orphans), and now work on BusyBox/Alpine, where "ps -p" is not supported and a running preload was always reported as not running.
 * Fixed: Purge no longer shows a false "Permission denied" error when a new cache entry is written into a directory while it is being deleted.
 * Fixed: The Vary: Accept-Encoding notice no longer false-alarms with gzip_vary or fastcgi_ignore_headers Vary; it now checks what Nginx actually stored in the cache files.
 * Fixed: Flushing the object cache no longer disrupts a running preload or makes the plugin forget its Nginx purge settings and Fail2Ban lookup progress.
 * Fixed: Preload All now runs its start check before it purges the cache. Previously a DNS, network or proxy failure, or a bad Exclude Endpoints regex, was reported only after the purge, leaving an empty cache and no crawl behind.
 * Fixed: The preload start check now probes only the start page instead of crawling the site, so a 404 on any internal link no longer wrongly aborts Preload on small sites, and the check no longer creates a missing cache directory or hides the path/permission error.
 * Fixed: When wget cannot resolve or reach the site, Preload now shows ERROR DNS, ERROR NETWORK or ERROR PROXY instead of the misleading ERROR COMMAND that pointed to the Exclude Endpoints settings.
-* Fixed: The plugin no longer requires /dev/null or /tmp in open_basedir.
-* Fixed: Preload All no longer fails with ERROR COMMAND on hosts that use open_basedir without /dev/null or /tmp in the allowed paths.
+* Fixed: The plugin no longer requires /dev/null or /tmp in open_basedir; Preload All no longer fails with ERROR COMMAND on such hosts.
 * Fixed: The Fail2Ban enrichment worker no longer needs the PHP CLI binary's directory in open_basedir; the binary is now verified by running it.
-* Fixed: "Purge/Preload This Page" now targets the exact page URL; pages with multiple query parameters or percent-encoded slugs were reported as "not currently found in cache".
-* Fixed: The redirect and address-bar cleanup after a single-page Purge/Preload no longer rewrite the query string, so the next click hits the same cache key.
+* Fixed: "Purge/Preload This Page" now targets the exact page URL (pages with multiple query parameters or percent-encoded slugs were reported as "not currently found in cache"), and the redirect and address-bar cleanup afterwards no longer rewrite the query string, so the next click hits the same cache key.
 * Fixed: Purge now successfully removes all spellings of percent-encoded or raw UTF-8 cache keys instead of leaving silent stale files or triggering false "ERROR REGEX" warnings.
-* Fixed: HTTP Purge now purges the real page on inline `fastcgi_cache_purge PURGE` setups.
 * Fixed: Preload finish time and Mobile + Desktop total time no longer depend on the server's timezone; they now reflect when the crawl actually ended, in the site timezone.
 * Security: HTTP Purge now skips single-page URLs whose path contains dot-segments, which could reach other locations of the same origin such as Purge All.
 * Changed: "Preload Related Pages" (Purge Scope) no longer requires Auto Preload to be ON for Auto Purge events. Enabling it alone now preloads the related pages after an auto-purge, without also arming the full-site preload that follows every Purge All.
@@ -359,7 +356,7 @@ This layered approach keeps purges fast and safe even on large WooCommerce sites
 * Perf: The Advanced tab now opens 2.3x–2.7x faster on large caches.
 * Perf: Environment checks now run in a single shell call, cutting the shell processes spawned per minute under continuous admin traffic from 5 to 2.
 * Updated: Confirmed compatibility with WordPress 7.1.4.
-* Tested: Tested with Nginx (1.31.8), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.8), ripgrep (15.2.0), ngx_cache_purge (4.0.0), wget (1.25.0), wget2 (2.3.0)  and aaPanel (8.0.6).
+* Tested: Tested with Nginx (1.31.8), FUSE (3.18.3), bindfs (1.18.4), safexec (1.9.8), ripgrep (15.2.0), ngx_cache_purge (v2.3, v2.5, v3, v4), wget (1.25.0), wget2 (2.3.0).
 
 = 2.1.8 (2026-09-25) =
 
