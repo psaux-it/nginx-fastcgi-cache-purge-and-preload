@@ -1804,6 +1804,10 @@ function nppp_preload_cache_premium_callback() {
         if ($rg_used) {
             $url_key = preg_replace('#^https?://#', '', $cache_url);
 
+            // A host-only URL (https://example.com) is requested as "/", so the stored key ends in
+            // "host/" (or "host/?query"). Restore the root slash or the homepage is never found.
+            $url_key = preg_replace('#^([^/?\#]+)(?=[?\#]|$)#', '$1/', $url_key);
+
             $rg_cmd = sprintf(
                 '%s%s -l -m 1 --text -E none --no-unicode --no-messages --no-ignore --no-config %s %s',
                 $rg_cmd_prefix,
