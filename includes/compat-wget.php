@@ -438,7 +438,17 @@ function nppp_wget_build_command( array $o ): string {
         $t[] = '--reject-regex=' . escapeshellarg( (string) $o['reject_regex'] );
     }
     if ( $o['reject_ext'] !== null ) {
-        $t[] = '--reject=' . escapeshellarg( (string) $o['reject_ext'] );
+        $rej = (string) $o['reject_ext'];
+        if ( $v2 ) {
+            // wget2 matches the --reject glob against the URL including its query string: "*.css" misses
+            // "style.css?ver=6.5" (WordPress adds ?ver= to almost every asset), so those were crawled and counted.
+            // Next to every "*.ext" add "*.ext[?]*" ([?] = a literal "?"). --ignore-case applies to globs.
+            $items = array_filter( explode( ',', $rej ), 'strlen' );
+            $rej   = implode( ',', array_merge( $items, array_map( static function ( $i ) {
+                return $i . '[?]*';
+            }, $items ) ) );
+        }
+        $t[] = '--reject=' . escapeshellarg( $rej );
     }
     $t[] = '--domains=' . escapeshellarg( (string) $o['domains'] );
     $t[] = '--header=' . escapeshellarg( NPPP_HEADER_ACCEPT );
