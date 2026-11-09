@@ -193,7 +193,7 @@ function nppp_wget_regex_is_valid( string $regex ): bool {
  *                     null (reachable, or it cannot be tested).
  */
 function nppp_wget_site_failure( string $url ): ?string {
-    $p    = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url ) : parse_url( $url );
+    $p    = wp_parse_url( $url );
     $host = is_array( $p ) ? trim( (string) ( $p['host'] ?? '' ), '[]' ) : '';
     if ( $host === '' || ! function_exists( 'fsockopen' ) ) {
         return null;
@@ -556,7 +556,7 @@ function nppp_wget_log_encode_url( string $url ): string {
 }
 
 function nppp_wget_is_robots_url( string $url ): bool {
-    $path = parse_url( $url, PHP_URL_PATH );
+    $path = wp_parse_url( $url, PHP_URL_PATH );
     return is_string( $path ) && $path === '/robots.txt';
 }
 
