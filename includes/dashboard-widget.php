@@ -514,11 +514,13 @@ function nppp_dashboard_widget() {
         // Painted from the stored samples so the page never waits for the status endpoint;
         // nppp-dashboard-widget.js loads the live figures right after (nppp_traffic_refresh).
         // Varnish-only mode: Nginx reports nothing there, the same slot shows the purge success of the last 24 hours.
+        // phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- Both row builders return HTML escaped at every dynamic part (esc_html / esc_attr / number_format_i18n); wp_kses() would strip the inline SVG trend chart.
         echo '<div id="nppp-traffic-row">'
            . ( $nppp_vo
                ? nppp_render_vo_purge_row()
                : ( function_exists( 'nppp_http_purge_traffic_stats_stored' ) ? nppp_render_traffic_row( nppp_http_purge_traffic_stats_stored() ) : '' ) )
            . '</div>';
+           // phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
 
         // Build one tile per option. States: on (green), off (red),
         // na (gray, lock) and wait (amber, configured but no activity seen yet).
@@ -673,6 +675,7 @@ function nppp_dashboard_widget() {
         }
 
         // Output the settings panel, collapsed by default
+        // phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped -- $nppp_summary, $nppp_strip_html and $nppp_tiles_html are assembled above from static markup plus esc_html / esc_attr / esc_html__ / esc_attr__ values only.
         echo '<details id="nppp-settings" class="nppp-settings">';
             echo '<summary class="nppp-settings-toggle">';
                 echo '<span class="nppp-settings-head">';
@@ -685,6 +688,7 @@ function nppp_dashboard_widget() {
             echo '</summary>';
             echo '<div class="nppp-settings-grid">' . $nppp_tiles_html . '</div>';
         echo '</details>';
+        // phpcs:enable WordPress.Security.EscapeOutput.OutputNotEscaped
 
         // Output the "Give Star" and "Configure Settings" bottom buttons
         echo '<div style="display: flex; justify-content: space-between; align-items: center;">';
@@ -1109,12 +1113,14 @@ function nppp_render_vo_purge_row(): string {
     $last  = end( $events );
     $right = '';
     if ( is_array( $last ) && function_exists( 'nppp_varnish_vo_event_text' ) ) {
-        $text  = nppp_varnish_vo_event_text( $last );
+        $text = nppp_varnish_vo_event_text( $last );
+        /* translators: %s: time span such as "3 mins" */
+        $nppp_ago = sprintf( __( '%s ago', 'fastcgi-cache-purge-and-preload-nginx' ), human_time_diff( (int) $last['at'], time() ) );
         $right = '<div class="nppp-traffic-right"><span class="nppp-traffic-sub">' . esc_html( sprintf(
             /* translators: 1: the newest purge, e.g. "Preload All, ban accepted", 2: time since it, e.g. "2 mins ago" */
             __( 'last: %1$s · %2$s', 'fastcgi-cache-purge-and-preload-nginx' ),
             $text['what'] . ', ' . $text['res'],
-            sprintf( __( '%s ago', 'fastcgi-cache-purge-and-preload-nginx' ), human_time_diff( (int) $last['at'], time() ) )
+            $nppp_ago
         ) ) . '</span></div>';
     }
 
