@@ -5360,6 +5360,8 @@ $(document).ready(function() {
         '#nginx_cache_limit_rate',
         '#nginx_cache_wait_request',
         '#nginx_cache_read_timeout',
+        '#nginx_cache_wget_binary',
+        '#nginx_cache_preload_threads',
         '#nginx_cache_email',
         '#nginx_cache_tracking_opt_in',
         '#nginx_cache_api_key',

@@ -118,6 +118,7 @@
                 '#nginx_cache_email, '                +
                 '#nginx_cache_read_timeout, '         +
                 '#nginx_cache_wait_request, '         +
+                '#nginx_cache_preload_threads, '      +
                 '#nginx_cache_limit_rate, '           +
                 '#nginx_cache_reject_extension, '     +
                 '#nginx_cache_reject_regex, '         +

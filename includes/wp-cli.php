@@ -545,6 +545,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
                 [ 'Field' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),                                        'Value' => $settings['nginx_cache_bypass_path_restriction'] ?? 'no' ],
                 [ 'Field' => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),                                              'Value' => $settings['nginx_cache_pctnorm_mode']            ?? 'off' ],
                 [ 'Field' => __( 'Wget Binary', 'fastcgi-cache-purge-and-preload-nginx' ), 'Value' => ( $settings['nginx_cache_wget_binary'] ?? 'auto' ) . ( function_exists( 'nppp_wget_bin' ) ? ' (' . nppp_wget_bin() . ')' : '' ) ],
+                [ 'Field' => __( 'Preload Threads', 'fastcgi-cache-purge-and-preload-nginx' ), 'Value' => (string) ( $settings['nginx_cache_preload_threads'] ?? 1 ) ],
 
                 $sep( _x( 'AUTO-PURGE TRIGGERS', 'status table section header', 'fastcgi-cache-purge-and-preload-nginx' ) ),
                 [ 'Field' => __( 'Auto-Purge Posts', 'fastcgi-cache-purge-and-preload-nginx' ),                                               'Value' => $settings['nppp_autopurge_posts']                ?? 'no' ],
@@ -1259,6 +1260,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nppp_varnish_endpoints',
             'nppp_varnish_header',
             'nppp_varnish_only_enabled',
+            'nginx_cache_preload_threads',
         ];
         $is_optional_key = in_array( $key, $optional_keys, true );
         $clears_optional = ( $is_optional_key && array_key_exists( 2, $args ) );
@@ -1343,11 +1345,12 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nginx_cache_limit_rate'         => [ 1,     102400 ],
             'nginx_cache_wait_request'       => [ 0,     60     ],
             'nginx_cache_read_timeout'       => [ 10,    300    ],
+            'nginx_cache_preload_threads'    => [ 1,     5      ],
             'nginx_cache_preload_proxy_port' => [ 1,     65535  ],
         ];
         static $int_keys = [
             'nginx_cache_cpu_limit',      'nginx_cache_limit_rate',
-            'nginx_cache_wait_request',   'nginx_cache_read_timeout',
+            'nginx_cache_wait_request',   'nginx_cache_read_timeout', 'nginx_cache_preload_threads',
             'nginx_cache_preload_proxy_port',
         ];
 
@@ -1738,6 +1741,7 @@ class NPPP_CLI_Command extends WP_CLI_Command {
             'nginx_cache_bypass_path_restriction' => __( 'Bypass Path Restriction', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_pctnorm_mode'            => __( 'URL Normalization', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_wget_binary'             => __( 'Wget Binary', 'fastcgi-cache-purge-and-preload-nginx' ),
+            'nginx_cache_preload_threads'         => __( 'Preload Threads', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_limit_rate'              => __( 'Limit Rate', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_preload_enable_proxy'    => __( 'Use Proxy', 'fastcgi-cache-purge-and-preload-nginx' ),
             'nginx_cache_preload_proxy_host'      => __( 'Proxy Host', 'fastcgi-cache-purge-and-preload-nginx' ),

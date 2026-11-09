@@ -22,7 +22,7 @@
  *   4. -e robots=off         wget2 ignores Disallow but still fetches /robots.txt and sitemaps.
  *                            -> --no-robots --no-follow-sitemaps
  *   5. --wait / threads      wget2 runs 5 threads by default and --wait is per thread.
- *                            -> --max-threads=1 (wget1 behaviour). Filter: nppp_wget2_max_threads.
+ *                            -> --max-threads=N, N = Preload Threads setting (default 1 = wget1 behaviour). Filter: nppp_wget2_max_threads.
  *   6. Accept-Encoding       wget2 offers gzip,br,zstd...; wget1 sends identity -> --compression=identity.
  *   7. Non-ASCII paths       wget2 assumes CP1252 and double-encodes %C3%A7 -> --remote-encoding=utf-8.
  *   8. Invalid regex         wget1 exits 1; wget2 regcomp() failure = "no match", exit 0, the reject
@@ -326,6 +326,7 @@ function nppp_wget_stdbuf_available( string $safexec ): bool {
  *   domains        string  --domains=
  *   user_agent     string
  *   urls           string  already shell-escaped URL argument(s)
+ *   threads        ?int    wget2 --max-threads (null = 1; filter nppp_wget2_max_threads)
  */
 function nppp_wget_build_command( array $o ): string {
     $v2  = nppp_wget_is_v2();
@@ -355,6 +356,7 @@ function nppp_wget_build_command( array $o ): string {
         'domains'      => '',
         'user_agent'   => '',
         'urls'         => '',
+        'threads'      => null,
     ], $o );
 
     // Never hand safexec a command it refuses (an old safexec rejects `wget2`): callers already pass '' through
@@ -456,7 +458,7 @@ function nppp_wget_build_command( array $o ): string {
 
     // wget2-only parity flags
     if ( $v2 ) {
-        $threads = (int) apply_filters( 'nppp_wget2_max_threads', 1 );
+        $threads = (int) apply_filters( 'nppp_wget2_max_threads', $o['threads'] !== null ? (int) $o['threads'] : 1 );
         $threads = max( 1, min( 5, $threads ) );
         $t[] = '--max-threads=' . $threads . ' --compression=identity --remote-encoding=utf-8';
         if ( $o['reject_regex'] !== null || $o['reject_ext'] !== null ) {
@@ -491,6 +493,22 @@ function nppp_wget_build_command( array $o ): string {
 /** True when the command already replaces its shell with wget ("... && exec wget2 ..."): wget2 + dir. */
 function nppp_wget_command_has_exec( string $cmd ): bool {
     return strncmp( $cmd, 'mkdir -p ', 9 ) === 0 || strncmp( $cmd, 'cd ', 3 ) === 0;
+}
+
+/**
+ * Preload Threads setting (1-5). wget2 only: wget1 has no threads, so it is always 1 there.
+ * Only the Preload All crawl passes this to nppp_wget_build_command(); single-URL and
+ * related-page preloads stay sequential.
+ */
+function nppp_wget_threads_setting(): int {
+    if ( ! nppp_wget_is_v2() ) {
+        return 1;
+    }
+
+    $opts = get_option( 'nginx_cache_settings', [] );
+    $n    = ( is_array( $opts ) && isset( $opts['nginx_cache_preload_threads'] ) ) ? (int) $opts['nginx_cache_preload_threads'] : 1;
+
+    return max( 1, min( 5, $n ) );
 }
 
 /** "-e use_proxy=no" for wget1, "--no-proxy" for wget2 (used by the purge-queue poll). */

@@ -359,6 +359,21 @@ function nppp_nginx_cache_settings_sanitize($input) {
         }
     }
 
+    // Preload Threads (wget2 only). Under wget1 the field is disabled and not posted, so the stored value is kept.
+    if (isset($input['nginx_cache_preload_threads'])) {
+        $threads_in = $input['nginx_cache_preload_threads'];
+        if (is_numeric($threads_in) && intval($threads_in) >= 1 && intval($threads_in) <= 5) {
+            $sanitized_input['nginx_cache_preload_threads'] = intval($threads_in);
+        } else {
+            add_settings_error(
+                'nppp_nginx_cache_settings_group',
+                'invalid-preload-threads',
+                __('Please enter Preload Threads between 1 and 5.', 'fastcgi-cache-purge-and-preload-nginx'),
+                'error'
+            );
+        }
+    }
+
     // Sanitize and validate PHP Response Timeout
     if (isset($input['nginx_cache_read_timeout'])) {
         if (is_numeric($input['nginx_cache_read_timeout'])) {

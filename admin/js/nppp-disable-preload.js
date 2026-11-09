@@ -128,6 +128,7 @@
             $('#nginx_cache_cpu_limit').prop('disabled', true);
             $('#nginx_cache_limit_rate').prop('disabled', true);
             $('#nginx_cache_wait_request').prop('disabled', true);
+            $('#nginx_cache_preload_threads').prop('disabled', true);
 
             // Disable preload exclude reset actions
             $('#nginx-regex-reset-defaults').prop('disabled', true);

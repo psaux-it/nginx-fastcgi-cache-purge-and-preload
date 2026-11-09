@@ -216,6 +216,7 @@ function nppp_defaults_on_plugin_activation() {
         'nginx_cache_key_custom_regex'        => base64_encode(nppp_fetch_default_regex_for_cache_key()),
         'nginx_cache_wait_request'            => 0,
         'nginx_cache_read_timeout'            => 60,
+        'nginx_cache_preload_threads'         => 1,
         'nginx_cache_limit_rate'              => 5120,
         'nginx_cache_api_key'                 => $new_api_key,
         'nginx_cache_preload_proxy_host'      => '127.0.0.1',

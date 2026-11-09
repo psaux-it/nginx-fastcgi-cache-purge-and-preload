@@ -54,6 +54,21 @@ function nppp_nginx_cache_read_timeout_callback() {
     echo "<input type='number' id='nginx_cache_read_timeout' name='nginx_cache_settings[nginx_cache_read_timeout]' min='10' max='300' value='" . esc_attr($options['nginx_cache_read_timeout'] ?? $default_read_timeout) . "' class='small-text' />";
 }
 
+// "wget2 only" pill used next to the label of wget2-dependent settings
+function nppp_wget2_only_badge(): string {
+    return '<span class="nppp-wget2-badge">' . esc_html__( 'wget2 only', 'fastcgi-cache-purge-and-preload-nginx' ) . '</span>';
+}
+
+// Callback function to display the input field for Preload Threads setting (wget2 only)
+function nppp_nginx_cache_preload_threads_callback() {
+    $options = get_option( 'nginx_cache_settings', [] );
+    $v2      = function_exists( 'nppp_wget_is_v2' ) && nppp_wget_is_v2();
+    $value   = isset( $options['nginx_cache_preload_threads'] ) ? (int) $options['nginx_cache_preload_threads'] : 1;
+    $value   = max( 1, min( 5, $value ) );
+
+    echo "<input type='number' id='nginx_cache_preload_threads' name='nginx_cache_settings[nginx_cache_preload_threads]' min='1' max='5' step='1' value='" . esc_attr( $value ) . "' class='small-text'" . ( $v2 ? '' : " disabled='disabled'" ) . " />";
+}
+
 // Callback function to display the checkbox for Send Email Notification setting
 function nppp_nginx_cache_send_mail_callback() {
     $options = get_option('nginx_cache_settings', []);

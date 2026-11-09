@@ -745,6 +745,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
                 'domains'      => $domain_list,
                 'user_agent'   => $NPPP_DYNAMIC_USER_AGENT,
                 'urls'         => escapeshellarg($fdomain),
+                'threads'      => nppp_wget_threads_setting(),
             ]);
 
             // Normally "<crawl> > log 2>&1 < /dev/null & echo $!". Behind a Purge All whose nginx
@@ -1017,6 +1018,7 @@ function nppp_preload_locked($nginx_cache_path, $this_script_path, $tmp_path, $f
             'domains'      => $domain_list,
             'user_agent'   => $NPPP_DYNAMIC_USER_AGENT,
             'urls'         => escapeshellarg($fdomain),
+            'threads'      => nppp_wget_threads_setting(),
         ]);
 
         // Same gate as above: held back behind a still-running nginx purge queue.
