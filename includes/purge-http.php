@@ -2359,6 +2359,7 @@ function nppp_http_purge_sweep_legacy_keys( string $path ): ?array {
                 if ( is_link( $full ) ) {
                     continue;
                 }
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- Read-only 4 KB header probe of an nginx cache file; WP_Filesystem cannot do a partial read and its uploads-rooted API is not meant for the nginx cache path.
                 $f = @fopen( $full, 'rb' );
                 if ( $f === false ) {
                     if ( file_exists( $full ) ) {
@@ -2366,12 +2367,15 @@ function nppp_http_purge_sweep_legacy_keys( string $path ): ?array {
                     }
                     continue; // else it vanished meanwhile (nginx removed it)
                 }
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread -- Bounded 4 KB read of the cache file header, see fopen above.
                 $head = (string) @fread( $f, 4096 );
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the handle opened above.
                 fclose( $f );
                 // First KEY: line of the file; "p4:" right after it is the generation envelope.
                 if ( ! preg_match( '/^KEY: (p4:)?/m', $head, $m ) || ( $m[1] ?? '' ) !== '' ) {
                     continue;
                 }
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Return value is needed to count deleted/failed entries; wp_delete_file() has no return value before WP 6.7 and applies a path filter.
                 if ( @unlink( $full ) ) {
                     $deleted++;
                 } elseif ( file_exists( $full ) ) {
