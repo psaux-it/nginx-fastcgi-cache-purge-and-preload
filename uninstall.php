@@ -253,10 +253,12 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
     $run_lock_path  = $runtime_real . DIRECTORY_SEPARATOR . 'f2b_rdap_worker.run.lock';
 
     if (is_file($run_lock_path)) {
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- flock() needs a real file handle; WP_Filesystem has no locking API.
         $worker_lock_fh = @fopen($run_lock_path, 'c');
         if ($worker_lock_fh === false || !@flock($worker_lock_fh, LOCK_EX | LOCK_NB)) {
             $worker_running = true;
             if (is_resource($worker_lock_fh)) {
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Closes the flock() handle opened above.
                 fclose($worker_lock_fh);
             }
             $worker_lock_fh = null;
@@ -297,6 +299,7 @@ function nppp_delete_runtime_artifacts_on_uninstall() {
 
     if (is_resource($worker_lock_fh)) {
         @flock($worker_lock_fh, LOCK_UN);
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- Releases the flock() handle held since the liveness check.
         fclose($worker_lock_fh);
     }
 
