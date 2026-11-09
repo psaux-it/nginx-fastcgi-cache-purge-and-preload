@@ -1351,8 +1351,8 @@ function nppp_get_varnish_vo_status(): ?array {
     $last_ok = ( is_array( $last_ok ) && ! empty( $last_ok['at'] ) ) ? $last_ok : null;
 
     $now = time();
-    /* translators: %s: time span such as "3 mins" */
     $ago = static function ( int $ts ) use ( $now ): string {
+        /* translators: %s: time span such as "3 mins" */
         return sprintf( __( '%s ago', 'fastcgi-cache-purge-and-preload-nginx' ), human_time_diff( $ts, $now ) );
     };
     $scope_label = static function ( $scope ): string {
