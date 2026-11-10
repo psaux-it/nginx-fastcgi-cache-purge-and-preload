@@ -859,7 +859,7 @@ add_action('wp_head', static function (): void {
         $text = sprintf(
             'Performance optimized by Nginx Cache Purge Preload. Generated: %s GMT. Learn more: %s',
             gmdate('Y-m-d H:i:s'),
-            'https://npp.psauxit.com/'
+            'https://www.psauxit.com/'
         );
 
         // Let sites customize or suppress it (return '' to disable).
