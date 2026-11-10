@@ -3,7 +3,7 @@
 = 2.1.9 (2026-11-01) =
 
 * NEW: Dashboard "Nginx Cache Traffic Hit Ratio" — Displays real visitor HIT/MISS ratios from Nginx (ngx_cache_purge v4) with a 24-hour trend excluding "Preload All" runs.
-* NEW: "Varnish Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends a PURGE request to the configured Varnish Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
+* NEW: "Varnish / Vinyl Cache Sync" — For setups where Varnish sits in front of the Nginx cache. After NPP purges Nginx cache it sends a PURGE request to the configured Varnish / Vinyl Cache addresses on Single Purge, Purge All and Preload All, before any preload starts.
 * NEW: "Varnish-Only Mode" — For setups where Nginx has no cache and Varnish is the only cache layer (Nginx → Varnish → Apache / PHP-FPM). Purge, Purge All and Preload go through Varnish only.
 * NEW: GNU Wget2 (2.1.0+) support for Preload alongside wget 1.x, including a new "Wget Binary" setting (Auto, wget, wget2) for distributions that ship it only as `wget2`. wget 1.x behavior is unchanged. Running wget2 under safexec requires safexec 1.9.8+.
 * NEW: "Preload Threads" setting (wget2 only, 1-5, default 1) to run the Preload All crawl with parallel requests. Single-page and related-page preloads stay sequential.
