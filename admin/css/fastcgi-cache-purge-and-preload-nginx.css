@@ -7837,3 +7837,10 @@ tr.nppp-wget2-off > td input {
     opacity: 0.55;
     cursor: not-allowed;
 }
+
+/* All settings descriptions share the same readable line length */
+#nppp-settings-form .form-table td > p.description,
+#nppp-settings-form .form-table td > ul.description {
+    max-width: 67em;
+    box-sizing: border-box;
+}
